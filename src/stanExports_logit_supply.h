@@ -127,25 +127,25 @@ static constexpr std::array<const char*, 291> locations_array__ =
   " (in 'string', line 257, column 6 to column 37)",
   " (in 'string', line 258, column 6 to column 53)",
   " (in 'string', line 259, column 6 to column 22)",
-  " (in 'string', line 268, column 8 to column 38)",
-  " (in 'string', line 267, column 13 to line 269, column 7)",
-  " (in 'string', line 266, column 8 to column 85)",
-  " (in 'string', line 265, column 36 to line 267, column 7)",
-  " (in 'string', line 265, column 13 to line 269, column 7)",
-  " (in 'string', line 263, column 8 to column 60)",
-  " (in 'string', line 264, column 8 to column 82)",
-  " (in 'string', line 262, column 36 to line 265, column 7)",
-  " (in 'string', line 262, column 13 to line 269, column 7)",
-  " (in 'string', line 261, column 8 to column 89)",
-  " (in 'string', line 260, column 29 to line 262, column 7)",
-  " (in 'string', line 260, column 6 to line 269, column 7)",
-  " (in 'string', line 270, column 6 to column 37)",
-  " (in 'string', line 272, column 6 to column 52)",
-  " (in 'string', line 273, column 6 to column 58)",
-  " (in 'string', line 274, column 6 to line 275, column 68)",
-  " (in 'string', line 244, column 19 to line 276, column 5)",
-  " (in 'string', line 244, column 4 to line 276, column 5)",
-  " (in 'string', line 240, column 2 to line 277, column 3)",
+  " (in 'string', line 271, column 8 to column 60)",
+  " (in 'string', line 272, column 8 to column 82)",
+  " (in 'string', line 269, column 13 to line 273, column 7)",
+  " (in 'string', line 268, column 8 to column 85)",
+  " (in 'string', line 266, column 36 to line 269, column 7)",
+  " (in 'string', line 266, column 13 to line 273, column 7)",
+  " (in 'string', line 265, column 8 to column 89)",
+  " (in 'string', line 263, column 36 to line 266, column 7)",
+  " (in 'string', line 263, column 13 to line 273, column 7)",
+  " (in 'string', line 262, column 8 to column 89)",
+  " (in 'string', line 260, column 29 to line 263, column 7)",
+  " (in 'string', line 260, column 6 to line 273, column 7)",
+  " (in 'string', line 274, column 6 to column 37)",
+  " (in 'string', line 276, column 6 to column 52)",
+  " (in 'string', line 277, column 6 to column 58)",
+  " (in 'string', line 278, column 6 to line 279, column 68)",
+  " (in 'string', line 244, column 19 to line 280, column 5)",
+  " (in 'string', line 244, column 4 to line 280, column 5)",
+  " (in 'string', line 240, column 2 to line 281, column 3)",
   " (in 'string', line 184, column 2 to column 59)",
   " (in 'string', line 188, column 4 to column 51)",
   " (in 'string', line 189, column 4 to column 34)",
@@ -298,14 +298,14 @@ static constexpr std::array<const char*, 291> locations_array__ =
   " (in 'string', line 40, column 6 to column 29)",
   " (in 'string', line 41, column 6 to column 53)",
   " (in 'string', line 42, column 6 to column 22)",
-  " (in 'string', line 55, column 8 to column 38)",
-  " (in 'string', line 53, column 13 to line 56, column 7)",
-  " (in 'string', line 52, column 8 to column 85)",
-  " (in 'string', line 50, column 36 to line 53, column 7)",
-  " (in 'string', line 50, column 13 to line 56, column 7)",
-  " (in 'string', line 48, column 8 to column 60)",
-  " (in 'string', line 49, column 8 to column 82)",
-  " (in 'string', line 46, column 36 to line 50, column 7)",
+  " (in 'string', line 54, column 8 to column 60)",
+  " (in 'string', line 55, column 8 to column 82)",
+  " (in 'string', line 52, column 13 to line 56, column 7)",
+  " (in 'string', line 51, column 8 to column 85)",
+  " (in 'string', line 49, column 36 to line 52, column 7)",
+  " (in 'string', line 49, column 13 to line 56, column 7)",
+  " (in 'string', line 48, column 8 to column 89)",
+  " (in 'string', line 46, column 36 to line 49, column 7)",
   " (in 'string', line 46, column 13 to line 56, column 7)",
   " (in 'string', line 45, column 8 to column 89)",
   " (in 'string', line 43, column 29 to line 46, column 7)",
@@ -625,25 +625,28 @@ partial_sum_fn(const std::vector<int>& slice_idx, const int& start,
       } else {
         current_statement__ = 278;
         if (stan::math::logical_eq(supply_model, 2)) {
-          local_scalar_t__ denom = DUMMY_VAR__;
-          current_statement__ = 275;
-          denom = stan::math::fmin(0.99,
-                    (stan::model::rvalue(shareIn, "shareIn",
-                       stan::model::index_uni(i)) * (1.0 - s_out)));
           current_statement__ = 276;
-          inv_markup = (alpha_structural * (w + ((1 - w) * (denom /
-            -stan::math::log((1.0 - denom))))));
+          inv_markup = (alpha_structural * (w + ((1 - w) * (1.0 -
+            (stan::model::rvalue(shareIn, "shareIn",
+               stan::model::index_uni(i))
+            * (1.0 - s_out))))));
         } else {
-          current_statement__ = 274;
+          current_statement__ = 275;
           if (stan::math::logical_eq(supply_model, 3)) {
-            current_statement__ = 272;
+            current_statement__ = 273;
             inv_markup = (alpha_structural * (w + ((1 - w) * (s_out / (s_out
               +
               stan::model::rvalue(shareIn, "shareIn",
                 stan::model::index_uni(i)))))));
           } else {
+            local_scalar_t__ denom = DUMMY_VAR__;
             current_statement__ = 270;
-            inv_markup = alpha_structural;
+            denom = stan::math::fmin(0.99,
+                      (stan::model::rvalue(shareIn, "shareIn",
+                         stan::model::index_uni(i)) * (1.0 - s_out)));
+            current_statement__ = 271;
+            inv_markup = (alpha_structural * (w + ((1 - w) * (denom /
+              -stan::math::log((1.0 - denom))))));
           }
         }
       }
@@ -2254,25 +2257,28 @@ public:
           } else {
             current_statement__ = 107;
             if (stan::math::logical_eq(supply_model, 2)) {
-              double denom = std::numeric_limits<double>::quiet_NaN();
-              current_statement__ = 104;
-              denom = stan::math::fmin(0.99,
-                        (stan::model::rvalue(shareIn, "shareIn",
-                           stan::model::index_uni(n)) * (1.0 - s_out)));
               current_statement__ = 105;
-              inv_markup = (alpha_structural * (w + ((1 - w) * (denom /
-                -stan::math::log((1.0 - denom))))));
+              inv_markup = (alpha_structural * (w + ((1 - w) * (1.0 -
+                (stan::model::rvalue(shareIn, "shareIn",
+                   stan::model::index_uni(n))
+                * (1.0 - s_out))))));
             } else {
-              current_statement__ = 103;
+              current_statement__ = 104;
               if (stan::math::logical_eq(supply_model, 3)) {
-                current_statement__ = 101;
+                current_statement__ = 102;
                 inv_markup = (alpha_structural * (w + ((1 - w) * (s_out /
                   (s_out +
                   stan::model::rvalue(shareIn, "shareIn",
                     stan::model::index_uni(n)))))));
               } else {
+                double denom = std::numeric_limits<double>::quiet_NaN();
                 current_statement__ = 99;
-                inv_markup = alpha_structural;
+                denom = stan::math::fmin(0.99,
+                          (stan::model::rvalue(shareIn, "shareIn",
+                             stan::model::index_uni(n)) * (1.0 - s_out)));
+                current_statement__ = 100;
+                inv_markup = (alpha_structural * (w + ((1 - w) * (denom /
+                  -stan::math::log((1.0 - denom))))));
               }
             }
           }

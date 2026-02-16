@@ -26,7 +26,9 @@
 #' @importFrom RcppParallel RcppParallelLibs
 #' @importFrom loo loo waic loo_compare loo_model_weights extract_log_lik
 #'   relative_eff
-#' @importFrom antitrust sim calcShares
+#' @importFrom antitrust calcMC calcPrices calcShares ownerToMatrix
+#'   elast diversion CV HypoMonTest
 #' @importFrom stats plogis quantile sd weighted.mean
+#' @importFrom utils capture.output
 #' @useDynLib antitrustBayes, .registration = TRUE
 "_PACKAGE"

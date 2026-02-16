@@ -10,14 +10,48 @@
 \usage{
 \S4method{show}{BayesSim}(object)
 
-\S4method{summary}{BayesSim}(object)
+\S4method{summary}{BayesSim}(
+  object,
+  market = FALSE,
+  levels = FALSE,
+  revenue = TRUE,
+  digits = 2,
+  ...
+)
 }
 \arguments{
 \item{object}{A \code{BayesSim} object.}
+
+\item{market}{Logical. If \code{TRUE}, return market-level statistics
+(HHI change, industry price change, compensating variation, etc.).
+If \code{FALSE} (default), return product-level statistics
+(pre/post prices, shares, price deltas).}
+
+\item{levels}{Logical. If \code{TRUE}, report level changes instead of
+percent changes. Default \code{FALSE}.}
+
+\item{revenue}{Logical. If \code{TRUE}, report revenue shares.
+Default \code{TRUE}.}
+
+\item{digits}{Integer; number of significant digits. Default 2.}
+
+\item{...}{Additional arguments passed to the underlying
+\pkg{antitrust} \code{summary} method.}
+}
+\value{
+A list with components \code{mean} and \code{sd}, each a
+data frame with the same structure as the \pkg{antitrust}
+\code{summary} output. If \code{market = TRUE}, each is a
+single-row data frame of market-level statistics; if
+\code{market = FALSE}, each has one row per product.
 }
 \description{
 S4 class holding the results of merger simulations computed
 over posterior draws from a \code{\linkS4class{BayesLogit}} object.
+
+Mirrors the \code{summary} method for \pkg{antitrust} \code{Bertrand}
+objects, but computes posterior means and standard deviations across
+all valid draws.
 }
 \section{Slots}{
 

@@ -7,9 +7,7 @@
 bayes_sim(
   fit,
   ownerPost,
-  supply = "bertrand",
-  demand = "Logit",
-  n_draws = 200L,
+  n_draws = NULL,
   mcDelta = NULL,
   subset = NULL,
   insideSize = 1,
@@ -27,13 +25,8 @@ bayes_sim(
 (same length as products in each market) or a named list of ownership
 matrices, one per market.}
 
-\item{supply}{Character string for the \pkg{antitrust} supply model.
-Default \code{"bertrand"}.}
-
-\item{demand}{Character string for the \pkg{antitrust} demand model.
-Default \code{"Logit"}.}
-
-\item{n_draws}{Integer number of posterior draws to use. Default 200.}
+\item{n_draws}{Integer number of posterior draws to use for simulation.
+Default \code{NULL}, which uses \code{min(200, total_draws)}.}
 
 \item{mcDelta}{Numeric vector of proportional marginal cost changes.
 Default \code{NULL} (no cost changes).}
@@ -50,7 +43,8 @@ uses group identifiers from the estimation data.}
 
 \item{market}{Which market(s) to simulate. Default \code{NULL} (all).}
 
-\item{...}{Additional arguments passed to \code{\link[antitrust]{sim}}.}
+\item{...}{Additional arguments passed to
+\code{\link[antitrust]{calcPrices}}.}
 }
 \value{
 A \code{\linkS4class{BayesSim}} object.
@@ -58,21 +52,40 @@ A \code{\linkS4class{BayesSim}} object.
 \description{
 Takes a fitted \code{\linkS4class{BayesLogit}} object and simulates the
 price effects of a merger using posterior draws of demand parameters.
-Each draw produces a complete merger simulation via
-\code{\link[antitrust]{sim}}, yielding posterior distributions of price
-changes, share changes, and other competition metrics.
+For each draw, the function constructs an \pkg{antitrust} class object
+matching the estimated supply model, calibrates marginal costs via
+\code{\link[antitrust]{calcMC}}, and solves for post-merger equilibrium
+prices via \code{\link[antitrust]{calcPrices}}, yielding posterior
+distributions of price changes, share changes, and other competition
+metrics.
 }
 \details{
 For each posterior draw \eqn{i} and each market \eqn{m}, the function:
 \enumerate{
-\item Extracts the price coefficient \eqn{\alpha^{(i)}_m} and outside
-share \eqn{s_0^{(i)}_m} from the posterior.
+\item Extracts the price coefficient \eqn{\alpha_m^{(i)}} and outside
+share \eqn{s_{0,m}^{(i)}} from the posterior.
 \item Computes unconditional shares:
 \eqn{s_j = s_j^{cond} \times (1 - s_0)}.
 \item Inverts for mean valuations:
 \eqn{\delta_j = \log(s_j) - \log(s_0) - \alpha \times p_j}.
-\item Calls \code{\link[antitrust]{sim}} with these demand parameters.
-\item Extracts pre- and post-merger prices from the simulation object.
+\item Constructs the appropriate \pkg{antitrust} class object
+(\code{Logit}, \code{LogitCournot}, or \code{Auction2ndLogit})
+matching the estimated supply model, with the draw's demand
+parameters set as \code{slopes}.
+\item Calibrates pre- and post-merger marginal costs using
+\code{\link[antitrust]{calcMC}}.
+\item Sets observed prices as the pre-merger equilibrium and solves
+for post-merger equilibrium prices using
+\code{\link[antitrust]{calcPrices}}.
+}
+
+The supply model determines which \pkg{antitrust} class is used:
+\describe{
+\item{\code{"bertrand"}}{Creates a \code{Logit} object (Nash-Bertrand).}
+\item{\code{"monopolistic"}}{Creates a \code{Logit} object
+(monopolistic competition).}
+\item{\code{"cournot"}}{Creates a \code{LogitCournot} object.}
+\item{\code{"auction"}}{Creates an \code{Auction2ndLogit} object.}
 }
 }
 \examples{
@@ -92,5 +105,8 @@ data(pnb)
 
 }
 \seealso{
-\code{\link{bayes_est}}, \code{\link[antitrust]{sim}}
+\code{\link{bayes_est}},
+\code{\link[antitrust]{calcMC}},
+\code{\link[antitrust]{calcPrices}},
+\code{\link[antitrust]{calcShares}}
 }

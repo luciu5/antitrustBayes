@@ -2,20 +2,20 @@
 #'
 #' Takes a fitted \code{\linkS4class{BayesLogit}} object and simulates the
 #' price effects of a merger using posterior draws of demand parameters.
-#' Each draw produces a complete merger simulation via
-#' \code{\link[antitrust]{sim}}, yielding posterior distributions of price
-#' changes, share changes, and other competition metrics.
+#' For each draw, the function constructs an \pkg{antitrust} class object
+#' matching the estimated supply model, calibrates marginal costs via
+#' \code{\link[antitrust]{calcMC}}, and solves for post-merger equilibrium
+#' prices via \code{\link[antitrust]{calcPrices}}, yielding posterior
+#' distributions of price changes, share changes, and other competition
+#' metrics.
 #'
 #' @param fit A \code{\linkS4class{BayesLogit}} object from
 #'   \code{\link{bayes_est}}.
 #' @param ownerPost Post-merger ownership: either a vector of firm IDs
 #'   (same length as products in each market) or a named list of ownership
 #'   matrices, one per market.
-#' @param supply Character string for the \pkg{antitrust} supply model.
-#'   Default \code{"bertrand"}.
-#' @param demand Character string for the \pkg{antitrust} demand model.
-#'   Default \code{"Logit"}.
-#' @param n_draws Integer number of posterior draws to use. Default 200.
+#' @param n_draws Integer number of posterior draws to use for simulation.
+#'   Default \code{NULL}, which uses \code{min(200, total_draws)}.
 #' @param mcDelta Numeric vector of proportional marginal cost changes.
 #'   Default \code{NULL} (no cost changes).
 #' @param subset Logical vector indicating which products to include in
@@ -25,24 +25,44 @@
 #' @param labels Character vector of product labels. If \code{NULL},
 #'   uses group identifiers from the estimation data.
 #' @param market Which market(s) to simulate. Default \code{NULL} (all).
-#' @param ... Additional arguments passed to \code{\link[antitrust]{sim}}.
+#' @param ... Additional arguments passed to
+#'   \code{\link[antitrust]{calcPrices}}.
 #'
 #' @details
 #' For each posterior draw \eqn{i} and each market \eqn{m}, the function:
 #' \enumerate{
-#'   \item Extracts the price coefficient \eqn{\alpha^{(i)}_m} and outside
-#'     share \eqn{s_0^{(i)}_m} from the posterior.
+#'   \item Extracts the price coefficient \eqn{\alpha_m^{(i)}} and outside
+#'     share \eqn{s_{0,m}^{(i)}} from the posterior.
 #'   \item Computes unconditional shares:
 #'     \eqn{s_j = s_j^{cond} \times (1 - s_0)}.
 #'   \item Inverts for mean valuations:
 #'     \eqn{\delta_j = \log(s_j) - \log(s_0) - \alpha \times p_j}.
-#'   \item Calls \code{\link[antitrust]{sim}} with these demand parameters.
-#'   \item Extracts pre- and post-merger prices from the simulation object.
+#'   \item Constructs the appropriate \pkg{antitrust} class object
+#'     (\code{Logit}, \code{LogitCournot}, or \code{Auction2ndLogit})
+#'     matching the estimated supply model, with the draw's demand
+#'     parameters set as \code{slopes}.
+#'   \item Calibrates pre- and post-merger marginal costs using
+#'     \code{\link[antitrust]{calcMC}}.
+#'   \item Sets observed prices as the pre-merger equilibrium and solves
+#'     for post-merger equilibrium prices using
+#'     \code{\link[antitrust]{calcPrices}}.
+#' }
+#'
+#' The supply model determines which \pkg{antitrust} class is used:
+#' \describe{
+#'   \item{\code{"bertrand"}}{Creates a \code{Logit} object (Nash-Bertrand).}
+#'   \item{\code{"monopolistic"}}{Creates a \code{Logit} object
+#'     (monopolistic competition).}
+#'   \item{\code{"cournot"}}{Creates a \code{LogitCournot} object.}
+#'   \item{\code{"auction"}}{Creates an \code{Auction2ndLogit} object.}
 #' }
 #'
 #' @return A \code{\linkS4class{BayesSim}} object.
 #'
-#' @seealso \code{\link{bayes_est}}, \code{\link[antitrust]{sim}}
+#' @seealso \code{\link{bayes_est}},
+#'   \code{\link[antitrust]{calcMC}},
+#'   \code{\link[antitrust]{calcPrices}},
+#'   \code{\link[antitrust]{calcShares}}
 #'
 #' @examples
 #' \donttest{
@@ -61,9 +81,7 @@
 #'
 #' @export
 bayes_sim <- function(fit, ownerPost,
-                      supply = "bertrand",
-                      demand = "Logit",
-                      n_draws = 200L,
+                      n_draws = NULL,
                       mcDelta = NULL,
                       subset = NULL,
                       insideSize = 1,
@@ -80,8 +98,16 @@ bayes_sim <- function(fit, ownerPost,
 
   draws <- rstan::extract(fit@stanfit)
   df    <- fit@data
-  sd_data <- fit@stan_data
   price_sd <- fit@price_sd
+
+  # Map supply_model integer to antitrust class name
+  supply_class <- switch(as.character(fit@supply_model),
+    "1" = "Logit",
+    "2" = "Logit",
+    "3" = "LogitCournot",
+    "4" = "Auction2ndLogit"
+  )
+  is_auction <- fit@supply_model == 4L
 
   # Determine markets to simulate
   market_f <- as.factor(df$market)
@@ -94,7 +120,11 @@ bayes_sim <- function(fit, ownerPost,
   }
 
   n_total <- nrow(draws$a_market)
-  draw_idx <- sample(seq_len(n_total), min(n_draws, n_total))
+  if (is.null(n_draws)) {
+    n_draws <- min(200L, n_total)
+  }
+  n_draws <- min(as.integer(n_draws), n_total)
+  draw_idx <- sample(seq_len(n_total), n_draws)
   n_draws_actual <- length(draw_idx)
 
   # Prepare market-year index mapping
@@ -125,27 +155,19 @@ bayes_sim <- function(fit, ownerPost,
     # Market-year index (take the first one for this market)
     mky_int_val <- as.integer(mky_f)[mkt_idx[1]]
 
-    # Ownership
-    ownerPre_m <- diag(n_prod)
+    # Ownership: pass vectors or matrices; ownerToMatrix handles conversion
+    ownerPre_m <- as.character(mdata$group)
     if (is.list(ownerPost)) {
       ownerPost_m <- ownerPost[[mk]]
     } else if (is.matrix(ownerPost)) {
       ownerPost_m <- ownerPost
     } else {
-      # Vector of firm IDs: convert to matrix
-      owner_pre_vec <- as.character(mdata$group)
-      if (length(ownerPost) == n_prod) {
-        owner_post_vec <- as.character(ownerPost)
-      } else {
-        stop("'ownerPost' vector length does not match products in market '",
-             mk, "'.")
-      }
-      ownerPost_m <- outer(owner_post_vec, owner_post_vec, "==") * 1.0
-      ownerPre_m  <- outer(owner_pre_vec, owner_pre_vec, "==") * 1.0
+      ownerPost_m <- as.character(ownerPost[mkt_idx])
     }
 
     prices_m <- as.numeric(mdata$prices)
     shares_cond <- as.numeric(mdata$shares)
+    margins_m <- as.numeric(mdata$margins)
 
     if (is.null(labels)) {
       labels_m <- as.character(mdata$group)
@@ -186,30 +208,64 @@ bayes_sim <- function(fit, ownerPost,
     for (d in seq_along(draw_idx)) {
       i <- draw_idx[d]
 
+      # Extract posterior draw parameters
       alpha_raw <- draws$a_market[i, market_int_val]
       alpha <- alpha_raw / price_sd
 
       s0 <- plogis(draws$s0_logit[i, mky_int_val])
 
+      # Compute unconditional shares and mean valuations
       shares_uncond <- shares_cond * (1 - s0)
-
       meanval <- log(shares_uncond) - log(s0) - alpha * prices_m
 
-      res <- tryCatch(
-        antitrust::sim(
+      res <- tryCatch({
+
+        # Construct the appropriate antitrust class object
+        # (following the structure of antitrust::sim)
+        obj <- new(supply_class,
           prices       = prices_m,
-          supply       = supply,
-          demand       = demand,
-          demand.param = list(alpha = alpha, meanval = meanval),
+          shares       = shares_uncond,
+          margins      = margins_m,
           ownerPre     = ownerPre_m,
           ownerPost    = ownerPost_m,
           mcDelta      = mcDelta_m,
           subset       = subset_m,
           insideSize   = insideSize,
           priceOutside = priceOutside,
-          labels       = labels_m,
-          ...
-        ),
+          priceStart   = prices_m,
+          shareInside  = 1 - s0,
+          normIndex    = NA,
+          labels       = labels_m
+        )
+
+        # Set demand slopes from posterior draw
+        obj@slopes <- list(alpha = alpha, meanval = meanval)
+
+        # Convert ownership vectors to matrices
+        obj@ownerPre  <- ownerToMatrix(obj, TRUE)
+        obj@ownerPost <- ownerToMatrix(obj, FALSE)
+
+        # Calibrate marginal costs from FOC + observed prices
+        obj@mcPre  <- calcMC(obj, preMerger = TRUE)
+        obj@mcPost <- calcMC(obj, preMerger = FALSE)
+
+        # Use observed prices as pre-merger equilibrium
+        obj@pricePre <- prices_m
+
+        # Solve for post-merger equilibrium prices
+        # (auction models don't pass subset to calcPrices)
+        if (is_auction) {
+          obj@pricePost <- calcPrices(obj, preMerger = FALSE, ...)
+        } else {
+          obj@pricePost <- calcPrices(obj, preMerger = FALSE,
+                                      subset = subset_m, ...)
+        }
+
+        # Set market size
+        obj@mktSize <- insideSize / sum(calcShares(obj))
+
+        obj
+      },
         error = function(e) NULL
       )
 

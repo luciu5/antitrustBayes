@@ -18,7 +18,7 @@
 #'   firms or holding companies). Used for hierarchical mean-value effects.
 #' @param supply_model Character string specifying the supply model:
 #'   \code{"bertrand"} (default), \code{"monopolistic"}, \code{"cournot"},
-#'   or \code{"competitive"}.
+#'   or \code{"auction"}.
 #' @param use_cutoff Logical. If \code{TRUE}, estimate a fringe-firm share
 #'   cutoff. Default \code{FALSE}.
 #' @param use_rho Logical. If \code{TRUE}, estimate share-margin error
@@ -36,9 +36,10 @@
 #' first-order condition. Four supply models are supported:
 #' \describe{
 #'   \item{1. \code{"bertrand"}}{Nash-Bertrand differentiated products pricing.}
-#'   \item{2. \code{"monopolistic"}}{Monopolistic competition.}
+#'   \item{2. \code{"monopolistic"}}{Monopolistic competition
+#'     (single-product Bertrand).}
 #'   \item{3. \code{"cournot"}}{Cournot quantity competition.}
-#'   \item{4. \code{"competitive"}}{Perfectly competitive (no markup).}
+#'   \item{4. \code{"auction"}}{Second-score auction with Logit demand.}
 #' }
 #'
 #' The \code{priors} argument accepts a named list with any of:
@@ -91,7 +92,7 @@
 bayes_est <- function(prices, shares, margins,
                       market, year = NULL, group,
                       supply_model = c("bertrand", "monopolistic",
-                                       "cournot", "competitive"),
+                                       "cournot", "auction"),
                       use_cutoff = FALSE,
                       use_rho = TRUE,
                       use_hmt = FALSE,
@@ -105,7 +106,7 @@ bayes_est <- function(prices, shares, margins,
     bertrand      = 1L,
     monopolistic  = 2L,
     cournot       = 3L,
-    competitive   = 4L
+    auction       = 4L
   )
 
   # Default year if not supplied

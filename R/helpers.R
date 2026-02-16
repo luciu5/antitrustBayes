@@ -122,15 +122,15 @@ prepare_stan_data <- function(prices, shares, margins, market, year, group,
       market_year_idx = mky_int,
       K_s0           = K_s0,
       X_s0           = X_s0_mat,
-      mky_to_market  = mky_to_market,
-      mky_to_year    = mky_to_year,
+      mky_to_market  = array(mky_to_market),
+      mky_to_year    = array(mky_to_year),
       is_single_market = is_single_market,
       use_rho        = as.integer(use_rho),
       use_hmt        = as.integer(use_hmt),
       avg_price_hmt  = avg_price_hmt,
       avg_margin_hmt = avg_margin_hmt,
       ssnip_hmt      = ssnip_hmt,
-      implied_s0     = implied_s0
+      implied_s0     = array(implied_s0)
     ),
     default_priors
   )

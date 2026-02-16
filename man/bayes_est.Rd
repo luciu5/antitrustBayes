@@ -11,7 +11,7 @@ bayes_est(
   market,
   year = NULL,
   group,
-  supply_model = c("bertrand", "monopolistic", "cournot", "competitive"),
+  supply_model = c("bertrand", "monopolistic", "cournot", "auction"),
   use_cutoff = FALSE,
   use_rho = TRUE,
   use_hmt = FALSE,
@@ -40,7 +40,7 @@ firms or holding companies). Used for hierarchical mean-value effects.}
 
 \item{supply_model}{Character string specifying the supply model:
 \code{"bertrand"} (default), \code{"monopolistic"}, \code{"cournot"},
-or \code{"competitive"}.}
+or \code{"auction"}.}
 
 \item{use_cutoff}{Logical. If \code{TRUE}, estimate a fringe-firm share
 cutoff. Default \code{FALSE}.}
@@ -73,9 +73,10 @@ The model estimates a Logit demand system jointly with a supply-side
 first-order condition. Four supply models are supported:
 \describe{
 \item{1. \code{"bertrand"}}{Nash-Bertrand differentiated products pricing.}
-\item{2. \code{"monopolistic"}}{Monopolistic competition.}
+\item{2. \code{"monopolistic"}}{Monopolistic competition
+(single-product Bertrand).}
 \item{3. \code{"cournot"}}{Cournot quantity competition.}
-\item{4. \code{"competitive"}}{Perfectly competitive (no markup).}
+\item{4. \code{"auction"}}{Second-score auction with Logit demand.}
 }
 
 The \code{priors} argument accepts a named list with any of:

@@ -1,6 +1,6 @@
 // Bayesian Logit Demand + Supply Model for Merger Simulation
 // Hierarchical model with market-level random effects
-// Supports 4 supply models: Bertrand, Monopolistic, Cournot, Competitive
+// Supports 4 supply models: Bertrand, Monopolistic Competition, Cournot, 2nd Score Auction
 
 functions {
   real soft_hmt_penalty(real agg_elast, real max_elast, real scale) {
@@ -51,18 +51,18 @@ functions {
 
       real inv_markup;
       if (supply_model == 1) {
-        // Bertrand
+        // Bertrand: margin = 1 / (alpha * (1 - s_uncond))
         inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[i] * (1.0 - s_out)));
       } else if (supply_model == 2) {
-        // Monopolistic
-        real denom = fmin(0.99, shareIn[i] * (1.0 - s_out));
-        inv_markup = alpha_structural * (w + (1-w) * (denom / -log(1.0 - denom)));
+        // Monopolistic competition: single-product Bertrand FOC
+        inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[i] * (1.0 - s_out)));
       } else if (supply_model == 3) {
-        // Cournot
+        // Cournot: margin = (s0 + s) / (alpha * s0)
         inv_markup = alpha_structural * (w + (1-w) * (s_out / (s_out + shareIn[i])));
       } else {
-        // Competitive (no markup)
-        inv_markup = alpha_structural;
+        // 2nd Score Auction: margin = -log(1 - s) / (alpha * s)
+        real denom = fmin(0.99, shareIn[i] * (1.0 - s_out));
+        inv_markup = alpha_structural * (w + (1-w) * (denom / -log(1.0 - denom)));
       }
 
       real mu2 = inv_markup;
@@ -299,14 +299,18 @@ generated quantities {
 
       real inv_markup;
       if (supply_model == 1) {
+        // Bertrand
         inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[n] * (1.0 - s_out)));
       } else if (supply_model == 2) {
-        real denom = fmin(0.99, shareIn[n] * (1.0 - s_out));
-        inv_markup = alpha_structural * (w + (1-w) * (denom / -log(1.0 - denom)));
+        // Monopolistic competition
+        inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[n] * (1.0 - s_out)));
       } else if (supply_model == 3) {
+        // Cournot
         inv_markup = alpha_structural * (w + (1-w) * (s_out / (s_out + shareIn[n])));
       } else {
-        inv_markup = alpha_structural;
+        // 2nd Score Auction
+        real denom = fmin(0.99, shareIn[n] * (1.0 - s_out));
+        inv_markup = alpha_structural * (w + (1-w) * (denom / -log(1.0 - denom)));
       }
 
       pred_marginInv[n] = inv_markup;

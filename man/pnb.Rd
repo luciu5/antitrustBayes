@@ -31,14 +31,15 @@ Trust Corn Exchange Bank (group \code{"889018"}).
 The merging parties are:
 \itemize{
 \item \strong{Acquirer:} Philadelphia National Bank (group \code{"298816"},
-~21\% share)
+~21\\% share)
 \item \strong{Target:} Girard Trust Corn Exchange Bank (group
-\code{"889018"}, ~14\% share)
+\code{"889018"}, ~14\\% share)
 }
 }
 \examples{
 data(pnb)
 head(pnb)
 sum(pnb$shares)  # approximately 1
+
 }
 \keyword{datasets}
