@@ -1,0 +1,57 @@
+Package: antitrustBayes
+Title: Bayesian Merger Simulation for Antitrust Analysis
+Version: 0.1.0
+Authors@R: c(
+    person("Charles", "Taragin",
+           email = "ctaragin+antitrustr@gmail.com",
+           role = c("aut", "cre"))
+    )
+Description: Bayesian estimation of differentiated products demand and supply
+    models using 'Stan' via 'rstan', with merger simulation via the 'antitrust'
+    package. Provides posterior distributions of merger price effects, consumer
+    welfare changes, and other competition metrics. Supports Bayesian model
+    averaging and comparison across supply models using WAIC and LOO-CV.
+License: CC0
+License_is_FOSS: yes
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.0.0),
+    methods
+Imports:
+    antitrust (>= 0.99.27),
+    loo (>= 2.5.0),
+    Rcpp (>= 0.12.0),
+    RcppParallel (>= 5.0.1),
+    rstan (>= 2.26.0),
+    rstantools (>= 2.6.0),
+    stats
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    ggplot2,
+    bayesplot
+Config/testthat/edition: 3
+Collate:
+    'AllClasses.R'
+    'antitrustBayes-package.R'
+    'bma.R'
+    'data.R'
+    'estimate.R'
+    'helpers.R'
+    'methods.R'
+    'simulate.R'
+    'stanmodels.R'
+URL: https://github.com/luciu5/antitrustBayes
+Biarch: true
+LinkingTo: 
+    BH (>= 1.66.0),
+    Rcpp (>= 0.12.0),
+    RcppEigen (>= 0.3.3.3.0),
+    RcppParallel (>= 5.0.1),
+    rstan (>= 2.18.1),
+    StanHeaders (>= 2.18.0)
+SystemRequirements: GNU make
