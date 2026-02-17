@@ -4,28 +4,41 @@
 \alias{bayes_avg}
 \title{Bayesian Model Averaging of Merger Simulations}
 \usage{
-bayes_avg(sims, weights)
+bayes_avg(sims, weights, n_draws = 1000L)
 }
 \arguments{
 \item{sims}{A list of \code{\linkS4class{BayesSim}} objects.}
 
 \item{weights}{Numeric vector of model weights (must sum to 1).
 Typically from \code{\link{bayes_compare}}.}
+
+\item{n_draws}{Total number of draws in the pooled result.
+Default 1000.}
 }
 \value{
-A data frame of model-averaged price change summaries with
-columns for market, product, weighted mean, weighted SD, and quantiles.
+A \code{\linkS4class{BayesSim}} object with draws resampled
+across models proportional to their weights. All \code{BayesSim}
+methods (e.g., \code{summary}, \code{elast}, \code{CV}) can be
+called on the result.
 }
 \description{
 Combines merger simulation results from multiple models using
-model weights (e.g., from \code{\link{bayes_compare}}).
+model weights (e.g., from \code{\link{bayes_compare}}). Returns a
+\code{\linkS4class{BayesSim}} object containing a weighted pool of
+simulation draws, so that all \code{BayesSim} methods
+(\code{summary}, \code{elast}, \code{diversion}, \code{CV},
+\code{HypoMonTest}) work on the model-averaged result.
 }
 \examples{
 \donttest{
 # comp <- bayes_compare(Bertrand = fit1, Cournot = fit2)
 # sim1 <- bayes_sim(fit1, ownerPost = ...)
 # sim2 <- bayes_sim(fit2, ownerPost = ...)
-# bayes_avg(list(sim1, sim2), weights = comp$weight)
+# avg <- bayes_avg(list(sim1, sim2), weights = comp$weight)
+# summary(avg)
+# summary(avg, market = TRUE)
+# elast(avg)
+# CV(avg)
 }
 
 }

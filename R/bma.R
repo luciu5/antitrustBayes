@@ -33,7 +33,7 @@ bayes_compare <- function(...) {
     nms[empty] <- paste0("Model_", which(empty))
   }
 
-  supply_names <- c("Bertrand", "Monopolistic", "Cournot", "Competitive")
+  supply_names <- c("Bertrand", "Monopolistic", "Cournot", "Auction")
 
   loo_list  <- list()
   waic_list <- list()
@@ -83,25 +83,37 @@ bayes_compare <- function(...) {
 #' Bayesian Model Averaging of Merger Simulations
 #'
 #' Combines merger simulation results from multiple models using
-#' model weights (e.g., from \code{\link{bayes_compare}}).
+#' model weights (e.g., from \code{\link{bayes_compare}}). Returns a
+#' \code{\linkS4class{BayesSim}} object containing a weighted pool of
+#' simulation draws, so that all \code{BayesSim} methods
+#' (\code{summary}, \code{elast}, \code{diversion}, \code{CV},
+#' \code{HypoMonTest}) work on the model-averaged result.
 #'
 #' @param sims A list of \code{\linkS4class{BayesSim}} objects.
 #' @param weights Numeric vector of model weights (must sum to 1).
 #'   Typically from \code{\link{bayes_compare}}.
+#' @param n_draws Total number of draws in the pooled result.
+#'   Default 1000.
 #'
-#' @return A data frame of model-averaged price change summaries with
-#'   columns for market, product, weighted mean, weighted SD, and quantiles.
+#' @return A \code{\linkS4class{BayesSim}} object with draws resampled
+#'   across models proportional to their weights. All \code{BayesSim}
+#'   methods (e.g., \code{summary}, \code{elast}, \code{CV}) can be
+#'   called on the result.
 #'
 #' @examples
 #' \donttest{
 #' # comp <- bayes_compare(Bertrand = fit1, Cournot = fit2)
 #' # sim1 <- bayes_sim(fit1, ownerPost = ...)
 #' # sim2 <- bayes_sim(fit2, ownerPost = ...)
-#' # bayes_avg(list(sim1, sim2), weights = comp$weight)
+#' # avg <- bayes_avg(list(sim1, sim2), weights = comp$weight)
+#' # summary(avg)
+#' # summary(avg, market = TRUE)
+#' # elast(avg)
+#' # CV(avg)
 #' }
 #'
 #' @export
-bayes_avg <- function(sims, weights) {
+bayes_avg <- function(sims, weights, n_draws = 1000L) {
   if (!is.list(sims) || length(sims) < 2L) {
     stop("'sims' must be a list of at least 2 BayesSim objects.")
   }
@@ -112,50 +124,78 @@ bayes_avg <- function(sims, weights) {
     stop("'weights' must sum to 1.")
   }
 
+  n_draws <- as.integer(n_draws)
+
   # Get common markets
   all_markets <- Reduce(intersect, lapply(sims, function(s) s@market_ids))
   if (length(all_markets) == 0L) {
     stop("No common markets across simulation objects.")
   }
 
-  results <- list()
+  # Number of draws to take from each model
+  n_per_model <- pmax(1L, round(weights * n_draws))
+
+  pooled_sims     <- list()
+  pooled_ppre     <- list()
+  pooled_ppost    <- list()
+  pooled_pchg     <- list()
+  pooled_spre     <- list()
+  pooled_spost    <- list()
+  pooled_labels   <- list()
+  pooled_n_valid  <- integer(length(all_markets))
+  names(pooled_n_valid) <- all_markets
 
   for (mk in all_markets) {
-    # Pool weighted draws
-    pooled_pchg <- NULL
+    mk_sims  <- list()
+    mk_ppre  <- NULL
+    mk_ppost <- NULL
+    mk_spre  <- NULL
+    mk_spost <- NULL
 
     for (i in seq_along(sims)) {
       s <- sims[[i]]
-      pchg <- s@price_change[[mk]]
-      valid_rows <- which(rowSums(is.na(pchg)) == 0)
-      if (length(valid_rows) == 0L) next
+      sims_mk <- s@sims[[mk]]
+      valid <- which(!vapply(sims_mk, is.null, logical(1)))
+      if (length(valid) == 0L) next
 
-      pchg_valid <- pchg[valid_rows, , drop = FALSE]
+      # Resample from this model's valid draws
+      n_take <- min(n_per_model[i], length(valid))
+      sel <- sample(valid, n_take, replace = TRUE)
 
-      # Resample proportional to model weight
-      n_resample <- max(1L, round(weights[i] * 1000))
-      resample_idx <- sample(nrow(pchg_valid), n_resample, replace = TRUE)
-      pooled_pchg <- rbind(pooled_pchg, pchg_valid[resample_idx, , drop = FALSE])
+      for (j in sel) {
+        mk_sims <- c(mk_sims, list(sims_mk[[j]]))
+      }
+
+      mk_ppre  <- rbind(mk_ppre,  s@price_pre[[mk]][sel, , drop = FALSE])
+      mk_ppost <- rbind(mk_ppost, s@price_post[[mk]][sel, , drop = FALSE])
+      mk_spre  <- rbind(mk_spre,  s@shares_pre[[mk]][sel, , drop = FALSE])
+      mk_spost <- rbind(mk_spost, s@shares_post[[mk]][sel, , drop = FALSE])
     }
 
-    if (is.null(pooled_pchg) || nrow(pooled_pchg) == 0L) next
-
-    labs <- sims[[1]]@product_labels[[mk]]
-
-    tbl <- data.frame(
-      market  = mk,
-      product = labs,
-      mean    = colMeans(pooled_pchg),
-      sd      = apply(pooled_pchg, 2, sd),
-      q025    = apply(pooled_pchg, 2, quantile, probs = 0.025),
-      median  = apply(pooled_pchg, 2, quantile, probs = 0.5),
-      q975    = apply(pooled_pchg, 2, quantile, probs = 0.975),
-      prob_positive = colMeans(pooled_pchg > 0),
-      stringsAsFactors = FALSE
-    )
-    rownames(tbl) <- NULL
-    results[[mk]] <- tbl
+    n_total <- length(mk_sims)
+    pooled_sims[[mk]]    <- mk_sims
+    pooled_ppre[[mk]]    <- mk_ppre
+    pooled_ppost[[mk]]   <- mk_ppost
+    pooled_pchg[[mk]]    <- if (n_total > 0L) mk_ppost / mk_ppre - 1 else NULL
+    pooled_spre[[mk]]    <- mk_spre
+    pooled_spost[[mk]]   <- mk_spost
+    pooled_labels[[mk]]  <- sims[[1]]@product_labels[[mk]]
+    pooled_n_valid[mk]   <- n_total
   }
 
-  do.call(rbind, results)
+  n_actual <- max(vapply(pooled_sims, length, integer(1)))
+
+  new("BayesSim",
+    sims           = pooled_sims,
+    price_pre      = pooled_ppre,
+    price_post     = pooled_ppost,
+    price_change   = pooled_pchg,
+    shares_pre     = pooled_spre,
+    shares_post    = pooled_spost,
+    market_ids     = all_markets,
+    product_labels = pooled_labels,
+    n_draws        = n_actual,
+    n_valid        = pooled_n_valid,
+    call           = match.call()
+  )
 }
