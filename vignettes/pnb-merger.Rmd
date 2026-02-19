@@ -1,0 +1,176 @@
+---
+title: "Bayesian Merger Simulation: Philadelphia National Bank"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Bayesian Merger Simulation: Philadelphia National Bank}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+This vignette demonstrates the full `antitrustBayes` workflow using the
+1963 Supreme Court case *United States v. Philadelphia National Bank*.
+The merger between Philadelphia National Bank (PNB) and Girard Trust
+would have created the largest bank in the Philadelphia metropolitan
+area. The Court found the merger violated Section 7 of the Clayton Act.
+
+We estimate Bayesian logit demand models under four supply assumptions,
+simulate the merger's price effects with full posterior uncertainty,
+compare models via bridge sampling and LOO-IC, and compute
+model-averaged predictions.
+
+## Data
+
+The package includes a dataset `pnb` with 39 banks in the Philadelphia
+market circa 1960.
+
+```{r data}
+library(antitrustBayes)
+data(pnb)
+str(pnb)
+```
+
+Each row is a bank with deposit rate (`prices`), market share
+(`shares`), price-cost margin (`margins`), and holding company
+identifier (`group`).
+
+## Step 1: Estimate Under Multiple Supply Models
+
+We estimate the Bayesian logit demand model under four supply
+assumptions: Nash-Bertrand, Monopolistic Competition, Cournot, and
+Second-Score Auction.
+
+```{r estimate, results='hide', message=FALSE}
+supply_models <- c("bertrand", "monopolistic", "cournot", "auction")
+
+fits <- lapply(supply_models, function(sm) {
+  bayes_est(
+    prices  = pnb$prices,
+    shares  = pnb$shares,
+    margins = pnb$margins,
+    market  = rep("PHL", nrow(pnb)),
+    group   = pnb$group,
+    supply_model = sm,
+    stan_options = list(
+      chains = 4, iter = 2000, warmup = 1000,
+      cores = 4, seed = 1960
+    )
+  )
+})
+names(fits) <- c("Bertrand", "MonCom", "Cournot", "Auction")
+```
+
+Inspect the Bertrand fit:
+
+```{r show-fit}
+fits$Bertrand
+```
+
+## Step 2: Model Comparison
+
+Compare models using LOO-IC and bridge sampling:
+
+```{r compare}
+comp <- bayes_compare(
+  Bertrand = fits$Bertrand,
+  MonCom   = fits$MonCom,
+  Cournot  = fits$Cournot,
+  Auction  = fits$Auction
+)
+print(comp)
+```
+
+Extract weights using either method:
+
+```{r weights}
+# Bridge sampling posterior probabilities (default):
+bayes_weights(comp, "bridge")
+
+# LOO stacking weights:
+bayes_weights(comp, "stacking")
+```
+
+## Step 3: Simulate the Merger
+
+The PNB-Girard Trust merger: acquirer is PNB (`298816`), target is
+Girard Trust (`889018`). Post-merger, Girard Trust's deposits are
+controlled by PNB.
+
+```{r ownership}
+owner_post <- pnb$group
+owner_post[owner_post == "889018"] <- "298816"
+```
+
+Simulate under each model:
+
+```{r simulate}
+sims <- lapply(fits, function(f) {
+  bayes_sim(f, ownerPost = owner_post, n_draws = 200)
+})
+```
+
+Examine the Bertrand simulation:
+
+```{r summary-bertrand}
+summary(sims$Bertrand)
+summary(sims$Bertrand, market = TRUE)
+```
+
+## Step 4: Bayesian Model Averaging
+
+Pool simulation draws across models proportional to bridge sampling
+weights:
+
+```{r bma}
+w <- bayes_weights(comp, "bridge")
+avg_sim <- bayes_avg(sims, weights = w)
+
+# Model-averaged price effects
+summary(avg_sim)
+
+# Market-level summary (HHI, industry price change, CV)
+summary(avg_sim, market = TRUE)
+```
+
+## Step 5: Additional Competition Metrics
+
+All standard antitrust metrics are available with posterior uncertainty:
+
+```{r metrics}
+# Elasticity matrix (posterior mean and SD)
+e <- elast(sims$Bertrand)
+round(e$mean[1:5, 1:5], 3)
+
+# Diversion ratios
+d <- diversion(sims$Bertrand)
+round(d$mean[1:5, 1:5], 3)
+
+# Compensating variation
+CV(sims$Bertrand)
+
+# Hypothetical Monopolist Test
+# (proportion of draws where a 5% SSNIP is profitable for merging parties)
+party_idx <- which(pnb$group %in% c("298816", "889018"))
+HypoMonTest(sims$Bertrand, prodIndex = party_idx)
+```
+
+## Notes
+
+- The `output = FALSE` convention in the underlying `antitrust` package
+  means prices are *input* prices (deposit rates), so negative price
+  changes indicate the merged bank pays depositors less --- a harm to
+  consumers.
+- The outside share (`s0`) is small (~1%) for this market, reflecting
+  limited substitution outside the 39 observed banks in 1960
+  Philadelphia. This amplifies unilateral effects.
+- Bridge sampling requires proper priors on all parameters; the model
+  uses informative priors calibrated from the data and supply FOCs.
