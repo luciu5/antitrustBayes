@@ -74,17 +74,21 @@ prepare_stan_data <- function(prices, shares, margins, market, year, group,
     K_s0 <- ncol(X_s0_mat)
   }
 
-  # Default priors
+  # Compute model-specific alpha prior from data and FOC
+  alpha_prior <- compute_alpha_prior(shares, margins, implied_s0,
+                                     mky_int, supply_model)
+
+  # Default priors (matched to mergerBayes defaults)
   default_priors <- list(
-    prior_sigma_share         = 0.5,
-    prior_sigma_margin        = 0.5,
+    prior_sigma_share         = 0.01,
+    prior_sigma_margin        = 1.0,
     prior_sigma_meanval_strat = 1.0,
     prior_sigma_meanval_fringe = 1.0,
-    prior_alpha_mean          = 1.0,
-    prior_alpha_sd            = 1.0,
-    s0_prior_mean             = 0.0,
-    s0_prior_sd               = 2.0,
-    prior_sigma_alpha         = 0.5,
+    prior_alpha_mean          = alpha_prior$mean,
+    prior_alpha_sd            = alpha_prior$sd,
+    s0_prior_mean             = -3.0,
+    s0_prior_sd               = 1.2,
+    prior_sigma_alpha         = 1.0,
     prior_sigma_beta_s0       = 1.0,
     prior_lkj                 = 2.0
   )
@@ -143,6 +147,52 @@ prepare_stan_data <- function(prices, shares, margins, market, year, group,
   attr(stan_data, "market_year_idx") <- mky_int
 
   stan_data
+}
+
+#' Compute Model-Specific Alpha Prior from Data and Supply FOC
+#'
+#' Uses 5th/95th percentile of shares and margins to derive a prior range
+#' for the price coefficient alpha that is consistent with the chosen supply
+#' model's first-order conditions.
+#'
+#' @param shares Numeric vector of product shares.
+#' @param margins Numeric vector of price-cost margins.
+#' @param implied_s0 Numeric vector of implied outside shares per market-year.
+#' @param mky_int Integer vector mapping observations to market-years.
+#' @param supply_model Integer 1--4.
+#' @return A list with elements \code{mean} and \code{sd}.
+#' @keywords internal
+compute_alpha_prior <- function(shares, margins, implied_s0, mky_int,
+                                supply_model) {
+  s_low  <- stats::quantile(shares, 0.05)
+  s_high <- stats::quantile(shares, 0.95)
+  m_low  <- stats::quantile(margins, 0.05)
+  m_high <- stats::quantile(margins, 0.95)
+
+  if (supply_model == 1L) {
+    # Bertrand: alpha ~ 1 / ((p-c) * (1 - s))
+    a_low  <- 1 / (m_high * (1 - s_low))
+    a_high <- 1 / (m_low  * (1 - s_high))
+  } else if (supply_model == 2L) {
+    # Monopolistic competition: alpha = 1 / (p-c)
+    a_low  <- 1 / m_high
+    a_high <- 1 / m_low
+  } else if (supply_model == 3L) {
+    # Cournot: alpha ~ (s0 + s) / (m * s0)
+    s0_proxy <- max(0.01, stats::median(implied_s0))
+    a_low  <- (s0_proxy + s_low)  / (m_high * s0_proxy)
+    a_high <- (s0_proxy + s_high) / (m_low  * s0_proxy)
+  } else {
+    # Auction: alpha ~ -log(1 - s) / (m * s)
+    a_low  <- -log(1 - s_low)  / (m_high * s_low)
+    a_high <- -log(1 - s_high) / (m_low  * s_high)
+  }
+
+  # Cover [a_low, a_high] with ~95% mass
+  p_mean <- (a_high + a_low) / 2
+  p_sd   <- (a_high - a_low) / 4
+
+  list(mean = p_mean, sd = p_sd)
 }
 
 #' Validate Inputs for bayes_est

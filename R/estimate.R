@@ -42,17 +42,25 @@
 #'   \item{4. \code{"auction"}}{Second-score auction with Logit demand.}
 #' }
 #'
+#' By default, the prior on the price coefficient alpha is calibrated from
+#' the data and supply model's first-order conditions, using the 5th/95th
+#' percentiles of shares and margins. This can be overridden via
+#' \code{priors}.
+#'
 #' The \code{priors} argument accepts a named list with any of:
 #' \describe{
-#'   \item{\code{prior_sigma_share}}{Half-normal scale for share error SD
-#'     (default 0.5).}
-#'   \item{\code{prior_sigma_margin}}{Half-normal scale for margin error SD
+#'   \item{\code{prior_sigma_share}}{Lognormal center for share error SD
+#'     (default 0.01).}
+#'   \item{\code{prior_sigma_margin}}{Lognormal center for margin error SD
 #'     (default 0.5).}
 #'   \item{\code{prior_sigma_meanval_strat}}{Half-normal scale for strategic
 #'     group mean-value SD (default 1.0).}
 #'   \item{\code{prior_alpha_mean}}{Prior mean for log(alpha) on price
-#'     sensitivity (default 1.0).}
-#'   \item{\code{prior_alpha_sd}}{Prior SD for log(alpha) (default 1.0).}
+#'     sensitivity (default: calibrated from data).}
+#'   \item{\code{prior_alpha_sd}}{Prior SD for log(alpha) (default:
+#'     calibrated from data).}
+#'   \item{\code{s0_prior_sd}}{Prior SD for outside share on logit scale,
+#'     used in single-market case (default 1.5).}
 #'   \item{\code{prior_lkj}}{LKJ prior parameter for share-margin correlation
 #'     (default 2.0).}
 #' }

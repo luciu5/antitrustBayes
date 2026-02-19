@@ -54,8 +54,8 @@ functions {
         // Bertrand: margin = 1 / (alpha * (1 - s_uncond))
         inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[i] * (1.0 - s_out)));
       } else if (supply_model == 2) {
-        // Monopolistic competition: single-product Bertrand FOC
-        inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[i] * (1.0 - s_out)));
+        // Monopolistic competition: alpha = 1/(p-c)
+        inv_markup = alpha_structural;
       } else if (supply_model == 3) {
         // Cournot: margin = (s0 + s) / (alpha * s0)
         inv_markup = alpha_structural * (w + (1-w) * (s_out / (s_out + shareIn[i])));
@@ -136,8 +136,8 @@ parameters {
   vector<lower=logit(0.01), upper=logit(0.99)>[N_market_year] s0_logit;
   vector<lower=0, upper=1>[(use_cutoff == 1) ? N_market : 0] cutoff_share;
   vector<lower=-1, upper=1>[use_rho == 1 ? 1 : 0] rho_param;
-  real<lower=0> sigma_share;
-  real<lower=0> sigma_margin;
+  real log_sigma_share;
+  real log_sigma_margin;
   vector<lower=0>[N_market_year > 1 ? 1 : 0] sigma_s0_vec;
 
   // Hierarchical s0
@@ -150,6 +150,9 @@ parameters {
 }
 
 transformed parameters {
+  real sigma_share = exp(log_sigma_share);
+  real sigma_margin = exp(log_sigma_margin);
+
   real rho = 0.0;
   if (use_rho == 1) rho = rho_param[1];
 
@@ -221,7 +224,8 @@ model {
   }
   b_group_raw ~ std_normal();
 
-  sigma_b_strat ~ normal(0, prior_sigma_meanval_strat);
+  // Informative prior pushes away from 0/infinity for better HMC geometry
+  sigma_b_strat ~ normal(1.0, 0.5);
   if (use_cutoff == 1) {
     sigma_b_fringe_vec ~ normal(0, prior_sigma_meanval_fringe);
     mu_b_fringe_vec ~ normal(0, 2);
@@ -231,7 +235,13 @@ model {
     s0_logit ~ normal(logit(implied_s0), sigma_s0_vec[1]);
     sigma_s0_vec ~ normal(0, 1.0);
   } else {
-    s0_logit ~ normal(logit(implied_s0), 5.0);
+    // If substantial outside share (> 2%), center prior on data.
+    // Otherwise fall back to user-specified informative prior.
+    if (implied_s0[1] > 0.02) {
+      s0_logit ~ normal(logit(implied_s0), 1.0);
+    } else {
+      s0_logit ~ normal(s0_prior_mean, s0_prior_sd);
+    }
   }
   beta_s0 ~ normal(0, prior_sigma_beta_s0);
 
@@ -246,8 +256,10 @@ model {
   if (use_rho == 1) {
     target += (prior_lkj - 1) * log1m(square(rho_param[1]));
   }
-  sigma_share ~ normal(0, prior_sigma_share);
-  sigma_margin ~ normal(0, prior_sigma_margin);
+  // Log-space priors prevent sigma collapse toward 0,
+  // which causes extreme curvature and divergences via exp() share link
+  log_sigma_share ~ normal(log(prior_sigma_share), 0.5);
+  log_sigma_margin ~ normal(log(prior_sigma_margin), 1.0);
 
   if (use_hmt == 1) {
      real alpha_check = exp(mu_log_a) / price_sd;
@@ -302,8 +314,8 @@ generated quantities {
         // Bertrand
         inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[n] * (1.0 - s_out)));
       } else if (supply_model == 2) {
-        // Monopolistic competition
-        inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[n] * (1.0 - s_out)));
+        // Monopolistic competition: alpha = 1/(p-c)
+        inv_markup = alpha_structural;
       } else if (supply_model == 3) {
         // Cournot
         inv_markup = alpha_structural * (w + (1-w) * (s_out / (s_out + shareIn[n])));

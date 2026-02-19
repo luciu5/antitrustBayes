@@ -1,28 +1,50 @@
-#' Compare Bayesian Models Using Information Criteria
+#' Compare Bayesian Models Using Information Criteria and Bridge Sampling
 #'
-#' Computes WAIC and LOO-IC for one or more fitted
-#' \code{\linkS4class{BayesLogit}} objects and returns a comparison table.
+#' Computes LOO-IC, WAIC, and optionally log marginal likelihoods via bridge
+#' sampling for one or more fitted \code{\linkS4class{BayesLogit}} objects.
+#' Returns a comparison table with model weights.
 #'
 #' @param ... One or more \code{BayesLogit} objects, optionally named.
+#' @param bridge Logical. If \code{TRUE} (default), compute log marginal
+#'   likelihoods via \code{\link[bridgesampling]{bridge_sampler}} for Bayes
+#'   factor model comparison. If \code{FALSE}, only LOO/WAIC are computed.
+#' @param bridge_maxiter Maximum iterations for bridge sampling.
+#'   Default 5000.
 #'
-#' @return A data frame with columns for model name, WAIC, LOO-IC,
-#'   effective number of parameters, and model weights.
+#' @return A data frame with columns for model name, supply model, LOOIC,
+#'   WAIC, stacking weights, and (if \code{bridge = TRUE}) log marginal
+#'   likelihoods, Bayes factors (vs. best model), and posterior model
+#'   probabilities (assuming equal prior model probabilities).
 #'
 #' @details
-#' Requires that the Stan model includes a \code{log_lik} generated quantity.
-#' Uses \code{\link[loo]{loo}} and \code{\link[loo]{waic}} for computation
-#' and \code{\link[loo]{loo_model_weights}} (stacking) for weights.
+#' Three model comparison approaches are provided:
+#' \describe{
+#'   \item{LOO-IC}{Leave-one-out cross-validation via \pkg{loo}. Stacking
+#'     weights reflect predictive performance.}
+#'   \item{WAIC}{Widely Applicable Information Criterion.}
+#'   \item{Bridge Sampling}{Computes the log marginal likelihood
+#'     \eqn{p(y | M_k)} via \code{\link[bridgesampling]{bridge_sampler}}.
+#'     Posterior model probabilities assume equal prior model probabilities.
+#'     Bayes factors are computed relative to the best model.}
+#' }
+#'
+#' Requires that the Stan model includes a \code{log_lik} generated quantity
+#' (for LOO/WAIC).
 #'
 #' @examples
 #' \donttest{
 #' # fit1 <- bayes_est(..., supply_model = "bertrand")
 #' # fit2 <- bayes_est(..., supply_model = "cournot")
 #' # bayes_compare(Bertrand = fit1, Cournot = fit2)
+#' # bayes_compare(Bertrand = fit1, Cournot = fit2, bridge = FALSE)
 #' }
 #'
 #' @export
-bayes_compare <- function(...) {
-  fits <- list(...)
+bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L) {
+  args <- list(...)
+
+  # Separate BayesLogit objects from named arguments
+  fits <- args[vapply(args, is, logical(1), "BayesLogit")]
 
   # Handle named and unnamed arguments
   nms <- names(fits)
@@ -37,12 +59,10 @@ bayes_compare <- function(...) {
 
   loo_list  <- list()
   waic_list <- list()
+  bridge_list <- list()
 
   for (i in seq_along(fits)) {
     fit <- fits[[i]]
-    if (!is(fit, "BayesLogit")) {
-      stop("Argument ", i, " is not a BayesLogit object.")
-    }
 
     log_lik <- loo::extract_log_lik(fit@stanfit, parameter_name = "log_lik",
                                      merge_chains = FALSE)
@@ -50,13 +70,26 @@ bayes_compare <- function(...) {
 
     loo_list[[i]]  <- loo::loo(log_lik, r_eff = r_eff)
     waic_list[[i]] <- loo::waic(log_lik)
+
+    # Bridge sampling for marginal likelihood
+    if (bridge) {
+      bridge_list[[i]] <- tryCatch(
+        bridgesampling::bridge_sampler(fit@stanfit, silent = TRUE,
+                                        maxiter = bridge_maxiter),
+        error = function(e) {
+          warning("Bridge sampling failed for model ", nms[i], ": ",
+                  conditionMessage(e))
+          NULL
+        }
+      )
+    }
   }
 
   names(loo_list) <- nms
   comp <- loo::loo_compare(loo_list)
 
-  # Model weights via stacking
-  weights <- loo::loo_model_weights(loo_list, method = "stacking")
+  # Stacking weights from LOO
+  weights_stacking <- loo::loo_model_weights(loo_list, method = "stacking")
 
   result <- data.frame(
     model         = nms,
@@ -70,15 +103,76 @@ bayes_compare <- function(...) {
                            numeric(1)),
     waic          = vapply(waic_list, function(x) x$estimates["waic", "Estimate"],
                            numeric(1)),
-    weight        = as.numeric(weights),
+    weight_stacking = as.numeric(weights_stacking),
     stringsAsFactors = FALSE
   )
+
+  # Add bridge sampling results
+  if (bridge && length(bridge_list) > 0L) {
+    logml <- vapply(bridge_list, function(b) {
+      if (!is.null(b)) b$logml else NA_real_
+    }, numeric(1))
+
+    max_logml <- max(logml, na.rm = TRUE)
+    diff_logml <- logml - max_logml
+    bf_vs_best <- exp(diff_logml)
+
+    # Posterior model probabilities (equal prior weights)
+    unnorm <- exp(diff_logml)
+    unnorm[is.na(unnorm)] <- 0
+    post_prob <- unnorm / sum(unnorm)
+
+    result$logml        <- logml
+    result$bf_vs_best   <- bf_vs_best
+    result$post_prob    <- post_prob
+  }
+
   rownames(result) <- NULL
 
   attr(result, "loo_compare") <- comp
   attr(result, "loo_list") <- loo_list
+  if (bridge) attr(result, "bridge_list") <- bridge_list
   result
 }
+
+#' Extract Model Weights from a Comparison Table
+#'
+#' Convenience function to extract weights from a \code{\link{bayes_compare}}
+#' result using either bridge sampling posterior probabilities or LOO stacking
+#' weights.
+#'
+#' @param comp A data frame returned by \code{\link{bayes_compare}}.
+#' @param method Character: \code{"bridge"} (default) for posterior model
+#'   probabilities from bridge sampling, or \code{"stacking"} for LOO
+#'   stacking weights. Falls back to stacking if bridge results are
+#'   unavailable.
+#'
+#' @return A named numeric vector of weights summing to 1.
+#'
+#' @examples
+#' \donttest{
+#' # comp <- bayes_compare(Bertrand = fit1, Cournot = fit2)
+#' # bayes_weights(comp, method = "bridge")
+#' # bayes_weights(comp, method = "stacking")
+#' }
+#'
+#' @export
+bayes_weights <- function(comp, method = c("bridge", "stacking")) {
+  method <- match.arg(method)
+
+  if (method == "bridge" && "post_prob" %in% names(comp)) {
+    w <- comp$post_prob
+  } else {
+    if (method == "bridge" && !"post_prob" %in% names(comp)) {
+      message("Bridge sampling results not available; using stacking weights.")
+    }
+    w <- comp$weight_stacking
+  }
+
+  names(w) <- comp$model
+  w
+}
+
 
 #' Bayesian Model Averaging of Merger Simulations
 #'
@@ -91,7 +185,9 @@ bayes_compare <- function(...) {
 #'
 #' @param sims A list of \code{\linkS4class{BayesSim}} objects.
 #' @param weights Numeric vector of model weights (must sum to 1).
-#'   Typically from \code{\link{bayes_compare}}.
+#'   Typically \code{post_prob} (from bridge sampling) or
+#'   \code{weight_stacking} (from LOO) in the output of
+#'   \code{\link{bayes_compare}}.
 #' @param n_draws Total number of draws in the pooled result.
 #'   Default 1000.
 #'
@@ -105,11 +201,16 @@ bayes_compare <- function(...) {
 #' # comp <- bayes_compare(Bertrand = fit1, Cournot = fit2)
 #' # sim1 <- bayes_sim(fit1, ownerPost = ...)
 #' # sim2 <- bayes_sim(fit2, ownerPost = ...)
-#' # avg <- bayes_avg(list(sim1, sim2), weights = comp$weight)
-#' # summary(avg)
-#' # summary(avg, market = TRUE)
-#' # elast(avg)
-#' # CV(avg)
+#' #
+#' # # BMA using bridge sampling posterior probabilities:
+#' # avg_bridge <- bayes_avg(list(sim1, sim2),
+#' #                         weights = bayes_weights(comp, "bridge"))
+#' #
+#' # # BMA using LOO stacking weights:
+#' # avg_loo <- bayes_avg(list(sim1, sim2),
+#' #                      weights = bayes_weights(comp, "stacking"))
+#' #
+#' # summary(avg_bridge)
 #' }
 #'
 #' @export

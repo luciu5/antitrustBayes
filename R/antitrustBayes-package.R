@@ -24,6 +24,7 @@
 #' @importFrom rstan summary
 #' @importFrom rstantools rstan_config
 #' @importFrom RcppParallel RcppParallelLibs
+#' @importFrom bridgesampling bridge_sampler
 #' @importFrom loo loo waic loo_compare loo_model_weights extract_log_lik
 #'   relative_eff
 #' @importFrom antitrust calcMC calcPrices calcShares ownerToMatrix
