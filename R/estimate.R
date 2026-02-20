@@ -122,6 +122,14 @@ bayes_est <- function(prices, shares, margins,
     year <- rep(1L, length(prices))
   }
 
+  # Cutoff is meaningless under monopolistic competition (all firms are
+
+  # single-product price-setters, so there is no strategic/fringe distinction)
+  if (use_cutoff && supply_model == "monopolistic") {
+    warning("use_cutoff ignored for monopolistic competition (no strategic/fringe distinction).")
+    use_cutoff <- FALSE
+  }
+
   # Validate
 
   validate_inputs(prices, shares, margins, market, year, group)
