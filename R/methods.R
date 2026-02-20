@@ -107,7 +107,9 @@ setMethod("show", "BayesLogit", function(object) {
 #' @param object A \code{BayesLogit} object.
 #' @exportMethod summary
 setMethod("summary", "BayesLogit", function(object) {
-  rstan::summary(object@stanfit)$summary
+  s <- rstan::summary(object@stanfit)$summary
+  print(round(s, 3))
+  invisible(s)
 })
 
 
@@ -384,10 +386,25 @@ setMethod("summary", "BayesSim",
     # Process each market
     out_list <- lapply(results_by_market, .aggregate_draw_dfs)
 
+    result <- if (length(out_list) == 1L) out_list[[1]] else out_list
+
+    # Print output (needed for Rscript where auto-printing doesn't occur)
     if (length(out_list) == 1L) {
-      out_list[[1]]
+      cat("Posterior Mean:\n")
+      print(result$mean, digits = digits, row.names = !market)
+      cat("\nPosterior SD:\n")
+      print(result$sd, digits = digits, row.names = !market)
     } else {
-      out_list
+      for (mk in names(result)) {
+        cat("Market:", mk, "\n")
+        cat("  Posterior Mean:\n")
+        print(result[[mk]]$mean, digits = digits, row.names = !market)
+        cat("  Posterior SD:\n")
+        print(result[[mk]]$sd, digits = digits, row.names = !market)
+        cat("\n")
+      }
     }
+
+    invisible(result)
   }
 )

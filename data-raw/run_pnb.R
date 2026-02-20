@@ -17,9 +17,11 @@ fits <- lapply(supply_models, function(sm) {
     market  = rep("PHL", nrow(pnb)),
     group   = pnb$group,
     supply_model = sm,
+    use_rho = FALSE,
     stan_options = list(
       chains = 4, iter = 2000, warmup = 1000,
-      cores = 4, seed = 1960, adapt_delta = 0.95
+      cores = 4, seed = 1960,
+      control = list(adapt_delta = 0.95, max_treedepth = 15)
     )
   )
 })

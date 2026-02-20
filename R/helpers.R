@@ -4,7 +4,7 @@
 #'
 #' @param prices Numeric vector of product prices.
 #' @param shares Numeric vector of product shares (within-market conditional).
-#' @param margins Numeric vector of product price-cost margins (price/MC).
+#' @param margins Numeric vector of product price-cost margins (p-c).
 #' @param market Factor or vector identifying markets.
 #' @param year Factor or vector identifying time periods.
 #' @param group Factor or vector identifying product groups (e.g., firms).
@@ -90,7 +90,9 @@ prepare_stan_data <- function(prices, shares, margins, market, year, group,
     s0_prior_sd               = 1.2,
     prior_sigma_alpha         = 1.0,
     prior_sigma_beta_s0       = 1.0,
-    prior_lkj                 = 2.0
+    prior_lkj                 = 2.0,
+    prior_cutoff_alpha        = 3.0,
+    prior_cutoff_beta         = 100.0
   )
   # Override with user priors
   for (nm in names(priors)) {
@@ -179,7 +181,7 @@ compute_alpha_prior <- function(shares, margins, implied_s0, mky_int,
     a_high <- 1 / m_low
   } else if (supply_model == 3L) {
     # Cournot: alpha ~ (s0 + s) / (m * s0)
-    s0_proxy <- max(0.01, stats::median(implied_s0))
+    s0_proxy <- 0.01
     a_low  <- (s0_proxy + s_low)  / (m_high * s0_proxy)
     a_high <- (s0_proxy + s_high) / (m_low  * s0_proxy)
   } else {

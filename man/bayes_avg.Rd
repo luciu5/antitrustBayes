@@ -10,7 +10,9 @@ bayes_avg(sims, weights, n_draws = 1000L)
 \item{sims}{A list of \code{\linkS4class{BayesSim}} objects.}
 
 \item{weights}{Numeric vector of model weights (must sum to 1).
-Typically from \code{\link{bayes_compare}}.}
+Typically \code{post_prob} (from bridge sampling) or
+\code{weight_stacking} (from LOO) in the output of
+\code{\link{bayes_compare}}.}
 
 \item{n_draws}{Total number of draws in the pooled result.
 Default 1000.}
@@ -34,11 +36,16 @@ simulation draws, so that all \code{BayesSim} methods
 # comp <- bayes_compare(Bertrand = fit1, Cournot = fit2)
 # sim1 <- bayes_sim(fit1, ownerPost = ...)
 # sim2 <- bayes_sim(fit2, ownerPost = ...)
-# avg <- bayes_avg(list(sim1, sim2), weights = comp$weight)
-# summary(avg)
-# summary(avg, market = TRUE)
-# elast(avg)
-# CV(avg)
+#
+# # BMA using bridge sampling posterior probabilities:
+# avg_bridge <- bayes_avg(list(sim1, sim2),
+#                         weights = bayes_weights(comp, "bridge"))
+#
+# # BMA using LOO stacking weights:
+# avg_loo <- bayes_avg(list(sim1, sim2),
+#                      weights = bayes_weights(comp, "stacking"))
+#
+# summary(avg_bridge)
 }
 
 }

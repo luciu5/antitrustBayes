@@ -24,7 +24,7 @@ prepare_stan_data(
 
 \item{shares}{Numeric vector of product shares (within-market conditional).}
 
-\item{margins}{Numeric vector of product price-cost margins (price/MC).}
+\item{margins}{Numeric vector of product price-cost margins (p-c).}
 
 \item{market}{Factor or vector identifying markets.}
 

@@ -2,31 +2,52 @@
 % Please edit documentation in R/bma.R
 \name{bayes_compare}
 \alias{bayes_compare}
-\title{Compare Bayesian Models Using Information Criteria}
+\title{Compare Bayesian Models Using Information Criteria and Bridge Sampling}
 \usage{
-bayes_compare(...)
+bayes_compare(..., bridge = TRUE, bridge_maxiter = 5000L)
 }
 \arguments{
 \item{...}{One or more \code{BayesLogit} objects, optionally named.}
+
+\item{bridge}{Logical. If \code{TRUE} (default), compute log marginal
+likelihoods via \code{\link[bridgesampling]{bridge_sampler}} for Bayes
+factor model comparison. If \code{FALSE}, only LOO/WAIC are computed.}
+
+\item{bridge_maxiter}{Maximum iterations for bridge sampling.
+Default 5000.}
 }
 \value{
-A data frame with columns for model name, WAIC, LOO-IC,
-effective number of parameters, and model weights.
+A data frame with columns for model name, supply model, LOOIC,
+WAIC, stacking weights, and (if \code{bridge = TRUE}) log marginal
+likelihoods, Bayes factors (vs. best model), and posterior model
+probabilities (assuming equal prior model probabilities).
 }
 \description{
-Computes WAIC and LOO-IC for one or more fitted
-\code{\linkS4class{BayesLogit}} objects and returns a comparison table.
+Computes LOO-IC, WAIC, and optionally log marginal likelihoods via bridge
+sampling for one or more fitted \code{\linkS4class{BayesLogit}} objects.
+Returns a comparison table with model weights.
 }
 \details{
-Requires that the Stan model includes a \code{log_lik} generated quantity.
-Uses \code{\link[loo]{loo}} and \code{\link[loo]{waic}} for computation
-and \code{\link[loo]{loo_model_weights}} (stacking) for weights.
+Three model comparison approaches are provided:
+\describe{
+\item{LOO-IC}{Leave-one-out cross-validation via \pkg{loo}. Stacking
+weights reflect predictive performance.}
+\item{WAIC}{Widely Applicable Information Criterion.}
+\item{Bridge Sampling}{Computes the log marginal likelihood
+\eqn{p(y | M_k)} via \code{\link[bridgesampling]{bridge_sampler}}.
+Posterior model probabilities assume equal prior model probabilities.
+Bayes factors are computed relative to the best model.}
+}
+
+Requires that the Stan model includes a \code{log_lik} generated quantity
+(for LOO/WAIC).
 }
 \examples{
 \donttest{
 # fit1 <- bayes_est(..., supply_model = "bertrand")
 # fit2 <- bayes_est(..., supply_model = "cournot")
 # bayes_compare(Bertrand = fit1, Cournot = fit2)
+# bayes_compare(Bertrand = fit1, Cournot = fit2, bridge = FALSE)
 }
 
 }

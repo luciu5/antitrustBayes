@@ -7,3 +7,7 @@
 ^LICENSE\.md$
 ^README\.md$
 ^\.github$
+^tmp_lib$
+^data-raw$
+^antitrustBayes\.Rcheck$
+^antitrustBayes_.*\.tar\.gz$

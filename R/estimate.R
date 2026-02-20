@@ -8,8 +8,8 @@
 #' @param prices Numeric vector of product prices.
 #' @param shares Numeric vector of within-market product shares. Must be
 #'   strictly between 0 and 1.
-#' @param margins Numeric vector of product price-cost margins
-#'   (price / marginal cost). Must be positive.
+#' @param margins Numeric vector of product price-cost margins (p-c).
+#'   Must be positive.
 #' @param market Factor or vector identifying markets. Each unique value
 #'   defines a separate geographic or product market.
 #' @param year Factor or vector identifying time periods. If \code{NULL}
@@ -165,6 +165,17 @@ bayes_est <- function(prices, shares, margins,
   )
   for (nm in names(stan_options)) {
     default_stan[[nm]] <- stan_options[[nm]]
+  }
+
+  # Convenience: allow adapt_delta and max_treedepth at top level
+  control_params <- c("adapt_delta", "max_treedepth")
+  found <- intersect(names(default_stan), control_params)
+  if (length(found) > 0L) {
+    if (is.null(default_stan$control)) default_stan$control <- list()
+    for (p in found) {
+      default_stan$control[[p]] <- default_stan[[p]]
+      default_stan[[p]] <- NULL
+    }
   }
 
   # Run sampling

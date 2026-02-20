@@ -26,8 +26,8 @@ bayes_est(
 \item{shares}{Numeric vector of within-market product shares. Must be
 strictly between 0 and 1.}
 
-\item{margins}{Numeric vector of product price-cost margins
-(price / marginal cost). Must be positive.}
+\item{margins}{Numeric vector of product price-cost margins (p-c).
+Must be positive.}
 
 \item{market}{Factor or vector identifying markets. Each unique value
 defines a separate geographic or product market.}
@@ -88,7 +88,7 @@ The \code{priors} argument accepts a named list with any of:
 \describe{
 \item{\code{prior_sigma_share}}{Lognormal center for share error SD
 (default 0.01).}
-\item{\code{prior_sigma_margin}}{Half-normal scale for margin error SD
+\item{\code{prior_sigma_margin}}{Lognormal center for margin error SD
 (default 0.5).}
 \item{\code{prior_sigma_meanval_strat}}{Half-normal scale for strategic
 group mean-value SD (default 1.0).}
