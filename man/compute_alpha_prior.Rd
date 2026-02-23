@@ -4,12 +4,12 @@
 \alias{compute_alpha_prior}
 \title{Compute Model-Specific Alpha Prior from Data and Supply FOC}
 \usage{
-compute_alpha_prior(shares, margins, implied_s0, mky_int, supply_model)
+compute_alpha_prior(shares, margins_abs, implied_s0, mky_int, supply_model)
 }
 \arguments{
 \item{shares}{Numeric vector of product shares.}
 
-\item{margins}{Numeric vector of price-cost margins.}
+\item{margins_abs}{Numeric vector of absolute price-cost margins (p-c).}
 
 \item{implied_s0}{Numeric vector of implied outside shares per market-year.}
 

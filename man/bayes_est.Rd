@@ -2,15 +2,16 @@
 % Please edit documentation in R/estimate.R
 \name{bayes_est}
 \alias{bayes_est}
-\title{Bayesian Estimation of Logit Demand and Supply}
+\title{Bayesian Estimation of Demand and Supply}
 \usage{
 bayes_est(
   prices,
-  shares,
+  quantities,
   margins,
   market,
   year = NULL,
   group,
+  demand_model = c("logit", "ces"),
   supply_model = c("bertrand", "monopolistic", "cournot", "auction"),
   use_cutoff = FALSE,
   use_rho = TRUE,
@@ -21,13 +22,15 @@ bayes_est(
 )
 }
 \arguments{
-\item{prices}{Numeric vector of product prices.}
+\item{prices}{Numeric vector of product prices. Must be positive.}
 
-\item{shares}{Numeric vector of within-market product shares. Must be
-strictly between 0 and 1.}
+\item{quantities}{Numeric vector of product quantities (e.g., units sold,
+deposits). Must be positive. The package computes the appropriate share
+type internally: quantity shares for logit, revenue shares for CES.}
 
-\item{margins}{Numeric vector of product price-cost margins (p-c).
-Must be positive.}
+\item{margins}{Numeric vector of Lerner indices \eqn{(p - c) / p}.
+Must be positive. Values greater than 1 are valid for input markets
+(e.g., deposits) where marginal productivity exceeds the input price.}
 
 \item{market}{Factor or vector identifying markets. Each unique value
 defines a separate geographic or product market.}
@@ -37,6 +40,10 @@ defines a separate geographic or product market.}
 
 \item{group}{Factor or vector identifying product groups (e.g., parent
 firms or holding companies). Used for hierarchical mean-value effects.}
+
+\item{demand_model}{Character string specifying the demand model:
+\code{"logit"} (default) or \code{"ces"} (Constant Elasticity of
+Substitution).}
 
 \item{supply_model}{Character string specifying the supply model:
 \code{"bertrand"} (default), \code{"monopolistic"}, \code{"cournot"},
@@ -64,23 +71,32 @@ A \code{\linkS4class{BayesLogit}} object.
 }
 \description{
 Estimates a hierarchical Bayesian model of differentiated products demand
-(Logit) and supply using Stan MCMC. The model jointly estimates demand
-parameters (price sensitivity, mean valuations, outside share) and supply
-parameters under one of four supply models.
+(logit or CES) and supply using Stan MCMC. The model jointly estimates
+demand parameters (price sensitivity, mean valuations, outside share) and
+supply parameters under one of four supply models.
 }
 \details{
-The model estimates a Logit demand system jointly with a supply-side
-first-order condition. Four supply models are supported:
+Two demand models are supported:
+\describe{
+\item{\code{"logit"}}{Standard multinomial logit. Uses quantity shares
+and price levels. The price coefficient alpha measures the marginal
+utility of income.}
+\item{\code{"ces"}}{Constant Elasticity of Substitution. Uses revenue
+shares and log-prices. The elasticity of substitution gamma (= sigma)
+controls substitution patterns.}
+}
+
+Four supply models are supported:
 \describe{
 \item{1. \code{"bertrand"}}{Nash-Bertrand differentiated products pricing.}
 \item{2. \code{"monopolistic"}}{Monopolistic competition
 (single-product Bertrand).}
 \item{3. \code{"cournot"}}{Cournot quantity competition.}
-\item{4. \code{"auction"}}{Second-score auction with Logit demand.}
+\item{4. \code{"auction"}}{Second-score auction.}
 }
 
-By default, the prior on the price coefficient alpha is calibrated from
-the data and supply model's first-order conditions, using the 5th/95th
+By default, the prior on the price coefficient is calibrated from
+the data and supply model's first-order conditions, using the 10th/90th
 percentiles of shares and margins. This can be overridden via
 \code{priors}.
 
@@ -107,13 +123,14 @@ used in single-market case (default 1.5).}
 # Philadelphia National Bank example (single market, 39 banks)
 data(pnb)
 
-# Estimate Bayesian Logit demand + Bertrand supply
+# Estimate Bayesian logit demand + Bertrand supply
 fit <- bayes_est(
-  prices  = pnb$prices,
-  shares  = pnb$shares,
+  prices = pnb$prices,
+  quantities = pnb$quantities,
   margins = pnb$margins,
-  market  = rep("PNB", nrow(pnb)),
-  group   = pnb$group,
+  market = rep("PNB", nrow(pnb)),
+  group = pnb$group,
+  demand_model = "logit",
   supply_model = "bertrand",
   stan_options = list(chains = 2, iter = 1000, warmup = 500)
 )

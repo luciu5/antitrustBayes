@@ -68,7 +68,7 @@
 #' \donttest{
 #' # See bayes_est() for a complete PNB merger example
 #' data(pnb)
-#' # fit <- bayes_est(prices = pnb$prices, shares = pnb$shares,
+#' # fit <- bayes_est(prices = pnb$prices, quantities = pnb$quantities,
 #' #   margins = pnb$margins, market = rep("PNB", nrow(pnb)),
 #' #   group = pnb$group, supply_model = "bertrand")
 #' #
@@ -166,8 +166,11 @@ bayes_sim <- function(fit, ownerPost,
     }
 
     prices_m <- as.numeric(mdata$prices)
-    shares_cond <- as.numeric(mdata$shares)
+    quantities_m <- as.numeric(mdata$quantities)
     margins_m <- as.numeric(mdata$margins)
+
+    # Compute quantity shares within this market
+    shares_cond <- quantities_m / sum(quantities_m)
 
     if (is.null(labels)) {
       labels_m <- as.character(mdata$group)

@@ -17,7 +17,7 @@
 }
 \description{
 S4 class holding the results of Bayesian estimation of a
-Logit demand and supply model via Stan.
+logit demand and supply model via Stan.
 }
 \section{Slots}{
 
@@ -30,8 +30,10 @@ Logit demand and supply model via Stan.
 
 \item{\code{supply_model}}{Integer (1--4) identifying the supply model.}
 
-\item{\code{price_sd}}{Numeric scalar: the standard deviation of prices used for
-standardization.}
+\item{\code{demand_model}}{Character: \code{"logit"} or \code{"ces"}.}
+
+\item{\code{price_sd}}{Numeric scalar: the standard deviation of prices (logit) or
+log-prices (CES) used for standardization.}
 
 \item{\code{call}}{The matched call to \code{\link{bayes_est}}.}
 }}

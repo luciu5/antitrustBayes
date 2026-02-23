@@ -3,23 +3,26 @@
 #' @aliases BayesLogit
 #'
 #' @description S4 class holding the results of Bayesian estimation of a
-#' Logit demand and supply model via Stan.
+#' logit demand and supply model via Stan.
 #'
 #' @slot stanfit A \code{stanfit} object from \pkg{rstan}.
 #' @slot data A \code{data.frame} of the original input data.
 #' @slot stan_data A \code{list} of the data passed to Stan.
 #' @slot supply_model Integer (1--4) identifying the supply model.
-#' @slot price_sd Numeric scalar: the standard deviation of prices used for
-#'   standardization.
+#' @slot demand_model Character: \code{"logit"} or \code{"ces"}.
+#' @slot price_sd Numeric scalar: the standard deviation of prices (logit) or
+#'   log-prices (CES) used for standardization.
 #' @slot call The matched call to \code{\link{bayes_est}}.
 #'
 #' @export
-setClass("BayesLogit",
+setClass(
+  "BayesLogit",
   representation(
     stanfit      = "ANY",
     data         = "data.frame",
     stan_data    = "list",
     supply_model = "integer",
+    demand_model = "character",
     price_sd     = "numeric",
     call         = "call"
   )
@@ -53,7 +56,8 @@ setClass("BayesLogit",
 #' @slot call The matched call to \code{\link{bayes_sim}}.
 #'
 #' @export
-setClass("BayesSim",
+setClass(
+  "BayesSim",
   representation(
     sims           = "list",
     price_pre      = "list",

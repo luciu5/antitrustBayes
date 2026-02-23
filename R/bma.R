@@ -10,11 +10,14 @@
 #'   factor model comparison. If \code{FALSE}, only LOO/WAIC are computed.
 #' @param bridge_maxiter Maximum iterations for bridge sampling.
 #'   Default 5000.
+#' @param prior_weights Optional numeric vector of prior model probabilities.
+#'   Must be the same length as the number of models and sum to 1. If
+#'   \code{NULL} (default), equal prior probabilities are used.
 #'
 #' @return A data frame with columns for model name, supply model, LOOIC,
 #'   WAIC, stacking weights, and (if \code{bridge = TRUE}) log marginal
 #'   likelihoods, Bayes factors (vs. best model), and posterior model
-#'   probabilities (assuming equal prior model probabilities).
+#'   probabilities.
 #'
 #' @details
 #' Three model comparison approaches are provided:
@@ -40,7 +43,8 @@
 #' }
 #'
 #' @export
-bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L) {
+bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
+                          prior_weights = NULL) {
   args <- list(...)
 
   # Separate BayesLogit objects from named arguments
@@ -53,6 +57,19 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L) {
   } else {
     empty <- nms == ""
     nms[empty] <- paste0("Model_", which(empty))
+  }
+
+  # Prior model probabilities
+  if (is.null(prior_weights)) {
+    prior_weights <- rep(1 / length(fits), length(fits))
+  } else {
+    if (length(prior_weights) != length(fits)) {
+      stop("'prior_weights' must have the same length as ",
+           "the number of models.")
+    }
+    if (abs(sum(prior_weights) - 1) > 1e-6) {
+      stop("'prior_weights' must sum to 1.")
+    }
   }
 
   supply_names <- c("Bertrand", "Monopolistic", "Cournot", "Auction")
@@ -117,8 +134,8 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L) {
     diff_logml <- logml - max_logml
     bf_vs_best <- exp(diff_logml)
 
-    # Posterior model probabilities (equal prior weights)
-    unnorm <- exp(diff_logml)
+    # Posterior model probabilities
+    unnorm <- exp(diff_logml) * prior_weights
     unnorm[is.na(unnorm)] <- 0
     post_prob <- unnorm / sum(unnorm)
 

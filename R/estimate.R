@@ -1,21 +1,26 @@
-#' Bayesian Estimation of Logit Demand and Supply
+#' Bayesian Estimation of Demand and Supply
 #'
 #' Estimates a hierarchical Bayesian model of differentiated products demand
-#' (Logit) and supply using Stan MCMC. The model jointly estimates demand
-#' parameters (price sensitivity, mean valuations, outside share) and supply
-#' parameters under one of four supply models.
+#' (logit or CES) and supply using Stan MCMC. The model jointly estimates
+#' demand parameters (price sensitivity, mean valuations, outside share) and
+#' supply parameters under one of four supply models.
 #'
-#' @param prices Numeric vector of product prices.
-#' @param shares Numeric vector of within-market product shares. Must be
-#'   strictly between 0 and 1.
-#' @param margins Numeric vector of product price-cost margins (p-c).
-#'   Must be positive.
+#' @param prices Numeric vector of product prices. Must be positive.
+#' @param quantities Numeric vector of product quantities (e.g., units sold,
+#'   deposits). Must be positive. The package computes the appropriate share
+#'   type internally: quantity shares for logit, revenue shares for CES.
+#' @param margins Numeric vector of Lerner indices \eqn{(p - c) / p}.
+#'   Must be positive. Values greater than 1 are valid for input markets
+#'   (e.g., deposits) where marginal productivity exceeds the input price.
 #' @param market Factor or vector identifying markets. Each unique value
 #'   defines a separate geographic or product market.
 #' @param year Factor or vector identifying time periods. If \code{NULL}
 #'   (default), all observations are treated as a single period.
 #' @param group Factor or vector identifying product groups (e.g., parent
 #'   firms or holding companies). Used for hierarchical mean-value effects.
+#' @param demand_model Character string specifying the demand model:
+#'   \code{"logit"} (default) or \code{"ces"} (Constant Elasticity of
+#'   Substitution).
 #' @param supply_model Character string specifying the supply model:
 #'   \code{"bertrand"} (default), \code{"monopolistic"}, \code{"cournot"},
 #'   or \code{"auction"}.
@@ -32,18 +37,27 @@
 #' @param ... Additional arguments (currently unused).
 #'
 #' @details
-#' The model estimates a Logit demand system jointly with a supply-side
-#' first-order condition. Four supply models are supported:
+#' Two demand models are supported:
+#' \describe{
+#'   \item{\code{"logit"}}{Standard multinomial logit. Uses quantity shares
+#'     and price levels. The price coefficient alpha measures the marginal
+#'     utility of income.}
+#'   \item{\code{"ces"}}{Constant Elasticity of Substitution. Uses revenue
+#'     shares and log-prices. The elasticity of substitution gamma (= sigma)
+#'     controls substitution patterns.}
+#' }
+#'
+#' Four supply models are supported:
 #' \describe{
 #'   \item{1. \code{"bertrand"}}{Nash-Bertrand differentiated products pricing.}
 #'   \item{2. \code{"monopolistic"}}{Monopolistic competition
 #'     (single-product Bertrand).}
 #'   \item{3. \code{"cournot"}}{Cournot quantity competition.}
-#'   \item{4. \code{"auction"}}{Second-score auction with Logit demand.}
+#'   \item{4. \code{"auction"}}{Second-score auction.}
 #' }
 #'
-#' By default, the prior on the price coefficient alpha is calibrated from
-#' the data and supply model's first-order conditions, using the 5th/95th
+#' By default, the prior on the price coefficient is calibrated from
+#' the data and supply model's first-order conditions, using the 10th/90th
 #' percentiles of shares and margins. This can be overridden via
 #' \code{priors}.
 #'
@@ -75,13 +89,14 @@
 #' # Philadelphia National Bank example (single market, 39 banks)
 #' data(pnb)
 #'
-#' # Estimate Bayesian Logit demand + Bertrand supply
+#' # Estimate Bayesian logit demand + Bertrand supply
 #' fit <- bayes_est(
-#'   prices  = pnb$prices,
-#'   shares  = pnb$shares,
+#'   prices = pnb$prices,
+#'   quantities = pnb$quantities,
 #'   margins = pnb$margins,
-#'   market  = rep("PNB", nrow(pnb)),
-#'   group   = pnb$group,
+#'   market = rep("PNB", nrow(pnb)),
+#'   group = pnb$group,
+#'   demand_model = "logit",
 #'   supply_model = "bertrand",
 #'   stan_options = list(chains = 2, iter = 1000, warmup = 500)
 #' )
@@ -97,18 +112,21 @@
 #' }
 #'
 #' @export
-bayes_est <- function(prices, shares, margins,
+bayes_est <- function(prices, quantities, margins,
                       market, year = NULL, group,
-                      supply_model = c("bertrand", "monopolistic",
-                                       "cournot", "auction"),
+                      demand_model = c("logit", "ces"),
+                      supply_model = c(
+                        "bertrand", "monopolistic",
+                        "cournot", "auction"
+                      ),
                       use_cutoff = FALSE,
                       use_rho = TRUE,
                       use_hmt = FALSE,
                       priors = list(),
                       stan_options = list(),
                       ...) {
-
   cl <- match.call()
+  demand_model <- match.arg(demand_model)
   supply_model <- match.arg(supply_model)
   supply_int <- switch(supply_model,
     bertrand      = 1L,
@@ -123,7 +141,6 @@ bayes_est <- function(prices, shares, margins,
   }
 
   # Cutoff is meaningless under monopolistic competition (all firms are
-
   # single-product price-setters, so there is no strategic/fringe distinction)
   if (use_cutoff && supply_model == "monopolistic") {
     warning("use_cutoff ignored for monopolistic competition (no strategic/fringe distinction).")
@@ -131,37 +148,53 @@ bayes_est <- function(prices, shares, margins,
   }
 
   # Validate
+  validate_inputs(prices, quantities, margins, market, year, group)
 
-  validate_inputs(prices, shares, margins, market, year, group)
-
-  # Build data frame
+  # Build data frame (store raw inputs for later use in simulation)
   df <- data.frame(
-    prices  = prices,
-    shares  = shares,
+    prices = prices,
+    quantities = quantities,
     margins = margins,
-    market  = market,
-    year    = year,
-    group   = group,
+    market = market,
+    year = year,
+    group = group,
     stringsAsFactors = FALSE
   )
 
-  # Prepare Stan data
-  stan_data <- prepare_stan_data(
-    prices       = prices,
-    shares       = shares,
-    margins      = margins,
-    market       = market,
-    year         = year,
-    group        = group,
-    supply_model = supply_int,
-    use_cutoff   = use_cutoff,
-    use_rho      = use_rho,
-    use_hmt      = use_hmt,
-    priors       = priors
-  )
-
-  # Get pre-compiled model
-  stan_mod <- stanmodels[["logit_supply"]]
+  # Prepare Stan data based on demand model
+  if (demand_model == "logit") {
+    stan_data <- prepare_stan_data(
+      prices       = prices,
+      quantities   = quantities,
+      margins      = margins,
+      market       = market,
+      year         = year,
+      group        = group,
+      supply_model = supply_int,
+      use_cutoff   = use_cutoff,
+      use_rho      = use_rho,
+      use_hmt      = use_hmt,
+      priors       = priors
+    )
+    stan_mod <- stanmodels[["logit_supply"]]
+    price_sd_val <- stan_data$price_sd
+  } else {
+    stan_data <- prepare_ces_stan_data(
+      prices       = prices,
+      quantities   = quantities,
+      margins      = margins,
+      market       = market,
+      year         = year,
+      group        = group,
+      supply_model = supply_int,
+      use_cutoff   = use_cutoff,
+      use_rho      = use_rho,
+      use_hmt      = use_hmt,
+      priors       = priors
+    )
+    stan_mod <- stanmodels[["ces_supply"]]
+    price_sd_val <- stan_data$log_price_sd
+  }
 
   # Default Stan options
   default_stan <- list(
@@ -197,7 +230,8 @@ bayes_est <- function(prices, shares, margins,
     data         = df,
     stan_data    = stan_data,
     supply_model = supply_int,
-    price_sd     = stan_data$price_sd,
+    demand_model = demand_model,
+    price_sd     = price_sd_val,
     call         = cl
   )
 }

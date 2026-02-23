@@ -4,6 +4,7 @@ test_that("BayesLogit class can be instantiated", {
     data         = data.frame(x = 1),
     stan_data    = list(N = 1L),
     supply_model = 1L,
+    demand_model = "logit",
     price_sd     = 1.0,
     call         = call("bayes_est")
   )

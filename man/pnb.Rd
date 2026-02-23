@@ -10,9 +10,8 @@ A data frame with 39 rows and 5 columns:
 \item{bank}{Character. Bank name.}
 \item{group}{Character. Holding company identifier (top-holder RSSD ID).}
 \item{prices}{Numeric. Interest rate on deposits (percent).}
-\item{shares}{Numeric. Within-market deposit share (conditional, sums
-to approximately 1).}
-\item{margins}{Numeric. Price-cost margin (price / marginal cost).}
+\item{quantities}{Numeric. Total deposits (thousands of dollars).}
+\item{margins}{Numeric. Lerner index (p - c) / p.}
 }
 }
 \source{
@@ -39,7 +38,7 @@ The merging parties are:
 \examples{
 data(pnb)
 head(pnb)
-sum(pnb$shares)  # approximately 1
+sum(pnb$quantities)  # total deposits
 
 }
 \keyword{datasets}

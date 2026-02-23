@@ -92,7 +92,7 @@ The supply model determines which \pkg{antitrust} class is used:
 \donttest{
 # See bayes_est() for a complete PNB merger example
 data(pnb)
-# fit <- bayes_est(prices = pnb$prices, shares = pnb$shares,
+# fit <- bayes_est(prices = pnb$prices, quantities = pnb$quantities,
 #   margins = pnb$margins, market = rep("PNB", nrow(pnb)),
 #   group = pnb$group, supply_model = "bertrand")
 #

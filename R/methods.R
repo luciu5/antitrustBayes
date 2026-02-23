@@ -24,7 +24,8 @@ NULL
     draw_results <- vector("list", length(valid))
     for (j in seq_along(valid)) {
       draw_results[[j]] <- tryCatch(fn(sims_mk[[valid[j]]]),
-                                     error = function(e) NULL)
+        error = function(e) NULL
+      )
     }
     draw_results <- draw_results[!vapply(draw_results, is.null, logical(1))]
     out[[mk]] <- draw_results
@@ -43,13 +44,15 @@ NULL
 #' @keywords internal
 .summarise_vector_draws <- function(draw_list, posterior = FALSE) {
   mat <- do.call(rbind, draw_list)
-  if (posterior) return(mat)
+  if (posterior) {
+    return(mat)
+  }
   data.frame(
-    mean   = colMeans(mat, na.rm = TRUE),
-    sd     = apply(mat, 2, sd, na.rm = TRUE),
-    q025   = apply(mat, 2, quantile, probs = 0.025, na.rm = TRUE),
+    mean = colMeans(mat, na.rm = TRUE),
+    sd = apply(mat, 2, sd, na.rm = TRUE),
+    q025 = apply(mat, 2, quantile, probs = 0.025, na.rm = TRUE),
     median = apply(mat, 2, quantile, probs = 0.5, na.rm = TRUE),
-    q975   = apply(mat, 2, quantile, probs = 0.975, na.rm = TRUE),
+    q975 = apply(mat, 2, quantile, probs = 0.975, na.rm = TRUE),
     stringsAsFactors = FALSE
   )
 }
@@ -68,11 +71,15 @@ NULL
   rn <- rownames(draw_list[[1]])
   cn <- colnames(draw_list[[1]])
 
-  arr <- array(NA_real_, dim = c(nr, nc, n),
-               dimnames = list(rn, cn, NULL))
+  arr <- array(NA_real_,
+    dim = c(nr, nc, n),
+    dimnames = list(rn, cn, NULL)
+  )
   for (i in seq_len(n)) arr[, , i] <- draw_list[[i]]
 
-  if (posterior) return(arr)
+  if (posterior) {
+    return(arr)
+  }
   list(
     mean = apply(arr, c(1, 2), mean, na.rm = TRUE),
     sd   = apply(arr, c(1, 2), sd, na.rm = TRUE)
@@ -86,20 +93,32 @@ NULL
 #' @exportMethod show
 setMethod("show", "BayesLogit", function(object) {
   supply_names <- c("Bertrand", "Monopolistic", "Cournot", "Auction")
-  cat("Bayesian Logit Demand Estimation\n")
+  demand_label <- if (length(object@demand_model) > 0 &&
+    object@demand_model == "ces") {
+    "CES"
+  } else {
+    "logit"
+  }
+  cat("Bayesian", demand_label, "Demand Estimation\n")
   cat("  Supply model:", supply_names[object@supply_model], "\n")
   cat("  Observations:", nrow(object@data), "\n")
   cat("  Markets:", length(unique(object@data$market)), "\n")
   cat("  Groups:", length(unique(object@data$group)), "\n")
-  cat("  Price SD (scaling):", round(object@price_sd, 4), "\n")
+  price_label <- if (demand_label == "CES") "Log-price SD" else "Price SD"
+  cat(" ", price_label, "(scaling):", round(object@price_sd, 4), "\n")
 
   # Basic MCMC diagnostics
   fit_summary <- rstan::summary(object@stanfit,
-                                pars = c("mu_log_a", "sigma_share",
-                                         "sigma_margin"))$summary
+    pars = c(
+      "mu_log_a", "sigma_share",
+      "sigma_margin"
+    )
+  )$summary
   cat("\nKey parameter estimates:\n")
-  print(round(fit_summary[, c("mean", "sd", "2.5%", "97.5%", "Rhat",
-                               "n_eff")], 3))
+  print(round(fit_summary[, c(
+    "mean", "sd", "2.5%", "97.5%", "Rhat",
+    "n_eff"
+  )], 3))
   invisible(object)
 })
 
@@ -135,14 +154,17 @@ setMethod("summary", "BayesLogit", function(object) {
 #' @seealso \code{\link[antitrust]{elast}}
 #' @rdname BayesSim-methods
 #' @exportMethod elast
-setMethod("elast", "BayesSim",
+setMethod(
+  "elast", "BayesSim",
   function(object, preMerger = TRUE, market = NULL, posterior = FALSE) {
     if (is.null(market)) market <- object@market_ids[1]
     fn <- function(sim) elast(sim, preMerger = preMerger)
     draws <- .apply_to_sims(object, fn, market = market)
 
     out <- lapply(draws, function(dl) {
-      if (length(dl) == 0L) return(NULL)
+      if (length(dl) == 0L) {
+        return(NULL)
+      }
       .summarise_matrix_draws(dl, posterior = posterior)
     })
     if (length(out) == 1L) out[[1]] else out
@@ -167,16 +189,23 @@ setMethod("elast", "BayesSim",
 #' @seealso \code{\link[antitrust]{diversion}}
 #' @rdname BayesSim-methods
 #' @exportMethod diversion
-setMethod("diversion", "BayesSim",
+setMethod(
+  "diversion", "BayesSim",
   function(object, preMerger = TRUE, revenue = FALSE,
            market = NULL, posterior = FALSE) {
     if (is.null(market)) market <- object@market_ids[1]
-    fn <- function(sim) diversion(sim, preMerger = preMerger,
-                                   revenue = revenue)
+    fn <- function(sim) {
+      diversion(sim,
+        preMerger = preMerger,
+        revenue = revenue
+      )
+    }
     draws <- .apply_to_sims(object, fn, market = market)
 
     out <- lapply(draws, function(dl) {
-      if (length(dl) == 0L) return(NULL)
+      if (length(dl) == 0L) {
+        return(NULL)
+      }
       .summarise_matrix_draws(dl, posterior = posterior)
     })
     if (length(out) == 1L) out[[1]] else out
@@ -200,20 +229,27 @@ setMethod("diversion", "BayesSim",
 #' @seealso \code{\link[antitrust]{CV}}
 #' @rdname BayesSim-methods
 #' @exportMethod CV
-setMethod("CV", "BayesSim",
+setMethod(
+  "CV", "BayesSim",
   function(object, market = NULL, posterior = FALSE) {
     fn <- function(sim) CV(sim)
     draws <- .apply_to_sims(object, fn, market = market)
 
     out <- lapply(draws, function(dl) {
-      if (length(dl) == 0L) return(NULL)
+      if (length(dl) == 0L) {
+        return(NULL)
+      }
       vals <- unlist(dl)
-      if (posterior) return(vals)
-      c(mean   = mean(vals, na.rm = TRUE),
-        sd     = sd(vals, na.rm = TRUE),
-        q025   = unname(quantile(vals, 0.025, na.rm = TRUE)),
+      if (posterior) {
+        return(vals)
+      }
+      c(
+        mean = mean(vals, na.rm = TRUE),
+        sd = sd(vals, na.rm = TRUE),
+        q025 = unname(quantile(vals, 0.025, na.rm = TRUE)),
         median = unname(quantile(vals, 0.5, na.rm = TRUE)),
-        q975   = unname(quantile(vals, 0.975, na.rm = TRUE)))
+        q975 = unname(quantile(vals, 0.975, na.rm = TRUE))
+      )
     })
     if (length(out) == 1L) out[[1]] else out
   }
@@ -242,18 +278,27 @@ setMethod("CV", "BayesSim",
 #' @seealso \code{\link[antitrust]{HypoMonTest}}
 #' @rdname BayesSim-methods
 #' @exportMethod HypoMonTest
-setMethod("HypoMonTest", "BayesSim",
+setMethod(
+  "HypoMonTest", "BayesSim",
   function(object, prodIndex, ssnip = 0.05,
            market = NULL, posterior = FALSE, ...) {
     if (is.null(market)) market <- object@market_ids[1]
-    fn <- function(sim) HypoMonTest(sim, prodIndex = prodIndex,
-                                     ssnip = ssnip, ...)
+    fn <- function(sim) {
+      HypoMonTest(sim,
+        prodIndex = prodIndex,
+        ssnip = ssnip, ...
+      )
+    }
     draws <- .apply_to_sims(object, fn, market = market)
 
     out <- lapply(draws, function(dl) {
-      if (length(dl) == 0L) return(NULL)
+      if (length(dl) == 0L) {
+        return(NULL)
+      }
       vals <- unlist(dl)
-      if (posterior) return(vals)
+      if (posterior) {
+        return(vals)
+      }
       mean(vals, na.rm = TRUE)
     })
     if (length(out) == 1L) out[[1]] else out
@@ -314,10 +359,10 @@ setMethod("show", "BayesSim", function(object) {
 #'
 #' @rdname BayesSim-class
 #' @exportMethod summary
-setMethod("summary", "BayesSim",
+setMethod(
+  "summary", "BayesSim",
   function(object, market = FALSE, levels = FALSE, revenue = TRUE,
            digits = 2, ...) {
-
     # Collect summary data frames from each valid draw
     results_by_market <- list()
 
@@ -328,15 +373,20 @@ setMethod("summary", "BayesSim",
 
       draw_dfs <- vector("list", length(valid))
       for (j in seq_along(valid)) {
-        draw_dfs[[j]] <- tryCatch({
-          # summary prints to console; suppress it
-          invisible(capture.output(
-            res <- summary(sims_mk[[valid[j]]], market = market,
-                           levels = levels, revenue = revenue,
-                           digits = 10, ...)
-          ))
-          res
-        }, error = function(e) NULL)
+        draw_dfs[[j]] <- tryCatch(
+          {
+            # summary prints to console; suppress it
+            invisible(capture.output(
+              res <- summary(sims_mk[[valid[j]]],
+                market = market,
+                levels = levels, revenue = revenue,
+                digits = 10, ...
+              )
+            ))
+            res
+          },
+          error = function(e) NULL
+        )
       }
       draw_dfs <- draw_dfs[!vapply(draw_dfs, is.null, logical(1))]
       if (length(draw_dfs) == 0L) next
@@ -344,7 +394,9 @@ setMethod("summary", "BayesSim",
       results_by_market[[mk]] <- draw_dfs
     }
 
-    if (length(results_by_market) == 0L) return(NULL)
+    if (length(results_by_market) == 0L) {
+      return(NULL)
+    }
 
     # Aggregate: compute mean and sd of each numeric column across draws
     .aggregate_draw_dfs <- function(draw_dfs) {
@@ -370,14 +422,14 @@ setMethod("summary", "BayesSim",
       }
 
       mean_mat <- apply(arr, c(1, 2), mean, na.rm = TRUE)
-      sd_mat   <- apply(arr, c(1, 2), sd, na.rm = TRUE)
+      sd_mat <- apply(arr, c(1, 2), sd, na.rm = TRUE)
 
       # Build output data frames matching antitrust summary format
       mean_df <- ref
-      sd_df   <- ref
+      sd_df <- ref
       for (k in seq_len(nc)) {
         mean_df[[num_names[k]]] <- round(mean_mat[, k], digits)
-        sd_df[[num_names[k]]]   <- round(sd_mat[, k], digits)
+        sd_df[[num_names[k]]] <- round(sd_mat[, k], digits)
       }
 
       list(mean = mean_df, sd = sd_df)

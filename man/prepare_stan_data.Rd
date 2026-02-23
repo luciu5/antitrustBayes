@@ -2,11 +2,11 @@
 % Please edit documentation in R/helpers.R
 \name{prepare_stan_data}
 \alias{prepare_stan_data}
-\title{Prepare Stan Data from User Inputs}
+\title{Prepare Stan Data for logit Demand}
 \usage{
 prepare_stan_data(
   prices,
-  shares,
+  quantities,
   margins,
   market,
   year,
@@ -22,9 +22,9 @@ prepare_stan_data(
 \arguments{
 \item{prices}{Numeric vector of product prices.}
 
-\item{shares}{Numeric vector of product shares (within-market conditional).}
+\item{quantities}{Numeric vector of product quantities.}
 
-\item{margins}{Numeric vector of product price-cost margins (p-c).}
+\item{margins}{Numeric vector of Lerner indices (p-c)/p, between 0 and 1.}
 
 \item{market}{Factor or vector identifying markets.}
 
@@ -48,6 +48,8 @@ prepare_stan_data(
 A list suitable for passing to \code{rstan::sampling}.
 }
 \description{
-Transforms user-supplied vectors into the list expected by the Stan model.
+Transforms user-supplied vectors into the list expected by the logit Stan
+model. Computes quantity shares from raw quantities and converts Lerner
+margins to inverse absolute margins.
 }
 \keyword{internal}

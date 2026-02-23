@@ -1,0 +1,94 @@
+---
+title: "Supply and Demand Models"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Supply and Demand Models}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>"
+)
+```
+
+## Overview
+
+This vignette describes the theoretical underpinnings of the demand and supply models implemented in `antitrustBayes`. We begin by outlining the indirect utility functions for the Constant Elasticity of Substitution (CES) and Logit demand frameworks, and then present the equilibrium first-order conditions (Lerner conditions) for our four supply models under both demand systems.
+
+---
+
+## 1. Demand Frameworks
+
+### CES Demand and the Fréchet Distribution
+
+Under the Constant Elasticity of Substitution (CES) demand model, consumer choice can be framed in a discrete choice setting where the indirect utility consumer $i$ derives from product $j$ is multiplicative:
+$$ U_{ij} = V_{j} \epsilon_{ij} $$
+Here, $V_{j}$ represents the deterministic component of utility, defined as:
+$$ V_j = \delta_j p_j^\sigma $$
+where $\delta_j$ represents intrinsic quality, $p_j$ is the product price, and $\sigma$ captures price sensitivity. The idiosyncratic error term $\epsilon_{ij}$ follows a **Fréchet distribution**:
+$$ F(\epsilon) = \exp\left(-\epsilon^{-(\gamma-1)}\right) $$
+where $\gamma > 1$ represents the elasticity of substitution between products. This distributional assumption on the unobserved preference shocks yields the familiar CES revenue shares (choice probabilities):
+$$ r_j = \frac{V_j^{\gamma-1}}{\sum_k V_k^{\gamma-1}} = \frac{\delta_j^{\gamma-1} p_j^{\sigma(\gamma-1)}}{\sum_k \delta_k^{\gamma-1} p_k^{\sigma(\gamma-1)}} $$
+
+To match standard macroeconomic and trade formulations of CES—where the exponent on price is strictly $1-\gamma$, or $-(\gamma-1)$—we require $\sigma(\gamma-1) = -(\gamma-1)$. This implies that functionally $\sigma = -1$, yielding the underlying base deterministic utility $V_j = \delta_j / p_j$.
+
+### Logit Demand and the Gumbel Distribution
+
+If we take the natural logarithm of the CES utility formulation—a monotone transformation that preserves choice properties—Logit demand naturally emerges. The multiplicative index becomes an additive random utility model:
+$$ \log U_{ij} = \log V_j + \log \epsilon_{ij} = \log \delta_j + \sigma \log p_j + \eta_{ij} $$
+Because $\epsilon_{ij}$ is Fréchet-distributed with shape parameter $\gamma-1$, the transformed error $\eta_{ij} = \log \epsilon_{ij}$ follows a **Gumbel (Type I Extreme Value) distribution** with a scale parameter inversely proportional to $\gamma-1$. 
+
+In standard applied work, Logit is often implemented by redefining the deterministic utility as exactly $v_j \equiv \log V_j$:
+$$ u_{ij} = \log \delta_j + \sigma \log p_j + \eta_{ij} $$
+Mapping to the conventional linear-price specification $u_{ij} \approx \tilde{\delta}_j - \alpha p_j + \varepsilon_{ij}$, we equate the local price derivatives between standard Logit and the log-baseline CES model, scaling by the dispersion parameter $\gamma-1$:
+$$ -\alpha = \frac{\partial}{\partial p_j} \left( (\gamma-1) \log V_j \right) = \frac{\sigma (\gamma-1)}{p_j} $$
+Since standard CES requires $\sigma = -1$, this establishes the structural mapping between the CES substitution parameter and the Logit linear price parameter:
+$$ \alpha = \frac{\gamma - 1}{p_j} $$
+This elegant linkage confirms how models parametrically convert into one another around local price points.
+
+---
+
+## 2. Equilibrium Supply Models
+
+In `antitrustBayes`, we implement four distinct models of supply-side competition. The theoretical implications of these models can be summarized by their equilibrium margin conditions. 
+
+For notation:
+- Suppose there are $K$ firms, and each firm $k \in K$ produces a subset of products $\mathcal{J}_k$.
+- Let $s_j$ and $r_j$ be the unconditional volumetric and revenue market shares under the Logit and CES models, respectively.
+- Let $s_{j|I}$ and $r_{j|I}$ be the inside (conditional) shares, such that $s_j = s_{j|I} (1 - s_0)$ and $r_j = r_{j|I} (1 - r_0)$, where $s_0$ and $r_0$ denote the share of the corresponding outside option.
+- Let $m_j = \frac{p_j - c_j}{p_j}$ denote the proportional margin or **Lerner index**, which we use to express the equilibrium conditions for both models.
+
+### Monopolistic Competition
+Under monopolistic competition, we assume firms are naive and ignore the impact of a price change on the aggregate industry price level (or denominator of the share equations). Because they ignore cross-price effects, margins depend only on own-product characteristics.
+
+* **Logit:** 
+\[ m_j = \frac{1}{\alpha p_j} \]
+* **CES:** 
+\[ m_j = \frac{1}{\gamma} \]
+
+### Nash-Bertrand Competition
+Under static Nash-Bertrand competition, firms choose prices to maximize profits across their entire portfolio of products, accounting for their effect on the total market share denominator while treating rival prices as fixed.
+
+* **Logit:** 
+\[ m_j = \frac{1}{\alpha p_j \left(1 - \sum_{l \in \mathcal{J}_k} s_l\right)} \]
+* **CES:** 
+\[ m_j = \frac{1}{\gamma - (\gamma - 1) \sum_{l \in \mathcal{J}_k} r_l} \]
+
+### Cournot Competition
+Under Cournot competition, firms choose quantities rather than prices. This model yields margins that scale differently with market share compared to Bertrand.
+
+* **Logit:** 
+\[ m_j = \frac{1}{\alpha p_j} \left( \frac{s_0 + \sum_{l \in \mathcal{J}_k} s_{l|I}}{s_0} \right) \]
+* **CES:** 
+\[ m_j = \frac{1 + (\gamma - 1) \sum_{l \in \mathcal{J}_k} r_l}{\gamma} \]
+
+### Second-Score Auction
+The Second-Score Auction model (or second-price auction) can be used to characterize markets where competition takes the form of bidding for consumer contracts or deposits, representing a "competition for the market". Margins scale according to the firm's total market presence.
+
+* **Logit:** 
+\[ m_j = \frac{1}{\alpha p_j} \left( \frac{-\log\left(1 - \sum_{l \in \mathcal{J}_k} s_l\right)}{\sum_{l \in \mathcal{J}_k} s_l} \right) \]
+* **CES:** 
+\[ m_j = 1 - \left(1 - \sum_{l \in \mathcal{J}_k} r_l\right)^{\frac{1}{\gamma - 1}} \]

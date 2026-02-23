@@ -39,8 +39,8 @@ data(pnb)
 str(pnb)
 ```
 
-Each row is a bank with deposit rate (`prices`), market share
-(`shares`), price-cost margin (`margins`), and holding company
+Each row is a bank with deposit rate (`prices`), total deposits
+(`quantities`), Lerner index (`margins`), and holding company
 identifier (`group`).
 
 ## Step 1: Estimate Under Multiple Supply Models
@@ -54,9 +54,9 @@ supply_models <- c("bertrand", "monopolistic", "cournot", "auction")
 
 fits <- lapply(supply_models, function(sm) {
   bayes_est(
-    prices  = pnb$prices,
-    shares  = pnb$shares,
-    margins = pnb$margins,
+    prices     = pnb$prices,
+    quantities = pnb$quantities,
+    margins    = pnb$margins,
     market  = rep("PHL", nrow(pnb)),
     group   = pnb$group,
     supply_model = sm,

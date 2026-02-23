@@ -4,7 +4,7 @@
 \alias{validate_inputs}
 \title{Validate Inputs for bayes_est}
 \usage{
-validate_inputs(prices, shares, margins, market, year, group)
+validate_inputs(prices, quantities, margins, market, year, group)
 }
 \description{
 Validate Inputs for bayes_est

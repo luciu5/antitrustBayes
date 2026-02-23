@@ -4,7 +4,7 @@
 \alias{bayes_compare}
 \title{Compare Bayesian Models Using Information Criteria and Bridge Sampling}
 \usage{
-bayes_compare(..., bridge = TRUE, bridge_maxiter = 5000L)
+bayes_compare(..., bridge = TRUE, bridge_maxiter = 5000L, prior_weights = NULL)
 }
 \arguments{
 \item{...}{One or more \code{BayesLogit} objects, optionally named.}
@@ -15,12 +15,16 @@ factor model comparison. If \code{FALSE}, only LOO/WAIC are computed.}
 
 \item{bridge_maxiter}{Maximum iterations for bridge sampling.
 Default 5000.}
+
+\item{prior_weights}{Optional numeric vector of prior model probabilities.
+Must be the same length as the number of models and sum to 1. If
+\code{NULL} (default), equal prior probabilities are used.}
 }
 \value{
 A data frame with columns for model name, supply model, LOOIC,
 WAIC, stacking weights, and (if \code{bridge = TRUE}) log marginal
 likelihoods, Bayes factors (vs. best model), and posterior model
-probabilities (assuming equal prior model probabilities).
+probabilities.
 }
 \description{
 Computes LOO-IC, WAIC, and optionally log marginal likelihoods via bridge
