@@ -85,7 +85,7 @@ functions {
 data {
   int<lower=1> N;
   vector[N] revShare;
-  vector<lower=1>[N] lernerInv;
+  vector[N] lernerInv;
   vector[N] log_price_std;
   real<lower=0> log_price_sd;
   int<lower=1> N_market;

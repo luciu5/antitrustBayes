@@ -15,14 +15,14 @@ test_that("validate_inputs catches bad margins", {
       c(1, 2, 3), c(10, 20, 30), c(-0.1, 0.2, 0.3),
       c(1, 1, 1), c(1, 1, 1), c(1, 2, 3)
     ),
-    "'margins' \\(Lerner index\\) must be positive and finite"
+    "'margins' \\(Lerner index \\(p-c\\)/p\\) must be positive and finite"
   )
   expect_error(
     validate_inputs(
       c(1, 2, 3), c(10, 20, 30), c(0.2, Inf, 0.3),
       c(1, 1, 1), c(1, 1, 1), c(1, 2, 3)
     ),
-    "'margins' \\(Lerner index\\) must be positive and finite"
+    "'margins' \\(Lerner index \\(p-c\\)/p\\) must be positive and finite"
   )
 })
 

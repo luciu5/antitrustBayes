@@ -87,6 +87,69 @@ NULL
 }
 
 
+# ---- Willingness-to-Pay Parameter Conversion ----
+
+#' Convert Between Logit Alpha and CES Gamma
+#'
+#' Transforms posterior draws of the price-sensitivity parameter between
+#' logit (alpha) and CES (gamma) scales using the Frechet--Gumbel
+#' distributional equivalence.
+#'
+#' CES demand arises from Frechet-distributed taste shocks with shape
+#' parameter \eqn{\sigma = \gamma - 1}, while logit demand arises from
+#' Gumbel-distributed shocks. Since CES operates on log-prices and logit
+#' on price levels, the conversion at reference price \eqn{\bar{p}} is:
+#' \deqn{\alpha = (\gamma - 1) / \bar{p}, \quad \gamma = 1 + \alpha \bar{p}}
+#'
+#' @param object A \code{\linkS4class{BayesLogit}} object.
+#' @param to_gamma Logical. If \code{TRUE} (default), convert logit alpha
+#'   draws to CES gamma equivalents. If \code{FALSE}, convert CES gamma
+#'   draws to logit alpha equivalents.
+#' @return A numeric vector of converted parameter draws (one per posterior
+#'   sample).
+#'
+#' @examples
+#' \donttest{
+#' # Convert CES gamma draws to logit alpha scale
+#' alpha_equiv <- wtp_convert(ces_fit, to_gamma = FALSE)
+#'
+#' # Convert logit alpha draws to CES gamma scale
+#' gamma_equiv <- wtp_convert(logit_fit, to_gamma = TRUE)
+#' }
+#'
+#' @export
+setGeneric("wtp_convert", function(object, to_gamma = TRUE) {
+  standardGeneric("wtp_convert")
+})
+
+#' @rdname wtp_convert
+#' @exportMethod wtp_convert
+setMethod("wtp_convert", "BayesLogit", function(object, to_gamma = TRUE) {
+  p_bar <- mean(object@data$prices)
+  mu_log_a_draws <- as.vector(
+    rstan::extract(object@stanfit, "mu_log_a")[[1]]
+  )
+
+  if (to_gamma) {
+    if (object@demand_model != "logit") {
+      stop("to_gamma = TRUE requires a logit fit.")
+    }
+    # alpha = exp(mu_log_a) / price_sd  =>  gamma = 1 + alpha * p_bar
+    alpha_draws <- exp(mu_log_a_draws) / object@price_sd
+    gamma_draws <- 1 + alpha_draws * p_bar
+    gamma_draws
+  } else {
+    if (object@demand_model != "ces") {
+      stop("to_gamma = FALSE requires a CES fit.")
+    }
+    # gamma = 1 + exp(mu_log_a) / log_price_sd  =>  alpha = (gamma - 1) / p_bar
+    gamma_draws <- 1 + exp(mu_log_a_draws) / object@price_sd
+    alpha_draws <- (gamma_draws - 1) / p_bar
+    alpha_draws
+  }
+})
+
+
 # ---- BayesLogit methods ----
 
 #' @rdname BayesLogit-class
@@ -119,6 +182,16 @@ setMethod("show", "BayesLogit", function(object) {
     "mean", "sd", "2.5%", "97.5%", "Rhat",
     "n_eff"
   )], 3))
+
+  # For CES fits, show equivalent logit alpha
+  if (demand_label == "CES") {
+    alpha_equiv <- wtp_convert(object, to_gamma = FALSE)
+    cat("\nEquivalent logit alpha (Frechet-Gumbel):\n")
+    cat("  mean =", round(mean(alpha_equiv), 4),
+        " sd =", round(sd(alpha_equiv), 4),
+        " 95% CI = [", round(quantile(alpha_equiv, 0.025), 4), ",",
+        round(quantile(alpha_equiv, 0.975), 4), "]\n")
+  }
   invisible(object)
 })
 

@@ -79,7 +79,7 @@ functions {
 data {
   int<lower=1> N;
   vector[N] shareIn;
-  vector<lower=0>[N] marginInv;
+  vector[N] marginInv;
   vector[N] price_std;
   real<lower=0> price_sd;
   int<lower=1> N_market;
