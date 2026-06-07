@@ -1,26 +1,64 @@
 #' Prepare Stan Data for logit Demand
 #'
 #' Transforms user-supplied vectors into the list expected by the logit Stan
-#' model. Computes quantity shares from raw quantities and converts Lerner
-#' margins to inverse absolute margins.
+#' model. Computes quantity shares from raw quantities and converts positive
+#' price-normalized margins to inverse absolute margins and log residual inputs.
 #'
 #' @param prices Numeric vector of product prices.
 #' @param quantities Numeric vector of product quantities.
-#' @param margins Numeric vector of Lerner indices (p-c)/p, between 0 and 1.
+#' @param margins Numeric vector of positive price-normalized margins. Values
+#'   greater than 1 are valid for input-market markdowns.
 #' @param market Factor or vector identifying markets.
 #' @param year Factor or vector identifying time periods.
 #' @param group Factor or vector identifying product groups (e.g., firms).
 #' @param supply_model Integer 1--4.
 #' @param use_cutoff Logical.
 #' @param use_rho Logical.
+#' @param use_market_resid_scale Logical.
+#' @param use_alpha_market_pool Logical.
+#' @param use_s0_market_year_pool Logical.
 #' @param use_hmt Logical.
 #' @param priors Named list of prior hyperparameters.
 #' @param X_s0 Optional model matrix for s0 covariates.
+#' @param grainsize Positive integer reduce-sum chunk size.
 #' @return A list suitable for passing to \code{rstan::sampling}.
 #' @keywords internal
+safe_sd <- function(x, floor = 1e-8) {
+  s <- stats::sd(x)
+  if (!is.finite(s) || s < floor) 1.0 else s
+}
+
+bounded01 <- function(x, eps = 1e-6) {
+  pmin(pmax(x, eps), 1 - eps)
+}
+
+log_prior_from_positive_draws <- function(x, fallback_mean = 1.0,
+                                          fallback_sd = 1.0) {
+  x <- x[is.finite(x) & x > 0]
+  if (length(x) < 2L) {
+    return(list(mean = log(fallback_mean), sd = fallback_sd))
+  }
+
+  qs <- stats::quantile(log(x), c(0.10, 0.90), na.rm = TRUE, names = FALSE)
+  if (!all(is.finite(qs)) || qs[2] <= qs[1]) {
+    return(list(mean = mean(log(x), na.rm = TRUE), sd = fallback_sd))
+  }
+
+  list(
+    mean = mean(qs),
+    sd = max((qs[2] - qs[1]) / 2.56, 0.15)
+  )
+}
+
 prepare_stan_data <- function(prices, quantities, margins, market, year, group,
-                              supply_model, use_cutoff, use_rho, use_hmt,
-                              priors, X_s0 = NULL) {
+                              supply_model, use_cutoff = FALSE,
+                              use_rho = TRUE,
+                              use_market_resid_scale = FALSE,
+                              use_hmt = FALSE,
+                              use_alpha_market_pool = TRUE,
+                              use_s0_market_year_pool = FALSE,
+                              priors = list(), X_s0 = NULL,
+                              grainsize = 1L) {
   N <- length(prices)
 
   # Encode factors
@@ -61,11 +99,13 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   }
 
   # Standardize prices
-  price_sd <- stats::sd(prices)
+  price_sd <- safe_sd(prices)
   price_std <- (prices - mean(prices)) / price_sd
 
-  # Convert Lerner index to inverse absolute margin: 1/(L*p) = 1/(p-c)
+  # Convert price-normalized margin to inverse absolute margin.
   marginInv <- 1.0 / (margins * prices)
+  log_shareIn <- log(pmax(shares, 1e-12))
+  log_marginInv <- log(pmax(marginInv, 1e-12))
 
   # Implied outside share per market-year (quantity-based)
   implied_s0 <- numeric(N_market_year)
@@ -80,11 +120,14 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     X_s0_mat <- matrix(0, nrow = N_market_year, ncol = 0)
   } else {
     X_s0_mat <- as.matrix(X_s0)
+    if (nrow(X_s0_mat) != N_market_year) {
+      stop("'X_s0' must have one row per market-year.")
+    }
     K_s0 <- ncol(X_s0_mat)
   }
 
   # Compute model-specific alpha prior from data and FOC
-  # Convert Lerner to absolute margins for FOC inversion
+  # Convert price-normalized margins to absolute margins for FOC inversion
   margins_abs <- margins * prices
   alpha_prior <- compute_alpha_prior(
     shares, margins_abs, implied_s0,
@@ -93,16 +136,18 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
 
   # Default priors (matched to mergerBayes defaults)
   default_priors <- list(
-    prior_sigma_share = 0.01,
-    prior_sigma_margin = 1.0,
+    prior_sigma_share = 0.5,
+    prior_sigma_margin = 0.75,
     prior_sigma_meanval_strat = 1.0,
     prior_sigma_meanval_fringe = 1.0,
     prior_alpha_mean = alpha_prior$mean,
     prior_alpha_sd = alpha_prior$sd,
     s0_prior_mean = -3.0,
     s0_prior_sd = 1.2,
-    prior_sigma_alpha = 1.0,
+    prior_sigma_alpha = 0.5,
+    prior_sigma_s0_pool = 0.5,
     prior_sigma_beta_s0 = 1.0,
+    prior_sigma_resid_market = 0.35,
     prior_lkj = 2.0,
     prior_cutoff_alpha = 3.0,
     prior_cutoff_beta = 100.0
@@ -126,6 +171,8 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       N = N,
       shareIn = shares,
       marginInv = marginInv,
+      log_shareIn = log_shareIn,
+      log_marginInv = log_marginInv,
       price_std = price_std,
       price_sd = price_sd,
       N_market = N_market,
@@ -136,7 +183,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       year = year_int,
       supply_model = supply_model,
       use_cutoff = as.integer(use_cutoff),
-      grainsize = 1L,
+      grainsize = as.integer(max(1L, grainsize)),
       N_market_year = N_market_year,
       market_year_idx = mky_int,
       K_s0 = K_s0,
@@ -145,6 +192,9 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       mky_to_year = array(mky_to_year),
       is_single_market = is_single_market,
       use_rho = as.integer(use_rho),
+      use_market_resid_scale = as.integer(use_market_resid_scale),
+      use_alpha_market_pool = as.integer(use_alpha_market_pool),
+      use_s0_market_year_pool = as.integer(use_s0_market_year_pool),
       use_hmt = as.integer(use_hmt),
       avg_price_hmt = avg_price_hmt,
       avg_margin_hmt = avg_margin_hmt,
@@ -168,14 +218,15 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
 #'
 #' Transforms user-supplied vectors into the list expected by the CES Stan
 #' model. Computes revenue shares from prices and quantities, and converts
-#' Lerner margins to inverse Lerner indices.
+#' bounded Lerner margins to inverse Lerner indices and log residual inputs.
 #'
 #' @inheritParams prepare_stan_data
 #' @return A list suitable for passing to \code{rstan::sampling}.
 #' @keywords internal
 prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   group, supply_model, use_cutoff, use_rho,
-                                  use_hmt, priors, X_s0 = NULL) {
+                                  use_hmt, priors, X_s0 = NULL,
+                                  grainsize = 1L) {
   N <- length(prices)
 
   # CES FOCs require L < 1 (positive marginal costs)
@@ -225,11 +276,13 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
 
   # Standardize log-prices
   log_prices <- log(prices)
-  log_price_sd <- stats::sd(log_prices)
+  log_price_sd <- safe_sd(log_prices)
   log_price_std <- (log_prices - mean(log_prices)) / log_price_sd
 
   # Inverse Lerner index: 1/L = p/(p-c)
   lernerInv <- 1.0 / margins
+  log_revShare <- log(pmax(revShare, 1e-12))
+  log_lernerInv <- log(pmax(lernerInv, 1e-12))
 
   # Implied outside revenue share per market-year
   implied_s0 <- numeric(N_market_year)
@@ -244,19 +297,22 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     X_s0_mat <- matrix(0, nrow = N_market_year, ncol = 0)
   } else {
     X_s0_mat <- as.matrix(X_s0)
+    if (nrow(X_s0_mat) != N_market_year) {
+      stop("'X_s0' must have one row per market-year.")
+    }
     K_s0 <- ncol(X_s0_mat)
   }
 
   # Compute CES-specific gamma prior from data and FOC
   gamma_prior <- compute_gamma_prior(
     revShare, margins, implied_s0,
-    mky_int, supply_model
+    mky_int, supply_model, log_price_sd
   )
 
   # Default priors
   default_priors <- list(
-    prior_sigma_share = 0.01,
-    prior_sigma_margin = 1.0,
+    prior_sigma_share = 0.5,
+    prior_sigma_margin = 0.75,
     prior_sigma_meanval_strat = 1.0,
     prior_sigma_meanval_fringe = 1.0,
     prior_alpha_mean = gamma_prior$mean,
@@ -288,6 +344,8 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       N = N,
       revShare = revShare,
       lernerInv = lernerInv,
+      log_revShare = log_revShare,
+      log_lernerInv = log_lernerInv,
       log_price_std = log_price_std,
       log_price_sd = log_price_sd,
       N_market = N_market,
@@ -298,7 +356,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       year = year_int,
       supply_model = supply_model,
       use_cutoff = as.integer(use_cutoff),
-      grainsize = 1L,
+      grainsize = as.integer(max(1L, grainsize)),
       N_market_year = N_market_year,
       market_year_idx = mky_int,
       K_s0 = K_s0,
@@ -328,9 +386,8 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
 
 #' Compute Model-Specific Alpha Prior from Data and Supply FOC
 #'
-#' Uses 5th/95th percentile of shares and margins to derive a prior range
-#' for the price coefficient alpha that is consistent with the chosen supply
-#' model's first-order conditions.
+#' Uses robust quantiles of observation-level FOC-implied coefficients to
+#' derive a log-scale prior for the price coefficient alpha.
 #'
 #' @param shares Numeric vector of product shares.
 #' @param margins_abs Numeric vector of absolute price-cost margins (p-c).
@@ -341,89 +398,62 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
 #' @keywords internal
 compute_alpha_prior <- function(shares, margins_abs, implied_s0, mky_int,
                                 supply_model) {
-  s_low <- stats::quantile(shares, 0.10)
-  s_high <- stats::quantile(shares, 0.90)
-  m_low <- stats::quantile(margins_abs, 0.10)
-  m_high <- stats::quantile(margins_abs, 0.90)
+  shares <- bounded01(shares)
+  margins_abs <- pmax(margins_abs, 1e-12)
+  s0 <- bounded01(implied_s0[mky_int])
+  margin_inv <- 1.0 / margins_abs
 
-  if (supply_model == 1L) {
-    # Bertrand: alpha ~ 1 / ((p-c) * (1 - s))
-    a_low <- 1 / (m_high * (1 - s_low))
-    a_high <- 1 / (m_low * (1 - s_high))
+  conduct <- if (supply_model == 1L) {
+    1.0 - shares * (1.0 - s0)
   } else if (supply_model == 2L) {
-    # Monopolistic competition: alpha = 1 / (p-c)
-    a_low <- 1 / m_high
-    a_high <- 1 / m_low
+    rep(1.0, length(shares))
   } else if (supply_model == 3L) {
-    # Cournot: alpha ~ (s0 + s) / (m * s0)
-    s0_proxy <- 0.01
-    a_low <- (s0_proxy + s_low) / (m_high * s0_proxy)
-    a_high <- (s0_proxy + s_high) / (m_low * s0_proxy)
+    s0 / (s0 + shares)
   } else {
-    # Auction: alpha ~ -log(1 - s) / (m * s)
-    a_low <- -log(1 - s_low) / (m_high * s_low)
-    a_high <- -log(1 - s_high) / (m_low * s_high)
+    denom <- pmin(0.99, shares * (1.0 - s0))
+    denom / (-log1p(-denom))
   }
 
-  # Cover [a_low, a_high] with ~95% mass
-  p_mean <- (a_high + a_low) / 2
-  p_sd <- (a_high - a_low) / 4
-
-  list(mean = p_mean, sd = p_sd)
+  alpha_draws <- margin_inv / pmax(conduct, 1e-12)
+  log_prior_from_positive_draws(alpha_draws)
 }
 
 #' Compute CES Gamma Prior from Data and Supply FOC
 #'
-#' Uses 5th/95th percentile of revenue shares and Lerner indices to derive
-#' a prior range for the CES elasticity of substitution gamma (= sigma)
-#' consistent with the chosen supply model's first-order conditions.
+#' Uses robust quantiles of observation-level FOC-implied CES coefficients to
+#' derive a log-scale prior for the standardized elasticity coefficient.
 #'
 #' @param revShare Numeric vector of revenue shares.
 #' @param margins Numeric vector of Lerner indices (p-c)/p.
 #' @param implied_s0 Numeric vector of implied outside revenue shares.
 #' @param mky_int Integer vector mapping observations to market-years.
 #' @param supply_model Integer 1--4.
+#' @param log_price_sd Scale used to convert structural gamma to the
+#'   standardized coefficient estimated by the Stan model.
 #' @return A list with elements \code{mean} and \code{sd}.
 #' @keywords internal
 compute_gamma_prior <- function(revShare, margins, implied_s0, mky_int,
-                                supply_model) {
-  r_low <- stats::quantile(revShare, 0.10)
-  r_high <- stats::quantile(revShare, 0.90)
-  L_low <- stats::quantile(margins, 0.10)
-  L_high <- stats::quantile(margins, 0.90)
+                                supply_model, log_price_sd = 1.0) {
+  revShare <- bounded01(revShare)
+  margins <- bounded01(margins)
 
-  if (supply_model == 1L) {
-    # Bertrand CES: L = (gamma-1)*r / (gamma - (gamma-1)*r)
-    # => gamma = (1/L - r) / (1 - r) ... rearranging lernerInv = gamma - (gamma-1)*r
-    # => gamma = (lernerInv - r) / (1 - r) ... but lernerInv = 1/L
-    g_low <- (1 / L_high - r_high) / (1 - r_high)
-    g_high <- (1 / L_low - r_low) / (1 - r_low)
+  gamma_draws <- if (supply_model == 1L) {
+    (1 / margins - revShare) / (1 - revShare)
   } else if (supply_model == 2L) {
-    # Monopolistic competition: L = 1/gamma => gamma = 1/L
-    g_low <- 1 / L_high
-    g_high <- 1 / L_low
+    1 / margins
   } else if (supply_model == 3L) {
-    # Cournot CES: L = (1 + (gamma-1)*r) / gamma
-    # => gamma * L = 1 + (gamma-1)*r => gamma*(L - r) = 1 - r
-    # => gamma = (1 - r) / (L - r)
-    g_low <- (1 - r_low) / (L_high - r_low)
-    g_high <- (1 - r_high) / (L_low - r_high)
+    denom <- margins - revShare
+    out <- rep(NA_real_, length(margins))
+    ok <- is.finite(denom) & denom > 1e-8
+    out[ok] <- (1 - revShare[ok]) / denom[ok]
+    out
   } else {
-    # Auction CES: (1-L)^(gamma-1) = (1-r)
-    # => gamma = 1 - log(1-r) / log(1-L)
-    g_low <- 1.0 - log(1 - r_low) / log(1 - L_high)
-    g_high <- 1.0 - log(1 - r_high) / log(1 - L_low)
+    1.0 - log1p(-revShare) / log1p(-margins)
   }
 
-  # Ensure gamma > 1
-  g_low <- max(g_low, 1.01)
-  g_high <- max(g_high, g_low + 0.1)
-
-  # Cover [g_low, g_high] with ~95% mass
-  p_mean <- (g_high + g_low) / 2
-  p_sd <- (g_high - g_low) / 4
-
-  list(mean = p_mean, sd = p_sd)
+  gamma_draws <- gamma_draws[is.finite(gamma_draws) & gamma_draws > 1.0]
+  a_draws <- (gamma_draws - 1.0) * max(log_price_sd, 1e-8)
+  log_prior_from_positive_draws(a_draws)
 }
 
 #' Validate Inputs for bayes_est
@@ -438,7 +468,7 @@ validate_inputs <- function(prices, quantities, margins, market, year, group) {
     stop("'margins' must have the same length as 'prices'.")
   }
   if (any(margins <= 0 | !is.finite(margins))) {
-    stop("'margins' (Lerner index (p-c)/p) must be positive and finite.")
+    stop("'margins' must be positive and finite.")
   }
   if (any(quantities <= 0 | !is.finite(quantities))) {
     stop("'quantities' must be positive and finite.")

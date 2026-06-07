@@ -9,3 +9,6 @@ inst/doc
 *.Rcheck/
 *.tar.gz
 src/symbols.rds
+.codex
+.claude/
+tmp_lib/

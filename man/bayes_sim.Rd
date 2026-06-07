@@ -14,6 +14,7 @@ bayes_sim(
   priceOutside = 0,
   labels = NULL,
   market = NULL,
+  year = NULL,
   ...
 )
 }
@@ -42,6 +43,10 @@ post-merger simulation. Default \code{NULL} (all products).}
 uses group identifiers from the estimation data.}
 
 \item{market}{Which market(s) to simulate. Default \code{NULL} (all).}
+
+\item{year}{Which year(s) to simulate. Default \code{NULL}, preserving
+market-level behavior for existing callers. When supplied, simulations
+are run for each selected market-year cell.}
 
 \item{...}{Additional arguments passed to
 \code{\link[antitrust]{calcPrices}}.}

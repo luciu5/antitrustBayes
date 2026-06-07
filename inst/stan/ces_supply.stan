@@ -4,6 +4,11 @@
 // CES: revenue shares, log-prices, gamma = elasticity of substitution
 
 functions {
+  real bounded_inv_logit(real eta) {
+    real eps = 1e-6;
+    return eps + (1.0 - 2.0 * eps) * inv_logit(eta);
+  }
+
   real soft_hmt_penalty(real agg_elast, real max_elast, real scale) {
     if (agg_elast > max_elast) {
       return normal_lpdf(agg_elast | max_elast, scale) - normal_lpdf(max_elast | max_elast, scale);
@@ -12,11 +17,12 @@ functions {
   }
 
   real partial_sum_fn(array[] int slice_idx, int start, int end,
-                      vector lernerInv, vector revShare, vector log_price_std,
+                      vector lernerInv, vector revShare, vector log_revShare,
+                      vector log_lernerInv, vector log_price_std,
                       array[] int market, array[] int group, array[] int year,
                       array[] int market_year_idx,
                       vector a_market, vector b_market, vector b_quality_all,
-                      real sigma_b_strat, real mu_b_fringe, real sigma_b_fringe,
+                      real sigma_b_strat, real mu_b_fringe,
                       vector s0,
                       vector cutoff_share, real sigma_share, real sigma_margin,
                       real rho,
@@ -34,7 +40,7 @@ functions {
       int m = market[i];
       int mky = market_year_idx[i];
 
-      real R_0 = inv_logit(s0[mky]);
+      real R_0 = bounded_inv_logit(s0[mky]);
 
       real w = 0;
       if (use_cutoff == 1) {
@@ -46,8 +52,7 @@ functions {
       // CES: negative sign on price (gamma > 1 requires negative coeff on log price)
       real delta = b_market[m] + b_quality - (a_market[m] * log_price_std[i]);
 
-      real mu1 = s0[mky] + delta;
-      real pred_r = exp(mu1);
+      real pred_log_r = log(R_0) + delta;
 
       // gamma = 1 + a_market / log_price_sd = sigma (elasticity of substitution)
       real gamma_structural = 1.0 + a_market[m] / log_price_sd;
@@ -67,16 +72,18 @@ functions {
         // 2nd Score Auction: p/mc = (1 - R_F)^(-1/(gamma-1))
         // lernerInv = 1 / (1 - (1 - r_unc)^(1/(gamma-1)))
         real r_unc = fmin(0.99, revShare[i] * (1.0 - R_0));
-        real base_lernerInv = 1.0 / (1.0 - pow(1.0 - r_unc, 1.0 / (gamma_structural - 1.0)));
+        real gamma_minus_one = fmax(gamma_structural - 1.0, 1e-6);
+        real base_lernerInv = 1.0 / (1.0 - pow(1.0 - r_unc, 1.0 / gamma_minus_one));
         pred_lernerInv = w * gamma_structural + (1-w) * base_lernerInv;
       }
 
       real mu2 = pred_lernerInv;
-      real err_share = revShare[i] - pred_r;
-      real mu2_cond = mu2 + slope_cond * err_share;
+      real pred_log_lernerInv = log(mu2 + 1e-9);
+      real err_share = log_revShare[i] - pred_log_r;
+      real mu2_cond = pred_log_lernerInv + slope_cond * err_share;
 
-      lp += normal_lpdf(revShare[i] | pred_r, sigma_share);
-      lp += normal_lpdf(lernerInv[i] | mu2_cond, sigma_cond);
+      lp += normal_lpdf(log_revShare[i] | pred_log_r, sigma_share);
+      lp += normal_lpdf(log_lernerInv[i] | mu2_cond, sigma_cond);
     }
     return lp;
   }
@@ -86,6 +93,8 @@ data {
   int<lower=1> N;
   vector[N] revShare;
   vector[N] lernerInv;
+  vector[N] log_revShare;
+  vector[N] log_lernerInv;
   vector[N] log_price_std;
   real<lower=0> log_price_sd;
   int<lower=1> N_market;
@@ -137,13 +146,12 @@ parameters {
   vector[N_group] b_group_raw;
   real<lower=0> sigma_b_strat;
   vector[use_cutoff == 1 ? 1 : 0] mu_b_fringe_vec;
-  vector<lower=0>[use_cutoff == 1 ? 1 : 0] sigma_b_fringe_vec;
   real mu_log_a;
   vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_log_a_vec;
   vector[is_single_market == 0 ? N_market : 0] r_market_a_raw;
   vector<lower=logit(0.01), upper=logit(0.99)>[N_market_year] s0_logit;
   vector<lower=0, upper=1>[(use_cutoff == 1) ? N_market : 0] cutoff_share;
-  vector<lower=-1, upper=1>[use_rho == 1 ? 1 : 0] rho_param;
+  vector[use_rho == 1 ? 1 : 0] rho_raw;
   real log_sigma_share;
   real log_sigma_margin;
   vector<lower=0>[N_market_year > 1 ? 1 : 0] sigma_s0_vec;
@@ -162,7 +170,7 @@ transformed parameters {
   real sigma_margin = exp(log_sigma_margin);
 
   real rho = 0.0;
-  if (use_rho == 1) rho = rho_param[1];
+  if (use_rho == 1) rho = 0.95 * tanh(rho_raw[1]);
 
   real sigma_log_a = 0.0;
   if (is_single_market == 0) sigma_log_a = sigma_log_a_vec[1];
@@ -183,10 +191,8 @@ transformed parameters {
   vector[N_group] b_quality_all = sigma_b_strat * b_group_raw;
 
   real mu_b_fringe = 0.0;
-  real sigma_b_fringe = 0.0;
   if (use_cutoff == 1) {
     mu_b_fringe = mu_b_fringe_vec[1];
-    sigma_b_fringe = sigma_b_fringe_vec[1];
   }
 
   vector[is_single_market == 0 ? N_market : 0] mu_s0_market;
@@ -220,7 +226,7 @@ transformed parameters {
 }
 
 model {
-  mu_log_a ~ normal(log(prior_alpha_mean), prior_alpha_sd);
+  mu_log_a ~ normal(prior_alpha_mean, prior_alpha_sd);
   if (is_single_market == 1) {
     // No prior needed for sigma_log_a
   } else {
@@ -236,7 +242,6 @@ model {
   sigma_b_strat ~ normal(1.0, 0.5);
   if (use_cutoff == 1) {
     cutoff_share ~ beta(prior_cutoff_alpha, prior_cutoff_beta);
-    sigma_b_fringe_vec ~ normal(0, prior_sigma_meanval_fringe);
     mu_b_fringe_vec ~ normal(0, 2);
   }
 
@@ -263,7 +268,7 @@ model {
     sigma_year_s0 ~ normal(0, 1.0);
   }
   if (use_rho == 1) {
-    target += (prior_lkj - 1) * log1m(square(rho_param[1]));
+    rho_raw ~ normal(0, 0.75);
   }
   // Log-space priors prevent sigma collapse toward 0,
   // which causes extreme curvature and divergences via exp() share link
@@ -273,17 +278,23 @@ model {
   if (use_hmt == 1) {
      // For CES, aggregate elasticity uses gamma and revenue-weighted outside share
      real gamma_check = 1.0 + exp(mu_log_a) / log_price_sd;
-     real R_0_check = mean(inv_logit(s0));
+     real R_0_sum = 0.0;
+     real R_0_check;
+     for (m in 1:N_market_year) {
+       R_0_sum += bounded_inv_logit(s0[m]);
+     }
+     R_0_check = R_0_sum / N_market_year;
      real agg_elasticity = abs((gamma_check - 1.0) * R_0_check);
      real max_elasticity = 1.0 / (ssnip_hmt + avg_margin_hmt);
      target += soft_hmt_penalty(agg_elasticity, max_elasticity, 0.1);
   }
 
   target += reduce_sum(partial_sum_fn, seq, grainsize,
-                       lernerInv, revShare, log_price_std, market, group, year,
+                       lernerInv, revShare, log_revShare, log_lernerInv,
+                       log_price_std, market, group, year,
                        market_year_idx,
                        a_market, b_market, b_quality_all, sigma_b_strat,
-                       mu_b_fringe, sigma_b_fringe,
+                       mu_b_fringe,
                        s0, cutoff_share,
                        sigma_share, sigma_margin, rho, log_price_sd, supply_model,
                        use_cutoff, is_single_market);
@@ -293,11 +304,16 @@ generated quantities {
   vector[N] pred_revShare;
   vector[N] pred_lernerInv;
   vector[N] log_lik;
+  vector[N_market_year] s0_prob;
 
   {
     real k = 0.2;
     real sigma_cond = sigma_margin * sqrt(1.0 - square(rho));
     real slope_cond = rho * (sigma_margin / sigma_share);
+
+    for (m in 1:N_market_year) {
+      s0_prob[m] = bounded_inv_logit(s0[m]);
+    }
 
     for (n in 1:N) {
       int m = market[n];
@@ -312,11 +328,10 @@ generated quantities {
       real b_quality = b_quality_all[group[n]] + (w * mu_b_fringe);
       real delta = b_market[m] + b_quality - (a_market[m] * log_price_std[n]);
 
-      real mu1 = s0[mky] + delta;
-      pred_revShare[n] = exp(mu1);
+      real R_0 = s0_prob[mky];
+      real pred_log_r = log(R_0) + delta;
+      pred_revShare[n] = exp(pred_log_r);
 
-      real R_0 = inv_logit(s0[mky]);
-      if (R_0 < 0.01) R_0 = 0.01;
       real gamma_structural = 1.0 + a_market[m] / log_price_sd;
 
       real pred_lInv;
@@ -333,17 +348,18 @@ generated quantities {
       } else {
         // 2nd Score Auction: lernerInv = 1 / (1 - (1-r_unc)^(1/(gamma-1)))
         real r_unc = fmin(0.99, revShare[n] * (1.0 - R_0));
-        real base_lInv = 1.0 / (1.0 - pow(1.0 - r_unc, 1.0 / (gamma_structural - 1.0)));
+        real gamma_minus_one = fmax(gamma_structural - 1.0, 1e-6);
+        real base_lInv = 1.0 / (1.0 - pow(1.0 - r_unc, 1.0 / gamma_minus_one));
         pred_lInv = w * gamma_structural + (1-w) * base_lInv;
       }
 
       pred_lernerInv[n] = pred_lInv;
 
       // Pointwise log-likelihood for LOO/WAIC
-      real err_share = revShare[n] - pred_revShare[n];
-      real mu2_cond = pred_lInv + slope_cond * err_share;
-      log_lik[n] = normal_lpdf(revShare[n] | pred_revShare[n], sigma_share)
-                 + normal_lpdf(lernerInv[n] | mu2_cond, sigma_cond);
+      real err_share = log_revShare[n] - pred_log_r;
+      real mu2_cond = log(pred_lInv + 1e-9) + slope_cond * err_share;
+      log_lik[n] = normal_lpdf(log_revShare[n] | pred_log_r, sigma_share)
+                 + normal_lpdf(log_lernerInv[n] | mu2_cond, sigma_cond);
     }
   }
 }

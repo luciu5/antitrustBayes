@@ -12,11 +12,15 @@ prepare_stan_data(
   year,
   group,
   supply_model,
-  use_cutoff,
-  use_rho,
-  use_hmt,
-  priors,
-  X_s0 = NULL
+  use_cutoff = FALSE,
+  use_rho = TRUE,
+  use_market_resid_scale = FALSE,
+  use_hmt = FALSE,
+  use_alpha_market_pool = TRUE,
+  use_s0_market_year_pool = FALSE,
+  priors = list(),
+  X_s0 = NULL,
+  grainsize = 1L
 )
 }
 \arguments{
@@ -24,7 +28,8 @@ prepare_stan_data(
 
 \item{quantities}{Numeric vector of product quantities.}
 
-\item{margins}{Numeric vector of Lerner indices (p-c)/p, between 0 and 1.}
+\item{margins}{Numeric vector of positive price-normalized margins. Values
+greater than 1 are valid for input-market markdowns.}
 
 \item{market}{Factor or vector identifying markets.}
 
@@ -38,18 +43,26 @@ prepare_stan_data(
 
 \item{use_rho}{Logical.}
 
+\item{use_market_resid_scale}{Logical.}
+
+\item{use_alpha_market_pool}{Logical.}
+
+\item{use_s0_market_year_pool}{Logical.}
+
 \item{use_hmt}{Logical.}
 
 \item{priors}{Named list of prior hyperparameters.}
 
 \item{X_s0}{Optional model matrix for s0 covariates.}
+
+\item{grainsize}{Positive integer reduce-sum chunk size.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.
 }
 \description{
 Transforms user-supplied vectors into the list expected by the logit Stan
-model. Computes quantity shares from raw quantities and converts Lerner
-margins to inverse absolute margins.
+model. Computes quantity shares from raw quantities and converts positive
+price-normalized margins to inverse absolute margins and log residual inputs.
 }
 \keyword{internal}

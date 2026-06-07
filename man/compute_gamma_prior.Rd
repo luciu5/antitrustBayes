@@ -4,7 +4,14 @@
 \alias{compute_gamma_prior}
 \title{Compute CES Gamma Prior from Data and Supply FOC}
 \usage{
-compute_gamma_prior(revShare, margins, implied_s0, mky_int, supply_model)
+compute_gamma_prior(
+  revShare,
+  margins,
+  implied_s0,
+  mky_int,
+  supply_model,
+  log_price_sd = 1.0
+)
 }
 \arguments{
 \item{revShare}{Numeric vector of revenue shares.}
@@ -16,13 +23,15 @@ compute_gamma_prior(revShare, margins, implied_s0, mky_int, supply_model)
 \item{mky_int}{Integer vector mapping observations to market-years.}
 
 \item{supply_model}{Integer 1--4.}
+
+\item{log_price_sd}{Scale used to convert structural gamma to the
+standardized coefficient estimated by the Stan model.}
 }
 \value{
 A list with elements \code{mean} and \code{sd}.
 }
 \description{
-Uses 5th/95th percentile of revenue shares and Lerner indices to derive
-a prior range for the CES elasticity of substitution gamma (= sigma)
-consistent with the chosen supply model's first-order conditions.
+Uses robust quantiles of observation-level FOC-implied CES coefficients to
+derive a log-scale prior for the standardized elasticity coefficient.
 }
 \keyword{internal}

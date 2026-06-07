@@ -25,6 +25,9 @@
 #' @param labels Character vector of product labels. If \code{NULL},
 #'   uses group identifiers from the estimation data.
 #' @param market Which market(s) to simulate. Default \code{NULL} (all).
+#' @param year Which year(s) to simulate. Default \code{NULL}, preserving
+#'   market-level behavior for existing callers. When supplied, simulations
+#'   are run for each selected market-year cell.
 #' @param ... Additional arguments passed to
 #'   \code{\link[antitrust]{calcPrices}}.
 #'
@@ -88,6 +91,7 @@ bayes_sim <- function(fit, ownerPost,
                       priceOutside = 0,
                       labels = NULL,
                       market = NULL,
+                      year = NULL,
                       ...) {
 
   cl <- match.call()
@@ -109,13 +113,22 @@ bayes_sim <- function(fit, ownerPost,
   )
   is_auction <- fit@supply_model == 4L
 
-  # Determine markets to simulate
+  # Determine markets/cells to simulate
   market_f <- as.factor(df$market)
   market_levels <- levels(market_f)
   if (!is.null(market)) {
     market_levels <- intersect(as.character(market), market_levels)
     if (length(market_levels) == 0L) {
       stop("None of the specified markets found in the fitted data.")
+    }
+  }
+
+  year_f <- as.factor(df$year)
+  year_levels <- levels(year_f)
+  if (!is.null(year)) {
+    year_levels <- intersect(as.character(year), year_levels)
+    if (length(year_levels) == 0L) {
+      stop("None of the specified years found in the fitted data.")
     }
   }
 
@@ -132,6 +145,32 @@ bayes_sim <- function(fit, ownerPost,
                       as.integer(as.factor(df$year)), sep = "_")
   mky_f <- as.factor(mky_labels)
 
+  if (is.null(year)) {
+    sim_units <- data.frame(
+      unit_id = market_levels,
+      market = market_levels,
+      year = NA_character_,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    sim_units <- unique(data.frame(
+      market = as.character(df$market),
+      year = as.character(df$year),
+      stringsAsFactors = FALSE
+    ))
+    sim_units <- sim_units[
+      sim_units$market %in% market_levels & sim_units$year %in% year_levels,
+      ,
+      drop = FALSE
+    ]
+    sim_units$unit_id <- paste(sim_units$market, sim_units$year, sep = "_")
+    sim_units <- sim_units[, c("unit_id", "market", "year")]
+    rownames(sim_units) <- NULL
+    if (nrow(sim_units) == 0L) {
+      stop("No market-year cells match the requested market/year filters.")
+    }
+  }
+
   all_sims     <- list()
   price_pre    <- list()
   price_post   <- list()
@@ -139,11 +178,27 @@ bayes_sim <- function(fit, ownerPost,
   shares_pre   <- list()
   shares_post  <- list()
   prod_labels  <- list()
-  n_valid_vec  <- integer(length(market_levels))
-  names(n_valid_vec) <- market_levels
+  n_valid_vec  <- integer(nrow(sim_units))
+  names(n_valid_vec) <- sim_units$unit_id
 
-  for (mk in market_levels) {
-    mkt_idx <- which(df$market == mk)
+  select_cell_arg <- function(x, idx, unit_id, mk) {
+    if (is.list(x)) {
+      if (!is.null(x[[unit_id]])) return(x[[unit_id]])
+      return(x[[mk]])
+    }
+    if (is.matrix(x)) return(x)
+    x[idx]
+  }
+
+  for (u in seq_len(nrow(sim_units))) {
+    mk <- sim_units$market[u]
+    yr <- sim_units$year[u]
+    unit_id <- sim_units$unit_id[u]
+    mkt_idx <- if (is.null(year)) {
+      which(df$market == mk)
+    } else {
+      which(df$market == mk & as.character(df$year) == yr)
+    }
     if (length(mkt_idx) == 0L) next
 
     mdata <- df[mkt_idx, , drop = FALSE]
@@ -157,12 +212,9 @@ bayes_sim <- function(fit, ownerPost,
 
     # Ownership: pass vectors or matrices; ownerToMatrix handles conversion
     ownerPre_m <- as.character(mdata$group)
-    if (is.list(ownerPost)) {
-      ownerPost_m <- ownerPost[[mk]]
-    } else if (is.matrix(ownerPost)) {
-      ownerPost_m <- ownerPost
-    } else {
-      ownerPost_m <- as.character(ownerPost[mkt_idx])
+    ownerPost_m <- select_cell_arg(ownerPost, mkt_idx, unit_id, mk)
+    if (!is.matrix(ownerPost_m)) {
+      ownerPost_m <- as.character(ownerPost_m)
     }
 
     prices_m <- as.numeric(mdata$prices)
@@ -174,28 +226,22 @@ bayes_sim <- function(fit, ownerPost,
 
     if (is.null(labels)) {
       labels_m <- as.character(mdata$group)
-    } else if (is.list(labels)) {
-      labels_m <- labels[[mk]]
     } else {
-      labels_m <- labels[mkt_idx]
+      labels_m <- select_cell_arg(labels, mkt_idx, unit_id, mk)
     }
 
     # mcDelta
     if (is.null(mcDelta)) {
       mcDelta_m <- rep(0, n_prod)
-    } else if (is.list(mcDelta)) {
-      mcDelta_m <- mcDelta[[mk]]
     } else {
-      mcDelta_m <- mcDelta[mkt_idx]
+      mcDelta_m <- select_cell_arg(mcDelta, mkt_idx, unit_id, mk)
     }
 
     # subset
     if (is.null(subset)) {
       subset_m <- rep(TRUE, n_prod)
-    } else if (is.list(subset)) {
-      subset_m <- subset[[mk]]
     } else {
-      subset_m <- subset[mkt_idx]
+      subset_m <- select_cell_arg(subset, mkt_idx, unit_id, mk)
     }
 
     # Pre-allocate result matrices
@@ -215,7 +261,13 @@ bayes_sim <- function(fit, ownerPost,
       alpha_raw <- draws$a_market[i, market_int_val]
       alpha <- alpha_raw / price_sd
 
-      s0 <- plogis(draws$s0_logit[i, mky_int_val])
+      s0 <- if ("s0_prob" %in% names(draws)) {
+        draws$s0_prob[i, mky_int_val]
+      } else if ("s0" %in% names(draws)) {
+        plogis(draws$s0[i, mky_int_val])
+      } else {
+        plogis(draws$s0_logit[i, mky_int_val])
+      }
 
       # Compute unconditional shares and mean valuations
       shares_uncond <- shares_cond * (1 - s0)
@@ -229,6 +281,7 @@ bayes_sim <- function(fit, ownerPost,
           prices       = prices_m,
           shares       = shares_uncond,
           margins      = margins_m,
+          weights      = rep(1, n_prod),
           ownerPre     = ownerPre_m,
           ownerPost    = ownerPost_m,
           mcDelta      = mcDelta_m,
@@ -282,14 +335,14 @@ bayes_sim <- function(fit, ownerPost,
       }
     }
 
-    all_sims[[mk]]     <- mkt_sims
-    price_pre[[mk]]    <- ppre
-    price_post[[mk]]   <- ppost
-    price_change[[mk]] <- ppost / ppre - 1
-    shares_pre[[mk]]   <- spre
-    shares_post[[mk]]  <- spost
-    prod_labels[[mk]]  <- labels_m
-    n_valid_vec[mk]    <- n_ok
+    all_sims[[unit_id]]     <- mkt_sims
+    price_pre[[unit_id]]    <- ppre
+    price_post[[unit_id]]   <- ppost
+    price_change[[unit_id]] <- ppost / ppre - 1
+    shares_pre[[unit_id]]   <- spre
+    shares_post[[unit_id]]  <- spost
+    prod_labels[[unit_id]]  <- labels_m
+    n_valid_vec[unit_id]    <- n_ok
   }
 
   new("BayesSim",
@@ -299,7 +352,7 @@ bayes_sim <- function(fit, ownerPost,
     price_change   = price_change,
     shares_pre     = shares_pre,
     shares_post    = shares_post,
-    market_ids     = market_levels,
+    market_ids     = sim_units$unit_id,
     product_labels = prod_labels,
     n_draws        = as.integer(n_draws_actual),
     n_valid        = n_valid_vec,

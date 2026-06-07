@@ -21,8 +21,7 @@ compute_alpha_prior(shares, margins_abs, implied_s0, mky_int, supply_model)
 A list with elements \code{mean} and \code{sd}.
 }
 \description{
-Uses 5th/95th percentile of shares and margins to derive a prior range
-for the price coefficient alpha that is consistent with the chosen supply
-model's first-order conditions.
+Uses robust quantiles of observation-level FOC-implied coefficients to
+derive a log-scale prior for the price coefficient alpha.
 }
 \keyword{internal}

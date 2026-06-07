@@ -16,7 +16,8 @@ prepare_ces_stan_data(
   use_rho,
   use_hmt,
   priors,
-  X_s0 = NULL
+  X_s0 = NULL,
+  grainsize = 1L
 )
 }
 \arguments{
@@ -24,7 +25,7 @@ prepare_ces_stan_data(
 
 \item{quantities}{Numeric vector of product quantities.}
 
-\item{margins}{Numeric vector of Lerner indices (p-c)/p, between 0 and 1.}
+\item{margins}{Numeric vector of positive Lerner indices (p-c)/p.}
 
 \item{market}{Factor or vector identifying markets.}
 
@@ -43,6 +44,8 @@ prepare_ces_stan_data(
 \item{priors}{Named list of prior hyperparameters.}
 
 \item{X_s0}{Optional model matrix for s0 covariates.}
+
+\item{grainsize}{Positive integer reduce-sum chunk size.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.
@@ -50,6 +53,6 @@ A list suitable for passing to \code{rstan::sampling}.
 \description{
 Transforms user-supplied vectors into the list expected by the CES Stan
 model. Computes revenue shares from prices and quantities, and converts
-Lerner margins to inverse Lerner indices.
+bounded Lerner margins to inverse Lerner indices and log residual inputs.
 }
 \keyword{internal}

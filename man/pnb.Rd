@@ -11,7 +11,8 @@ A data frame with 39 rows and 5 columns:
 \item{group}{Character. Holding company identifier (top-holder RSSD ID).}
 \item{prices}{Numeric. Interest rate on deposits (percent).}
 \item{quantities}{Numeric. Total deposits (thousands of dollars).}
-\item{margins}{Numeric. Lerner index (p - c) / p.}
+\item{margins}{Numeric. Positive price-normalized input markdown
+ratio. Values may exceed 1 in input markets.}
 }
 }
 \source{
