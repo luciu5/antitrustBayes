@@ -32,13 +32,73 @@ bounded01 <- function(x, eps = 1e-6) {
   pmin(pmax(x, eps), 1 - eps)
 }
 
-log_prior_from_positive_draws <- function(x, fallback_mean = 1.0,
+#' Convert Positive Draws to Log-Normal Prior Parameters
+#'
+#' Computes prior mean and SD from FOC-implied parameter draws. By default uses
+#' weighted mean and SD when weights are provided (emphasizing large products),
+#' or robust quantiles (10th and 90th percentiles) when unweighted.
+#'
+#' @param x Numeric vector of positive draws (e.g., FOC-implied alphas).
+#' @param weights Optional numeric vector of non-negative weights (e.g., market shares).
+#'   If provided, uses weighted mean and SD directly. Must have same length as x
+#'   after filtering to valid values - no vector recycling. Default NULL uses
+#'   robust quantiles.
+#' @param fallback_mean Fallback prior mean if draws are insufficient.
+#' @param fallback_sd Fallback prior SD if draws are insufficient.
+#' @return A list with elements \code{mean} and \code{sd} on log scale.
+#' @keywords internal
+log_prior_from_positive_draws <- function(x, weights = NULL,
+                                          fallback_mean = 1.0,
                                           fallback_sd = 1.0) {
-  x <- x[is.finite(x) & x > 0]
+  # Filter to valid x first
+  valid <- is.finite(x) & x > 0
+  x <- x[valid]
+
   if (length(x) < 2L) {
     return(list(mean = log(fallback_mean), sd = fallback_sd))
   }
 
+  # Handle and validate weights
+  if (!is.null(weights)) {
+    # Filter weights to match filtered x
+    weights <- weights[valid]
+
+    # Validation: length must match (no recycling)
+    if (length(weights) != length(x)) {
+      stop("length(weights) must equal length(x) after filtering. ",
+           "Got ", length(weights), " weights and ", length(x), " valid x values.")
+    }
+
+    # Validation: must be non-negative
+    if (any(weights < 0, na.rm = TRUE)) {
+      stop("weights must be non-negative. Found negative values.")
+    }
+
+    # Normalize weights to sum to 1
+    weights <- pmax(weights, 0)
+    weight_sum <- sum(weights, na.rm = TRUE)
+    if (weight_sum > 0) {
+      weights <- weights / weight_sum
+    } else {
+      # All weights are zero - fall back to unweighted
+      weights <- NULL
+    }
+  }
+
+  # Compute weighted mean and SD if weights provided
+  if (!is.null(weights)) {
+    log_x <- log(x)
+    mean_val <- sum(log_x * weights, na.rm = TRUE)
+
+    # Weighted variance
+    var_val <- sum(weights * (log_x - mean_val)^2, na.rm = TRUE)
+    sd_val <- max(sqrt(var_val), 0.15)
+
+    return(list(mean = mean_val, sd = sd_val))
+  }
+
+  # Unweighted fallback: use robust quantiles (original behavior)
+  # Only used when weights explicitly NULL or all zero
   qs <- stats::quantile(log(x), c(0.10, 0.90), na.rm = TRUE, names = FALSE)
   if (!all(is.finite(qs)) || qs[2] <= qs[1]) {
     return(list(mean = mean(log(x), na.rm = TRUE), sd = fallback_sd))
@@ -384,17 +444,18 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   stan_data
 }
 
-#' Compute Model-Specific Alpha Prior from Data and Supply FOC
+#' Compute Alpha Prior from Data and Supply FOC
 #'
-#' Uses robust quantiles of observation-level FOC-implied coefficients to
-#' derive a log-scale prior for the price coefficient alpha.
+#' Uses **share-weighted mean and SD** of observation-level FOC-implied
+#' alphas to derive a log-scale prior for the price coefficient. Large products
+#' receive more weight in calibration, reducing sensitivity to small-product outliers.
 #'
-#' @param shares Numeric vector of product shares.
-#' @param margins_abs Numeric vector of absolute price-cost margins (p-c).
-#' @param implied_s0 Numeric vector of implied outside shares per market-year.
+#' @param shares Numeric vector of within-market-year quantity shares.
+#' @param margins_abs Numeric vector of absolute price-cost margins (not Lerner indices).
+#' @param implied_s0 Numeric vector of implied outside shares by market-year.
 #' @param mky_int Integer vector mapping observations to market-years.
-#' @param supply_model Integer 1--4.
-#' @return A list with elements \code{mean} and \code{sd}.
+#' @param supply_model Integer 1--4 (Bertrand, MonCom, Cournot, Auction).
+#' @return A list with elements \code{mean} and \code{sd} on log scale.
 #' @keywords internal
 compute_alpha_prior <- function(shares, margins_abs, implied_s0, mky_int,
                                 supply_model) {
@@ -415,22 +476,25 @@ compute_alpha_prior <- function(shares, margins_abs, implied_s0, mky_int,
   }
 
   alpha_draws <- margin_inv / pmax(conduct, 1e-12)
-  log_prior_from_positive_draws(alpha_draws)
+
+  # Pass shares as weights for share-weighted calibration
+  log_prior_from_positive_draws(alpha_draws, weights = shares)
 }
 
 #' Compute CES Gamma Prior from Data and Supply FOC
 #'
-#' Uses robust quantiles of observation-level FOC-implied CES coefficients to
-#' derive a log-scale prior for the standardized elasticity coefficient.
+#' Uses **revenue-share-weighted mean and SD** of observation-level
+#' FOC-implied CES coefficients to derive a log-scale prior for the standardized
+#' elasticity coefficient.
 #'
 #' @param revShare Numeric vector of revenue shares.
 #' @param margins Numeric vector of Lerner indices (p-c)/p.
 #' @param implied_s0 Numeric vector of implied outside revenue shares.
 #' @param mky_int Integer vector mapping observations to market-years.
-#' @param supply_model Integer 1--4.
+#' @param supply_model Integer 1--4 (Bertrand, MonCom, Cournot, Auction).
 #' @param log_price_sd Scale used to convert structural gamma to the
 #'   standardized coefficient estimated by the Stan model.
-#' @return A list with elements \code{mean} and \code{sd}.
+#' @return A list with elements \code{mean} and \code{sd} on log scale.
 #' @keywords internal
 compute_gamma_prior <- function(revShare, margins, implied_s0, mky_int,
                                 supply_model, log_price_sd = 1.0) {
@@ -451,9 +515,15 @@ compute_gamma_prior <- function(revShare, margins, implied_s0, mky_int,
     1.0 - log1p(-revShare) / log1p(-margins)
   }
 
-  gamma_draws <- gamma_draws[is.finite(gamma_draws) & gamma_draws > 1.0]
-  a_draws <- (gamma_draws - 1.0) * max(log_price_sd, 1e-8)
-  log_prior_from_positive_draws(a_draws)
+  # Filter to finite, valid gamma values
+  valid <- is.finite(gamma_draws) & gamma_draws > 1.0
+  gamma_draws_valid <- gamma_draws[valid]
+  revShare_valid <- revShare[valid]
+
+  a_draws <- (gamma_draws_valid - 1.0) * max(log_price_sd, 1e-8)
+
+  # Pass revenue shares as weights for share-weighted calibration
+  log_prior_from_positive_draws(a_draws, weights = revShare_valid)
 }
 
 #' Validate Inputs for bayes_est
