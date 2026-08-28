@@ -163,16 +163,6 @@ bayes_est <- function(prices, quantities, margins,
     warning("use_cutoff ignored for monopolistic competition (no strategic/fringe distinction).")
     use_cutoff <- FALSE
   }
-  if (use_market_resid_scale && demand_model != "logit") {
-    warning("use_market_resid_scale is currently implemented for logit demand only; ignoring.")
-    use_market_resid_scale <- FALSE
-  }
-  if ((use_alpha_market_pool || use_s0_market_year_pool) && demand_model != "logit") {
-    warning("alpha/s0 pooling switches are currently implemented for logit demand only; ignoring.")
-    use_alpha_market_pool <- FALSE
-    use_s0_market_year_pool <- FALSE
-  }
-
   # Validate
   validate_inputs(prices, quantities, margins, market, year, group)
 
@@ -263,7 +253,12 @@ bayes_est <- function(prices, quantities, margins,
       use_hmt      = use_hmt,
       priors       = priors,
       X_s0         = X_s0,
-      grainsize    = grainsize
+      grainsize    = grainsize,
+      use_market_resid_scale = use_market_resid_scale,
+      use_alpha_market_pool = use_alpha_market_pool,
+      use_s0_market_year_pool = use_s0_market_year_pool,
+      use_centered_alpha = use_centered_alpha,
+      use_centered_s0_pool = use_centered_s0_pool
     )
     stan_mod <- stanmodels[["ces_supply"]]
     price_sd_val <- stan_data$log_price_sd
