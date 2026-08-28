@@ -17,7 +17,13 @@ prepare_ces_stan_data(
   use_hmt,
   priors,
   X_s0 = NULL,
-  grainsize = 1L
+  market_side = "output",
+  grainsize = 1L,
+  use_market_resid_scale = FALSE,
+  use_alpha_market_pool = FALSE,
+  use_s0_market_year_pool = FALSE,
+  use_centered_alpha = FALSE,
+  use_centered_s0_pool = FALSE
 )
 }
 \arguments{
@@ -45,7 +51,19 @@ prepare_ces_stan_data(
 
 \item{X_s0}{Optional model matrix for s0 covariates.}
 
+\item{market_side}{Character; CES currently supports \code{"output"} only.}
+
 \item{grainsize}{Positive integer reduce-sum chunk size.}
+
+\item{use_market_resid_scale}{Logical.}
+
+\item{use_alpha_market_pool}{Logical.}
+
+\item{use_s0_market_year_pool}{Logical.}
+
+\item{use_centered_alpha}{Logical.}
+
+\item{use_centered_s0_pool}{Logical.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.

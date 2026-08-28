@@ -10,6 +10,7 @@
 #' @slot stan_data A \code{list} of the data passed to Stan.
 #' @slot supply_model Integer (1--4) identifying the supply model.
 #' @slot demand_model Character: \code{"logit"} or \code{"ces"}.
+#' @slot market_side Character: \code{"input"} or \code{"output"}.
 #' @slot price_sd Numeric scalar: the standard deviation of prices (logit) or
 #'   log-prices (CES) used for standardization.
 #' @slot call The matched call to \code{\link{bayes_est}}.
@@ -23,6 +24,7 @@ setClass(
     stan_data    = "list",
     supply_model = "integer",
     demand_model = "character",
+    market_side  = "character",
     price_sd     = "numeric",
     call         = "call"
   )

@@ -13,11 +13,14 @@ prepare_stan_data(
   group,
   supply_model,
   use_cutoff = FALSE,
+  market_side = "input",
   use_rho = TRUE,
   use_market_resid_scale = FALSE,
   use_hmt = FALSE,
   use_alpha_market_pool = TRUE,
   use_s0_market_year_pool = FALSE,
+  use_centered_alpha = FALSE,
+  use_centered_s0_pool = FALSE,
   priors = list(),
   X_s0 = NULL,
   grainsize = 1L
@@ -39,6 +42,8 @@ greater than 1 are valid for input-market markdowns.}
 
 \item{supply_model}{Integer 1--4.}
 
+\item{market_side}{Character: \code{"input"} or \code{"output"}.}
+
 \item{use_cutoff}{Logical.}
 
 \item{use_rho}{Logical.}
@@ -50,6 +55,10 @@ greater than 1 are valid for input-market markdowns.}
 \item{use_s0_market_year_pool}{Logical.}
 
 \item{use_hmt}{Logical.}
+
+\item{use_centered_alpha}{Logical.}
+
+\item{use_centered_s0_pool}{Logical.}
 
 \item{priors}{Named list of prior hyperparameters.}
 

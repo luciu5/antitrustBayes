@@ -2,26 +2,39 @@
 % Please edit documentation in R/helpers.R
 \name{compute_alpha_prior}
 \alias{compute_alpha_prior}
-\title{Compute Model-Specific Alpha Prior from Data and Supply FOC}
+\title{Compute Alpha Prior from Data and Supply FOC}
 \usage{
-compute_alpha_prior(shares, margins_abs, implied_s0, mky_int, supply_model)
+compute_alpha_prior(
+  shares,
+  margins_abs,
+  s0_reference,
+  mky_int,
+  supply_model,
+  price_sd = 1
+)
 }
 \arguments{
-\item{shares}{Numeric vector of product shares.}
+\item{shares}{Numeric vector of within-market-year quantity shares.}
 
-\item{margins_abs}{Numeric vector of absolute price-cost margins (p-c).}
+\item{margins_abs}{Numeric vector of absolute price-cost margins (not Lerner indices).}
 
-\item{implied_s0}{Numeric vector of implied outside shares per market-year.}
+\item{s0_reference}{Probability-scale outside share used to calibrate the
+FOC prior. Conditional inside shares do not identify this quantity.}
 
 \item{mky_int}{Integer vector mapping observations to market-years.}
 
-\item{supply_model}{Integer 1--4.}
+\item{supply_model}{Integer 1--4 (Bertrand, MonCom, Cournot, Auction).}
+
+\item{price_sd}{Standard deviation of prices used by the standardized Stan
+coefficient. The FOC-implied structural alpha is multiplied by this
+value before taking logs.}
 }
 \value{
-A list with elements \code{mean} and \code{sd}.
+A list with elements \code{mean} and \code{sd} on log scale.
 }
 \description{
-Uses robust quantiles of observation-level FOC-implied coefficients to
-derive a log-scale prior for the price coefficient alpha.
+Uses \strong{share-weighted mean and SD} of observation-level FOC-implied
+alphas to derive a log-scale prior for the price coefficient. Large products
+receive more weight in calibration, reducing sensitivity to small-product outliers.
 }
 \keyword{internal}

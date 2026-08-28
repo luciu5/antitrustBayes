@@ -49,6 +49,10 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
 
   # Separate BayesLogit objects from named arguments
   fits <- args[vapply(args, is, logical(1), "BayesLogit")]
+  if (length(fits) == 0L) {
+    stop("At least one BayesLogit fit is required.")
+  }
+  invisible(lapply(fits, validate_fit_spec))
 
   # Handle named and unnamed arguments
   nms <- names(fits)

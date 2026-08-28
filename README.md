@@ -6,7 +6,7 @@ Bayesian estimation of differentiated products demand and supply models using St
 
 `antitrustBayes` provides two core functions:
 
-- **`bayes_est()`** — Estimate a hierarchical Bayesian Logit demand + supply model using Stan MCMC. Supports four supply models (Bertrand, Monopolistic, Cournot, Competitive).
+- **`bayes_est()`** — Estimate a hierarchical Bayesian Logit or CES demand + supply model using Stan MCMC. Supports four supply models (Bertrand, Monopolistic, Cournot, Second-Score Auction).
 
 - **`bayes_sim()`** — Simulate merger effects over posterior draws. Each draw produces a full merger simulation via `antitrust::sim()`, yielding posterior distributions of price changes, share changes, and all other `antitrust` package metrics.
 
@@ -30,7 +30,7 @@ library(antitrustBayes)
 # 1. Estimate the Bayesian model
 fit <- bayes_est(
   prices  = dat$prices,
-  shares  = dat$shares,
+  quantities = dat$quantities,
   margins = dat$margins,
   market  = dat$market,
   year    = dat$year,

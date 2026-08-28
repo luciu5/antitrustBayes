@@ -99,10 +99,17 @@ bayes_sim <- function(fit, ownerPost,
   if (!is(fit, "BayesLogit")) {
     stop("'fit' must be a BayesLogit object from bayes_est().")
   }
+  validate_fit_spec(fit)
+  if (fit@demand_model == "ces") {
+    stop("bayes_sim() does not yet support CES fits; refusing to simulate a ",
+         "CES posterior with Logit demand equations.", call. = FALSE)
+  }
 
   draws <- rstan::extract(fit@stanfit)
   df    <- fit@data
   price_sd <- fit@price_sd
+  market_side <- fit@market_side
+  is_output <- identical(market_side, "output")
 
   # Map supply_model integer to antitrust class name
   supply_class <- switch(as.character(fit@supply_model),
@@ -129,6 +136,16 @@ bayes_sim <- function(fit, ownerPost,
     year_levels <- intersect(as.character(year), year_levels)
     if (length(year_levels) == 0L) {
       stop("None of the specified years found in the fitted data.")
+    }
+  }
+
+  if (is.null(year)) {
+    year_counts <- tapply(as.character(df$year), df$market,
+                          function(x) length(unique(x)))
+    if (any(year_counts[market_levels] > 1L, na.rm = TRUE)) {
+      stop("year must be supplied when simulating a panel fit; otherwise ",
+           "different years would be treated as simultaneous products.",
+           call. = FALSE)
     }
   }
 
@@ -260,6 +277,7 @@ bayes_sim <- function(fit, ownerPost,
       # Extract posterior draw parameters
       alpha_raw <- draws$a_market[i, market_int_val]
       alpha <- alpha_raw / price_sd
+      if (is_output) alpha <- -alpha
 
       s0 <- if ("s0_prob" %in% names(draws)) {
         draws$s0_prob[i, mky_int_val]
@@ -291,6 +309,7 @@ bayes_sim <- function(fit, ownerPost,
           priceStart   = prices_m,
           shareInside  = 1 - s0,
           normIndex    = NA,
+          output       = is_output,
           labels       = labels_m
         )
 

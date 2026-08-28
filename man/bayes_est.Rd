@@ -12,12 +12,15 @@ bayes_est(
   year = NULL,
   group,
   demand_model = c("logit", "ces"),
+  market_side = NULL,
   supply_model = c("bertrand", "monopolistic", "cournot", "auction"),
   use_cutoff = FALSE,
   use_rho = TRUE,
   use_market_resid_scale = FALSE,
   use_alpha_market_pool = TRUE,
   use_s0_market_year_pool = FALSE,
+  use_centered_alpha = FALSE,
+  use_centered_s0_pool = FALSE,
   use_hmt = FALSE,
   X_s0 = NULL,
   priors = list(),
@@ -29,8 +32,10 @@ bayes_est(
 \item{prices}{Numeric vector of product prices. Must be positive.}
 
 \item{quantities}{Numeric vector of product quantities (e.g., units sold,
-deposits). Must be positive. The package computes the appropriate share
-type internally: quantity shares for logit, revenue shares for CES.}
+deposits). Must be positive. Within each market-year, the package
+normalizes these into conditional inside quantity shares for logit or
+conditional inside revenue shares for CES. The outside-share level is a
+model parameter identified jointly with the supply FOCs.}
 
 \item{margins}{Numeric vector of positive price-normalized margins. For
 output markets this is the usual Lerner index \eqn{(p - c) / p}; for
@@ -49,6 +54,12 @@ firms or holding companies). Used for hierarchical mean-value effects.}
 \item{demand_model}{Character string specifying the demand model:
 \code{"logit"} (default) or \code{"ces"} (Constant Elasticity of
 Substitution).}
+
+\item{market_side}{Character string specifying whether prices are input
+prices (\code{"input"}, default for Logit; positive price coefficient)
+or output prices (\code{"output"}, negative price coefficient). CES
+currently supports output markets only; if omitted, its default is
+\code{"output"}.}
 
 \item{supply_model}{Character string specifying the supply model:
 \code{"bertrand"} (default), \code{"monopolistic"}, \code{"cournot"},
@@ -69,6 +80,13 @@ logit price coefficients with hierarchical shrinkage. Default \code{TRUE}.}
 
 \item{use_s0_market_year_pool}{Logical. If \code{TRUE}, allow market-year
 outside shares with hierarchical shrinkage. Default \code{FALSE}.}
+
+\item{use_centered_alpha}{Logical. If \code{TRUE}, use the centered
+parameterization for market-level price coefficients. Default \code{FALSE}.}
+
+\item{use_centered_s0_pool}{Logical. If \code{TRUE}, use the centered
+parameterization for market-year outside-share pooling. Default
+\code{FALSE}.}
 
 \item{use_hmt}{Logical. If \code{TRUE}, apply a soft Hypothetical
 Monopolist Test penalty. Default \code{FALSE}.}
@@ -98,11 +116,11 @@ supply parameters under one of four supply models.
 Two demand models are supported:
 \describe{
 \item{\code{"logit"}}{Standard multinomial logit. Uses quantity shares
-and price levels. The price coefficient alpha measures the marginal
-utility of income.}
+and price levels. The absolute price coefficient alpha measures price
+sensitivity; its sign is determined by \code{market_side}.}
 \item{\code{"ces"}}{Constant Elasticity of Substitution. Uses revenue
-shares and log-prices. The elasticity of substitution gamma (= sigma)
-controls substitution patterns.}
+shares and log-prices in output markets. The elasticity of substitution
+gamma (= sigma) controls substitution patterns.}
 }
 
 Four supply models are supported:
@@ -114,10 +132,9 @@ Four supply models are supported:
 \item{4. \code{"auction"}}{Second-score auction.}
 }
 
-By default, the prior on the price coefficient is calibrated from
-the data and supply model's first-order conditions, using robust
-quantiles of the FOC-implied coefficient on the log scale. This can be
-overridden via \code{priors}.
+By default, the prior on the standardized price coefficient is calibrated
+from the data and supply model's first-order conditions on the log scale.
+This can be overridden via \code{priors}.
 
 The \code{priors} argument accepts a named list with any of:
 \describe{
@@ -127,12 +144,16 @@ The \code{priors} argument accepts a named list with any of:
 error SD (default 0.75).}
 \item{\code{prior_sigma_meanval_strat}}{Half-normal scale for strategic
 group mean-value SD (default 1.0).}
-\item{\code{prior_alpha_mean}}{Prior mean for log(alpha) on price
-sensitivity (default: calibrated from data on the log scale).}
-\item{\code{prior_alpha_sd}}{Prior SD for log(alpha) (default:
-calibrated from data).}
-\item{\code{s0_prior_sd}}{Prior SD for outside share on logit scale,
-used in single-market case (default 1.5).}
+\item{\code{prior_alpha_mean}}{Prior mean for the log standardized
+price coefficient (default: calibrated from data on the log scale).}
+\item{\code{prior_alpha_sd}}{Prior SD for the log standardized price
+coefficient (default: calibrated from data).}
+\item{\code{s0_prior_mean}}{Prior location for the outside share on the
+logit scale (default -1.4467864). Together with the default scale, this
+gives an arithmetic prior mean of 20 percent.}
+\item{\code{s0_prior_sd}}{Prior SD for the outside share on the logit
+scale (default 0.4562340). The default prior's 5th percentile is
+10 percent.}
 \item{\code{prior_lkj}}{LKJ prior parameter for share-margin correlation
 (default 2.0).}
 }

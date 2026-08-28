@@ -32,6 +32,8 @@ logit demand and supply model via Stan.
 
 \item{\code{demand_model}}{Character: \code{"logit"} or \code{"ces"}.}
 
+\item{\code{market_side}}{Character: \code{"input"} or \code{"output"}.}
+
 \item{\code{price_sd}}{Numeric scalar: the standard deviation of prices (logit) or
 log-prices (CES) used for standardization.}
 

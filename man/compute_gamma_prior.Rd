@@ -7,10 +7,10 @@
 compute_gamma_prior(
   revShare,
   margins,
-  implied_s0,
+  s0_reference,
   mky_int,
   supply_model,
-  log_price_sd = 1.0
+  log_price_sd = 1
 )
 }
 \arguments{
@@ -18,20 +18,22 @@ compute_gamma_prior(
 
 \item{margins}{Numeric vector of Lerner indices (p-c)/p.}
 
-\item{implied_s0}{Numeric vector of implied outside revenue shares.}
+\item{s0_reference}{Probability-scale outside revenue share used to
+convert conditional inside shares to unconditional shares.}
 
 \item{mky_int}{Integer vector mapping observations to market-years.}
 
-\item{supply_model}{Integer 1--4.}
+\item{supply_model}{Integer 1--4 (Bertrand, MonCom, Cournot, Auction).}
 
 \item{log_price_sd}{Scale used to convert structural gamma to the
 standardized coefficient estimated by the Stan model.}
 }
 \value{
-A list with elements \code{mean} and \code{sd}.
+A list with elements \code{mean} and \code{sd} on log scale.
 }
 \description{
-Uses robust quantiles of observation-level FOC-implied CES coefficients to
-derive a log-scale prior for the standardized elasticity coefficient.
+Uses \strong{revenue-share-weighted mean and SD} of observation-level
+FOC-implied CES coefficients to derive a log-scale prior for the standardized
+elasticity coefficient.
 }
 \keyword{internal}

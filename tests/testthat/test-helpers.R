@@ -87,7 +87,67 @@ test_that("prepare_stan_data returns correct structure", {
   expect_equal(sd$log_marginInv, log(sd$marginInv))
   expect_equal(length(sd$price_std), N)
   expect_true(sd$price_sd > 0)
-  expect_true(all(sd$implied_s0 > 0 & sd$implied_s0 < 1))
+  expect_false("implied_s0" %in% names(sd))
+  expect_equal(attr(sd, "model_spec_version"), 3L)
+  expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
+})
+
+test_that("default outside-share prior has mean 20% and 5th percentile 10%", {
+  sd <- prepare_stan_data(
+    prices       = c(1, 2, 3, 4),
+    quantities   = c(40, 30, 20, 10),
+    margins      = rep(0.3, 4),
+    market       = rep(1, 4),
+    year         = rep(1, 4),
+    group        = 1:4,
+    supply_model = 1L,
+    use_cutoff   = FALSE,
+    use_rho      = FALSE,
+    use_hmt      = FALSE,
+    priors       = list()
+  )
+
+  prior_mean <- logit_normal_mean(sd$s0_prior_mean, sd$s0_prior_sd)
+  prior_q05 <- plogis(sd$s0_prior_mean + qnorm(0.05) * sd$s0_prior_sd)
+  expect_equal(prior_mean, 0.20, tolerance = 1e-8)
+  expect_equal(prior_q05, 0.10, tolerance = 1e-8)
+})
+
+test_that("custom outside-share prior sets the FOC calibration reference", {
+  prices <- c(1, 2, 3, 4)
+  quantities <- c(40, 30, 20, 10)
+  margins <- rep(0.3, 4)
+  custom_location <- qlogis(0.30)
+  custom_scale <- 0.20
+  sd <- prepare_stan_data(
+    prices       = prices,
+    quantities   = quantities,
+    margins      = margins,
+    market       = rep(1, 4),
+    year         = rep(1, 4),
+    group        = 1:4,
+    supply_model = 1L,
+    use_cutoff   = FALSE,
+    use_rho      = FALSE,
+    use_hmt      = FALSE,
+    priors       = list(
+      s0_prior_mean = custom_location,
+      s0_prior_sd = custom_scale
+    )
+  )
+
+  expected_reference <- logit_normal_mean(custom_location, custom_scale)
+  expected_alpha <- compute_alpha_prior(
+    sd$shareIn,
+    margins * prices,
+    expected_reference,
+    rep(1L, length(prices)),
+    1L,
+    sd$price_sd
+  )
+  expect_equal(attr(sd, "s0_prior_reference"), expected_reference)
+  expect_equal(sd$prior_alpha_mean, expected_alpha$mean)
+  expect_equal(sd$prior_alpha_sd, expected_alpha$sd)
 })
 
 test_that("prepare_stan_data computes quantity shares correctly", {
@@ -110,6 +170,46 @@ test_that("prepare_stan_data computes quantity shares correctly", {
 
   expected_shares <- quantities / sum(quantities)
   expect_equal(sd$shareIn, expected_shares)
+})
+
+test_that("strategic FOCs receive firm shares and market direction", {
+  sd <- prepare_stan_data(
+    prices       = c(1, 2, 3),
+    quantities   = c(2, 3, 5),
+    margins      = rep(0.2, 3),
+    market       = rep("m", 3),
+    year         = rep(1, 3),
+    group        = c("a", "a", "b"),
+    supply_model = 3L,
+    use_cutoff   = FALSE,
+    use_rho      = FALSE,
+    use_hmt      = FALSE,
+    market_side  = "output",
+    priors       = list()
+  )
+
+  expect_equal(sd$market_sign, -1L)
+  expect_equal(sd$firm_shareIn, c(0.5, 0.5, 0.5))
+})
+
+test_that("Logit alpha prior follows the standardized price scale", {
+  base <- compute_alpha_prior(
+    shares = c(0.2, 0.3, 0.5),
+    margins_abs = c(1, 1, 1),
+    s0_reference = 0.2,
+    mky_int = rep(1L, 3),
+    supply_model = 2L,
+    price_sd = 1
+  )
+  scaled <- compute_alpha_prior(
+    shares = c(0.2, 0.3, 0.5),
+    margins_abs = c(1, 1, 1),
+    s0_reference = 0.2,
+    mky_int = rep(1L, 3),
+    supply_model = 2L,
+    price_sd = 2
+  )
+  expect_equal(scaled$mean, base$mean + log(2), tolerance = 1e-10)
 })
 
 test_that("prepare_stan_data handles constant prices and custom grainsize", {
@@ -266,6 +366,9 @@ test_that("prepare_ces_stan_data returns correct structure", {
   expect_equal(sd$log_lernerInv, log(sd$lernerInv))
   expect_equal(length(sd$log_price_std), N)
   expect_true(sd$log_price_sd > 0)
+  expect_false("implied_s0" %in% names(sd))
+  expect_equal(attr(sd, "model_spec_version"), 3L)
+  expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
   # Revenue shares should sum to ~1 within each market
   for (m in 1:sd$N_market_year) {
     idx <- which(attr(sd, "market_year_idx") == m)
@@ -318,4 +421,30 @@ test_that("CES prior is calibrated on standardized a scale", {
   expected_a <- (1 / 0.3 - 1) * stats::sd(log(prices))
   expect_equal(sd$prior_alpha_mean, log(expected_a), tolerance = 1e-8)
   expect_true(sd$prior_alpha_sd > 0)
+})
+
+test_that("CES FOC priors use unconditional revenue shares", {
+  rev_share <- c(0.10, 0.25, 0.40)
+  s0 <- 0.20
+  r_unc <- rev_share * (1 - s0)
+  gamma <- 4
+
+  margins_by_model <- list(
+    1 / (gamma - (gamma - 1) * r_unc),
+    rep(1 / gamma, length(r_unc)),
+    (1 + (gamma - 1) * r_unc) / gamma,
+    1 - (1 - r_unc)^(1 / (gamma - 1))
+  )
+
+  for (supply_model in seq_along(margins_by_model)) {
+    prior <- compute_gamma_prior(
+      rev_share,
+      margins_by_model[[supply_model]],
+      s0,
+      rep(1L, length(rev_share)),
+      supply_model,
+      log_price_sd = 1
+    )
+    expect_equal(prior$mean, log(gamma - 1), tolerance = 1e-8)
+  }
 })

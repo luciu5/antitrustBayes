@@ -16,7 +16,7 @@ functions {
   }
 
   real partial_sum_fn(array[] int slice_idx, int start, int end,
-                      vector marginInv, vector shareIn, vector log_shareIn,
+                      vector marginInv, vector shareIn, vector firm_shareIn, vector log_shareIn,
                       vector log_marginInv, vector price_std,
                       array[] int market, array[] int group, array[] int year,
                       array[] int market_year_idx,
@@ -26,7 +26,7 @@ functions {
                       vector cutoff_share,
                       vector sigma_share_market, vector sigma_margin_market,
                       real rho,
-                      int supply_model, int use_cutoff,
+                      int supply_model, int market_sign, int use_cutoff,
                       int is_single_market) {
 
     real lp = 0;
@@ -51,25 +51,30 @@ functions {
       }
 
       real b_quality = b_quality_all[group[i]] + (w * mu_b_fringe);
-      real delta = b_market[m] + b_quality + (a_market[m] * price_std[i]);
+      real delta = b_market[m] + b_quality +
+        (market_sign * a_market[m] * price_std[i]);
 
-      real pred_log_s = log(s_out) + delta;
+      // shareIn is normalized over inside goods. For structural outside share
+      // s_out, log(s_j | inside) = logit(s_out) + delta_j.
+      real pred_log_s = logit(s_out) + delta;
 
       real alpha_structural = alpha_structural_market[m];
 
       real inv_markup;
       if (supply_model == 1) {
         // Bertrand: margin = 1 / (alpha * (1 - s_uncond))
-        inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[i] * (1.0 - s_out)));
+        inv_markup = alpha_structural * (w + (1-w) *
+          (1.0 - firm_shareIn[i] * (1.0 - s_out)));
       } else if (supply_model == 2) {
         // Monopolistic competition: alpha = 1/(p-c)
         inv_markup = alpha_structural;
       } else if (supply_model == 3) {
         // Cournot: margin = (s0 + s) / (alpha * s0)
-        inv_markup = alpha_structural * (w + (1-w) * (s_out / (s_out + shareIn[i])));
+        inv_markup = alpha_structural * (w + (1-w) *
+          (s_out / (s_out + firm_shareIn[i] * (1.0 - s_out))));
       } else {
         // 2nd Score Auction: margin = -log(1 - s) / (alpha * s)
-        real denom = fmin(0.99, shareIn[i] * (1.0 - s_out));
+        real denom = fmin(0.99, firm_shareIn[i] * (1.0 - s_out));
         inv_markup = alpha_structural * (w + (1-w) * (denom / -log1m(denom)));
       }
 
@@ -88,11 +93,13 @@ functions {
 data {
   int<lower=1> N;
   vector[N] shareIn;
+  vector[N] firm_shareIn;
   vector[N] marginInv;
   vector[N] log_shareIn;
   vector[N] log_marginInv;
   vector[N] price_std;
   real<lower=0> price_sd;
+  int<lower=-1, upper=1> market_sign;
   int<lower=1> N_market;
   array[N] int<lower=1> market;
   int<lower=1> N_group;
@@ -134,21 +141,14 @@ data {
   real<lower=0> prior_lkj;
   real<lower=0> prior_cutoff_alpha;
   real<lower=0> prior_cutoff_beta;
-  vector<lower=0, upper=1>[N_market_year] implied_s0;
 }
 
 transformed data {
   array[N] int seq;
-  vector[N_market_year] implied_s0_logit;
-  real implied_s0_logit_mean = 0.0;
   int is_cournot = (supply_model == 3) ? 1 : 0;
   int pool_alpha_by_market = (is_single_market == 0 && use_alpha_market_pool == 1) ? 1 : 0;
   array[N_market] int n_mky_per_market = rep_array(0, N_market);
   for (i in 1:N) seq[i] = i;
-  for (m in 1:N_market_year) {
-    implied_s0_logit[m] = logit(implied_s0[m]);
-    implied_s0_logit_mean += implied_s0_logit[m] / N_market_year;
-  }
   for (mky in 1:N_market_year) {
     n_mky_per_market[mky_to_market[mky]] += 1;
   }
@@ -157,7 +157,7 @@ transformed data {
 parameters {
   vector[is_single_market == 0 ? 1 : 0] mu_b_market_vec;
   vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;
-  vector[is_single_market == 0 ? N_market : 0] gamma_market;
+  vector[N_market] gamma_market;
   vector[N_group] b_group_raw;
   real<lower=0> sigma_b_strat;
   vector[use_cutoff == 1 ? 1 : 0] mu_b_fringe_vec;
@@ -199,6 +199,7 @@ transformed parameters {
   vector[N_market_year] s0;
   vector[N_market_year] s0_prob;
   vector[N_market] mean_log_s0_market = rep_vector(0.0, N_market);
+  vector[N_market] mean_logit_s0_market = rep_vector(0.0, N_market);
   vector[N_market] alpha_structural_market;
 
   if (use_market_resid_scale == 1) {
@@ -241,17 +242,19 @@ transformed parameters {
      s0_prob[m] = bounded_inv_logit(s0[m]);
   }
 
-  if (is_single_market == 1) {
-    b_market = rep_vector(0.0, N_market);
-  } else {
-    for (mky in 1:N_market_year) {
-      mean_log_s0_market[mky_to_market[mky]] += log(s0_prob[mky]);
-    }
-    for (mm in 1:N_market) {
-      mean_log_s0_market[mm] /= n_mky_per_market[mm];
-    }
-    b_market = gamma_market - mean_log_s0_market;
+  // Rotate the market intercept by mean logit(s0). This makes the level of
+  // conditional inside shares neutral to the outside-share level while
+  // retaining relative market-year movements in panel applications.
+  for (mky in 1:N_market_year) {
+    int mm = mky_to_market[mky];
+    mean_log_s0_market[mm] += log(s0_prob[mky]);
+    mean_logit_s0_market[mm] += logit(s0_prob[mky]);
   }
+  for (mm in 1:N_market) {
+    mean_log_s0_market[mm] /= n_mky_per_market[mm];
+    mean_logit_s0_market[mm] /= n_mky_per_market[mm];
+  }
+  b_market = gamma_market - mean_logit_s0_market;
 
   if (is_cournot == 0) {
     mu_log_a = mu_log_a_free[1];
@@ -294,22 +297,24 @@ model {
   if (is_cournot == 1 && pool_alpha_by_market == 1) {
     log_a_market_derived ~ normal(mu_log_a, sigma_log_a);
   }
-  if (is_single_market == 0) {
+  if (is_single_market == 1) {
+    gamma_market ~ normal(0, 1.0);
+  } else {
     mu_b_market_vec ~ normal(0, 1.0);
     sigma_b_market_vec ~ normal(0, 0.5);
-    b_market ~ normal(mu_b_market_vec[1], sigma_b_market_vec[1]);
+    gamma_market ~ normal(mu_b_market_vec[1], sigma_b_market_vec[1]);
   }
   b_group_raw ~ std_normal();
 
   // Informative prior pushes away from 0/infinity for better HMC geometry
-  sigma_b_strat ~ normal(1.0, 0.5);
+  sigma_b_strat ~ normal(1.0, prior_sigma_meanval_strat);
   if (use_cutoff == 1) {
     cutoff_share ~ beta(prior_cutoff_alpha, prior_cutoff_beta);
-    mu_b_fringe_vec ~ normal(0, 2);
+    mu_b_fringe_vec ~ normal(0, prior_sigma_meanval_fringe);
   }
 
   if (use_s0_market_year_pool == 1) {
-    mu_s0_pool_vec ~ normal(implied_s0_logit_mean, s0_prior_sd);
+    mu_s0_pool_vec ~ normal(s0_prior_mean, s0_prior_sd);
     sigma_s0_pool_vec ~ normal(0, prior_sigma_s0_pool);
     if (use_centered_s0_pool == 1) {
       eta_s0_pool ~ normal(mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
@@ -317,22 +322,16 @@ model {
       s0_pool_raw ~ std_normal();
     }
   } else {
-    if (N_market_year > 1) {
-      s0_logit ~ normal(implied_s0_logit, s0_prior_sd);
-    } else {
-      // If substantial outside share (> 2%), center prior on data.
-      // Otherwise fall back to user-specified informative prior.
-      if (implied_s0[1] > 0.02) {
-        s0_logit ~ normal(implied_s0_logit, 1.0);
-      } else {
-        s0_logit ~ normal(s0_prior_mean, s0_prior_sd);
-      }
-    }
+    s0_logit ~ normal(s0_prior_mean, s0_prior_sd);
   }
   beta_s0 ~ normal(0, prior_sigma_beta_s0);
 
   if (use_rho == 1) {
-    rho_raw ~ normal(0, 0.75);
+    // A two-dimensional LKJ prior has density proportional to
+    // (1-rho^2)^(eta-1). Include the transform Jacobian for the bounded
+    // rho = 0.95*tanh(rho_raw) parameterization.
+    target += (prior_lkj - 1.0) * log1m(square(rho)) +
+      log1m(square(tanh(rho_raw[1])));
   }
   // Log-space priors prevent sigma collapse toward 0,
   // which causes extreme curvature and divergences via exp() share link
@@ -359,14 +358,14 @@ model {
   }
 
   target += reduce_sum(partial_sum_fn, seq, grainsize,
-                       marginInv, shareIn, log_shareIn, log_marginInv,
+                       marginInv, shareIn, firm_shareIn, log_shareIn, log_marginInv,
                        price_std, market, group, year,
                        market_year_idx,
                        a_market, alpha_structural_market, b_market, b_quality_all, sigma_b_strat,
                        mu_b_fringe,
                        s0_prob, cutoff_share,
                        sigma_share_market, sigma_margin_market,
-                       rho, supply_model,
+                       rho, supply_model, market_sign,
                        use_cutoff, is_single_market);
 }
 
@@ -393,10 +392,11 @@ generated quantities {
       }
 
       real b_quality = b_quality_all[group[n]] + (w * mu_b_fringe);
-      real delta = b_market[m] + b_quality + (a_market[m] * price_std[n]);
+      real delta = b_market[m] + b_quality +
+        (market_sign * a_market[m] * price_std[n]);
 
       real s_out = s0_prob[mky];
-      real pred_log_s = log(s_out) + delta;
+      real pred_log_s = logit(s_out) + delta;
       pred_shareIn[n] = exp(pred_log_s);
 
       real alpha_structural = alpha_structural_market[m];
@@ -404,16 +404,18 @@ generated quantities {
       real inv_markup;
       if (supply_model == 1) {
         // Bertrand
-        inv_markup = alpha_structural * (w + (1-w) * (1.0 - shareIn[n] * (1.0 - s_out)));
+        inv_markup = alpha_structural * (w + (1-w) *
+          (1.0 - firm_shareIn[n] * (1.0 - s_out)));
       } else if (supply_model == 2) {
         // Monopolistic competition: alpha = 1/(p-c)
         inv_markup = alpha_structural;
       } else if (supply_model == 3) {
         // Cournot
-        inv_markup = alpha_structural * (w + (1-w) * (s_out / (s_out + shareIn[n])));
+        inv_markup = alpha_structural * (w + (1-w) *
+          (s_out / (s_out + firm_shareIn[n] * (1.0 - s_out))));
       } else {
         // 2nd Score Auction
-        real denom = fmin(0.99, shareIn[n] * (1.0 - s_out));
+        real denom = fmin(0.99, firm_shareIn[n] * (1.0 - s_out));
         inv_markup = alpha_structural * (w + (1-w) * (denom / -log1m(denom)));
       }
 
