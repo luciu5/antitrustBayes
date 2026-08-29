@@ -137,12 +137,15 @@ test_that("custom outside-share prior sets the FOC calibration reference", {
   )
 
   expected_reference <- logit_normal_mean(custom_location, custom_scale)
+  # The alpha prior is always calibrated against the monopolistic-competition
+  # FOC (supply_model = 2L), shared across all four supply models, regardless
+  # of the fit's own supply_model = 1L (Bertrand).
   expected_alpha <- compute_alpha_prior(
     sd$shareIn,
     margins * prices,
     expected_reference,
     rep(1L, length(prices)),
-    1L,
+    2L,
     sd$price_sd
   )
   expect_equal(attr(sd, "s0_prior_reference"), expected_reference)

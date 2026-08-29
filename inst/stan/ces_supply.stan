@@ -20,7 +20,7 @@ functions {
                       vector lernerInv, vector revShare, vector firm_revShare, vector log_revShare,
                       vector log_lernerInv, vector log_price_std,
                       array[] int market, array[] int group, array[] int year,
-                      array[] int market_year_idx,
+                      array[] int market_year_idx, array[] int margin_obs,
                       vector a_market, vector gamma_structural_market,
                       vector b_market, vector b_quality_all,
                       real sigma_b_strat, real mu_b_fringe,
@@ -95,7 +95,9 @@ functions {
       real mu2_cond = pred_log_lernerInv + slope_cond * err_share;
 
       lp += normal_lpdf(log_revShare[i] | pred_log_r, sigma_share);
-      lp += normal_lpdf(log_lernerInv[i] | mu2_cond, sigma_cond);
+      if (margin_obs[i] == 1) {
+        lp += normal_lpdf(log_lernerInv[i] | mu2_cond, sigma_cond);
+      }
     }
     return lp;
   }
@@ -122,6 +124,7 @@ data {
   int<lower=1> grainsize;
   int<lower=1> N_market_year;
   array[N] int<lower=1> market_year_idx;
+  array[N] int<lower=0, upper=1> margin_obs;
   int<lower=0> K_s0;
   matrix[N_market_year, K_s0] X_s0;
   array[N_market_year] int<lower=1> mky_to_market;
@@ -167,7 +170,7 @@ transformed data {
 parameters {
   vector[is_single_market == 0 ? 1 : 0] mu_b_market_vec;
   vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;
-  vector[N_market] b_market_rot;
+  vector[is_single_market == 0 ? N_market : 0] b_market_rot;
   vector[N_group] b_group_raw;
   real<lower=0> sigma_b_strat;
   vector[use_cutoff == 1 ? 1 : 0] mu_b_fringe_vec;
@@ -255,7 +258,24 @@ transformed parameters {
   for (mm in 1:N_market) {
     mean_logit_s0_market[mm] /= n_mky_per_market[mm];
   }
-  b_market = b_market_rot - mean_logit_s0_market;
+
+  if (is_single_market == 1) {
+    // A single market has no cross-market intercept to speak of; normalize
+    // it to zero and let s0's level be identified directly off the share
+    // equation, rather than sampling a free intercept that would compete
+    // with s0 for the same variation.
+    b_market = rep_vector(0.0, N_market);
+  } else {
+    for (mm in 1:N_market) {
+      if (n_mky_per_market[mm] > 1) {
+        b_market[mm] = b_market_rot[mm] - mean_logit_s0_market[mm];
+      } else {
+        // One market-year: nothing to rotate against, so the intercept is
+        // just b_market_rot directly and logit(R_0) survives uncancelled.
+        b_market[mm] = b_market_rot[mm];
+      }
+    }
+  }
 
   if (is_single_market == 1 || use_alpha_market_pool == 0) {
     a_market = rep_vector(exp(mu_log_a), N_market);
@@ -279,12 +299,15 @@ model {
       r_market_a_raw ~ std_normal();
     }
   }
-  if (is_single_market == 1) {
-    b_market_rot ~ normal(0, 1.0);
-  } else {
+  if (is_single_market == 0) {
+    // No market intercept is sampled when N_market == 1 (b_market is fixed
+    // at 0 in that case; see transformed parameters).
     mu_b_market_vec ~ normal(0, 1.0);
     sigma_b_market_vec ~ normal(0, 0.5);
-    b_market_rot ~ normal(mu_b_market_vec[1], sigma_b_market_vec[1]);
+    // Prior is on the derived (possibly rotated) b_market, not the raw
+    // b_market_rot, so it targets the intended economic quantity even when
+    // b_market = b_market_rot - mean_logit_s0_market(s0).
+    b_market ~ normal(mu_b_market_vec[1], sigma_b_market_vec[1]);
   }
   b_group_raw ~ std_normal();
 
@@ -341,7 +364,7 @@ model {
   target += reduce_sum(partial_sum_fn, seq, grainsize,
                        lernerInv, revShare, firm_revShare, log_revShare, log_lernerInv,
                        log_price_std, market, group, year,
-                       market_year_idx,
+                       market_year_idx, margin_obs,
                        a_market, gamma_structural_market, b_market, b_quality_all, sigma_b_strat,
                        mu_b_fringe,
                        s0_prob, cutoff_share,
@@ -405,11 +428,15 @@ generated quantities {
 
       pred_lernerInv[n] = pred_lInv;
 
-      // Pointwise log-likelihood for LOO/WAIC
+      // Pointwise log-likelihood for LOO/WAIC. The margin term is gated by
+      // margin_obs so masked (fringe/NA-margin) rows contribute only their
+      // share likelihood, matching partial_sum_fn's training objective.
       real err_share = log_revShare[n] - pred_log_r;
       real mu2_cond = log(pred_lInv + 1e-9) + slope_cond * err_share;
-      log_lik[n] = normal_lpdf(log_revShare[n] | pred_log_r, sigma_share_n)
-                 + normal_lpdf(log_lernerInv[n] | mu2_cond, sigma_cond);
+      log_lik[n] = normal_lpdf(log_revShare[n] | pred_log_r, sigma_share_n);
+      if (margin_obs[n] == 1) {
+        log_lik[n] += normal_lpdf(log_lernerInv[n] | mu2_cond, sigma_cond);
+      }
     }
   }
 }

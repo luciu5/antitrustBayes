@@ -19,7 +19,7 @@ functions {
                       vector marginInv, vector shareIn, vector firm_shareIn, vector log_shareIn,
                       vector log_marginInv, vector price_std,
                       array[] int market, array[] int group, array[] int year,
-                      array[] int market_year_idx,
+                      array[] int market_year_idx, array[] int margin_obs,
                       vector a_market, vector alpha_structural_market, vector b_market, vector b_quality_all,
                       real sigma_b_strat, real mu_b_fringe,
                       vector s0_prob,
@@ -84,7 +84,9 @@ functions {
       real mu2_cond = pred_log_marginInv + slope_cond * err_share;
 
       lp += normal_lpdf(log_shareIn[i] | pred_log_s, sigma_share);
-      lp += normal_lpdf(log_marginInv[i] | mu2_cond, sigma_cond);
+      if (margin_obs[i] == 1) {
+        lp += normal_lpdf(log_marginInv[i] | mu2_cond, sigma_cond);
+      }
     }
     return lp;
   }
@@ -111,6 +113,7 @@ data {
   int<lower=1> grainsize;
   int<lower=1> N_market_year;
   array[N] int<lower=1> market_year_idx;
+  array[N] int<lower=0, upper=1> margin_obs;
   int<lower=0> K_s0;
   matrix[N_market_year, K_s0] X_s0;
   array[N_market_year] int<lower=1> mky_to_market;
@@ -157,7 +160,7 @@ transformed data {
 parameters {
   vector[is_single_market == 0 ? 1 : 0] mu_b_market_vec;
   vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;
-  vector[N_market] gamma_market;
+  vector[is_single_market == 0 ? N_market : 0] gamma_market;
   vector[N_group] b_group_raw;
   real<lower=0> sigma_b_strat;
   vector[use_cutoff == 1 ? 1 : 0] mu_b_fringe_vec;
@@ -242,9 +245,14 @@ transformed parameters {
      s0_prob[m] = bounded_inv_logit(s0[m]);
   }
 
-  // Rotate the market intercept by mean logit(s0). This makes the level of
-  // conditional inside shares neutral to the outside-share level while
-  // retaining relative market-year movements in panel applications.
+  // mean_log_s0_market/mean_logit_s0_market are always the plain per-market
+  // average of log/logit(s0) across that market's market-years (used below
+  // by the Cournot pooled-alpha reparameterization regardless of panel
+  // shape). The *demand* market-intercept rotation that consumes
+  // mean_logit_s0_market is handled separately below, because naively
+  // rotating a market with only one market-year cancels logit(s_out)
+  // exactly out of pred_log_s and silently zeroes out the share equation's
+  // contribution to identifying s0.
   for (mky in 1:N_market_year) {
     int mm = mky_to_market[mky];
     mean_log_s0_market[mm] += log(s0_prob[mky]);
@@ -254,7 +262,27 @@ transformed parameters {
     mean_log_s0_market[mm] /= n_mky_per_market[mm];
     mean_logit_s0_market[mm] /= n_mky_per_market[mm];
   }
-  b_market = gamma_market - mean_logit_s0_market;
+
+  if (is_single_market == 1) {
+    // A single market has no cross-market intercept to speak of; normalize
+    // it to zero and let s0's level be identified directly off the share
+    // equation, rather than sampling a free gamma_market that would compete
+    // with s0 for the same variation.
+    b_market = rep_vector(0.0, N_market);
+  } else {
+    for (mm in 1:N_market) {
+      if (n_mky_per_market[mm] > 1) {
+        // Rotated coordinate: gamma_market centers the *level* of the
+        // market intercept to be neutral to the outside-share level while
+        // retaining relative market-year movements.
+        b_market[mm] = gamma_market[mm] - mean_logit_s0_market[mm];
+      } else {
+        // One market-year: nothing to rotate against, so the intercept is
+        // just gamma_market directly and logit(s_out) survives uncancelled.
+        b_market[mm] = gamma_market[mm];
+      }
+    }
+  }
 
   if (is_cournot == 0) {
     mu_log_a = mu_log_a_free[1];
@@ -297,12 +325,17 @@ model {
   if (is_cournot == 1 && pool_alpha_by_market == 1) {
     log_a_market_derived ~ normal(mu_log_a, sigma_log_a);
   }
-  if (is_single_market == 1) {
-    gamma_market ~ normal(0, 1.0);
-  } else {
+  if (is_single_market == 0) {
+    // No market intercept is sampled when N_market == 1 (b_market is fixed
+    // at 0 in that case; see transformed parameters) -- with a single
+    // market there is nothing for gamma_market to distinguish, and a free
+    // intercept there would trade off almost exactly against s0's level.
     mu_b_market_vec ~ normal(0, 1.0);
     sigma_b_market_vec ~ normal(0, 0.5);
-    gamma_market ~ normal(mu_b_market_vec[1], sigma_b_market_vec[1]);
+    // Prior is on the derived (possibly rotated) b_market, not the raw
+    // gamma_market, so it targets the intended economic quantity even when
+    // b_market = gamma_market - mean_logit_s0_market(s0).
+    b_market ~ normal(mu_b_market_vec[1], sigma_b_market_vec[1]);
   }
   b_group_raw ~ std_normal();
 
@@ -360,7 +393,7 @@ model {
   target += reduce_sum(partial_sum_fn, seq, grainsize,
                        marginInv, shareIn, firm_shareIn, log_shareIn, log_marginInv,
                        price_std, market, group, year,
-                       market_year_idx,
+                       market_year_idx, margin_obs,
                        a_market, alpha_structural_market, b_market, b_quality_all, sigma_b_strat,
                        mu_b_fringe,
                        s0_prob, cutoff_share,
@@ -421,11 +454,15 @@ generated quantities {
 
       pred_marginInv[n] = inv_markup;
 
-      // Pointwise log-likelihood for LOO/WAIC
+      // Pointwise log-likelihood for LOO/WAIC. The margin term is gated by
+      // margin_obs so masked (fringe/NA-margin) rows contribute only their
+      // share likelihood, matching partial_sum_fn's training objective.
       real err_share = log_shareIn[n] - pred_log_s;
       real mu2_cond = log(inv_markup + 1e-9) + slope_cond * err_share;
-      log_lik[n] = normal_lpdf(log_shareIn[n] | pred_log_s, sigma_share_n)
-                 + normal_lpdf(log_marginInv[n] | mu2_cond, sigma_cond);
+      log_lik[n] = normal_lpdf(log_shareIn[n] | pred_log_s, sigma_share_n);
+      if (margin_obs[n] == 1) {
+        log_lik[n] += normal_lpdf(log_marginInv[n] | mu2_cond, sigma_cond);
+      }
     }
   }
 }

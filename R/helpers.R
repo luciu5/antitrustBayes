@@ -125,10 +125,16 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               use_centered_alpha = FALSE,
                               use_centered_s0_pool = FALSE,
                               priors = list(), X_s0 = NULL,
-                              grainsize = 1L) {
+                              grainsize = 1L,
+                              margin_observed = NULL) {
   N <- length(prices)
   market_side <- match.arg(market_side, c("input", "output"))
   market_sign <- if (market_side == "input") 1L else -1L
+
+  if (is.null(margin_observed)) {
+    margin_observed <- rep(TRUE, N)
+  }
+  margin_observed <- as.logical(margin_observed)
 
   # Encode factors
   market_f <- as.factor(market)
@@ -183,8 +189,13 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   price_sd <- safe_sd(prices)
   price_std <- (prices - mean(prices)) / price_sd
 
-  # Convert price-normalized margin to inverse absolute margin.
-  marginInv <- 1.0 / (margins * prices)
+  # Convert price-normalized margin to inverse absolute margin. Masked rows
+  # (margin_observed == FALSE) may carry NA/invalid margins -- Stan never
+  # reads their margin likelihood term, but the vectors must still be finite,
+  # so substitute a dummy placeholder margin of 1 before computing marginInv.
+  margins_for_stan <- margins
+  margins_for_stan[!margin_observed] <- 1.0
+  marginInv <- 1.0 / (margins_for_stan * prices)
   log_shareIn <- log(pmax(shares, 1e-12))
   log_marginInv <- log(pmax(marginInv, 1e-12))
 
@@ -236,10 +247,18 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     default_priors$s0_prior_mean,
     default_priors$s0_prior_sd
   )
+  # Calibrate the FOC-based alpha prior (and the HMT average margin) on the
+  # observed-margin subset only, so masked/fringe rows don't distort the
+  # prior for a quantity they don't inform. The reference FOC is always
+  # monopolistic competition's conduct = 1 -- a single supply-model-agnostic
+  # prior shared across Bertrand/MonCom/Cournot/Auction fits, just like
+  # s0_prior_mean/s0_prior_sd are model-agnostic constants. This keeps
+  # cross-model comparison (LOOIC/WAIC/bridge sampling) from being
+  # confounded by each model getting a differently-centered prior.
   margins_abs <- margins * prices
   alpha_prior <- compute_alpha_prior(
-    shares, margins_abs, s0_prior_reference,
-    mky_int, supply_model, price_sd
+    shares[margin_observed], margins_abs[margin_observed], s0_prior_reference,
+    mky_int[margin_observed], 2L, price_sd
   )
   if (is.na(default_priors$prior_alpha_mean)) {
     default_priors$prior_alpha_mean <- alpha_prior$mean
@@ -250,7 +269,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
 
   # HMT data (uses absolute margins)
   avg_price_hmt <- mean(prices)
-  avg_margin_hmt <- mean(margins_abs)
+  avg_margin_hmt <- mean(margins_abs[margin_observed])
   ssnip_hmt <- 0.05
 
   stan_data <- c(
@@ -275,6 +294,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       grainsize = as.integer(max(1L, grainsize)),
       N_market_year = N_market_year,
       market_year_idx = mky_int,
+      margin_obs = as.integer(margin_observed),
       K_s0 = K_s0,
       X_s0 = X_s0_mat,
       mky_to_market = array(mky_to_market),
@@ -324,7 +344,8 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   use_alpha_market_pool = FALSE,
                                   use_s0_market_year_pool = FALSE,
                                   use_centered_alpha = FALSE,
-                                  use_centered_s0_pool = FALSE) {
+                                  use_centered_s0_pool = FALSE,
+                                  margin_observed = NULL) {
   N <- length(prices)
   market_side <- match.arg(market_side, c("input", "output"))
   if (market_side != "output") {
@@ -333,10 +354,20 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   }
   market_sign <- -1L
 
-  # CES FOCs require L < 1 (positive marginal costs)
-  if (any(margins >= 1)) {
+  if (is.null(margin_observed)) {
+    margin_observed <- rep(TRUE, N)
+  }
+  margin_observed <- as.logical(margin_observed)
+
+  # Masked rows may carry NA/invalid margins -- their likelihood term is
+  # never read by Stan, so substitute a dummy placeholder before validating
+  # and computing lernerInv.
+  margins[!margin_observed] <- 0.5
+
+  # CES FOCs require L < 1 (positive marginal costs), checked on observed rows.
+  if (any(margins[margin_observed] >= 1)) {
     stop("CES demand requires Lerner indices strictly less than 1. ",
-         "Found ", sum(margins >= 1), " observation(s) with L >= 1. ",
+         "Found ", sum(margins[margin_observed] >= 1), " observation(s) with L >= 1. ",
          "Use demand_model = \"logit\" for input markets with L >= 1.")
   }
 
@@ -442,9 +473,14 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     default_priors$s0_prior_mean,
     default_priors$s0_prior_sd
   )
+  # Calibrate the FOC-based gamma prior (and the HMT average margin) on the
+  # observed-margin subset only, so masked/fringe rows don't distort the
+  # prior for a quantity they don't inform. The reference FOC is always
+  # monopolistic competition (gamma = 1/margin), shared across all four
+  # supply models -- see the analogous note in prepare_stan_data().
   gamma_prior <- compute_gamma_prior(
-    revShare, margins, s0_prior_reference, mky_int,
-    supply_model, log_price_sd
+    revShare[margin_observed], margins[margin_observed], s0_prior_reference,
+    mky_int[margin_observed], 2L, log_price_sd
   )
   if (is.na(default_priors$prior_alpha_mean)) {
     default_priors$prior_alpha_mean <- gamma_prior$mean
@@ -455,7 +491,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
 
   # HMT data (uses Lerner index directly for CES)
   avg_price_hmt <- mean(prices)
-  avg_margin_hmt <- mean(margins)
+  avg_margin_hmt <- mean(margins[margin_observed])
   ssnip_hmt <- 0.05
 
   stan_data <- c(
@@ -480,6 +516,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       grainsize = as.integer(max(1L, grainsize)),
       N_market_year = N_market_year,
       market_year_idx = mky_int,
+      margin_obs = as.integer(margin_observed),
       K_s0 = K_s0,
       X_s0 = X_s0_mat,
       mky_to_market = array(mky_to_market),
@@ -612,7 +649,8 @@ compute_gamma_prior <- function(revShare, margins, s0_reference, mky_int,
 
 #' Validate Inputs for bayes_est
 #' @keywords internal
-validate_inputs <- function(prices, quantities, margins, market, year, group) {
+validate_inputs <- function(prices, quantities, margins, market, year, group,
+                             margin_observed = NULL) {
   N <- length(prices)
 
   if (length(quantities) != N) {
@@ -621,8 +659,19 @@ validate_inputs <- function(prices, quantities, margins, market, year, group) {
   if (length(margins) != N) {
     stop("'margins' must have the same length as 'prices'.")
   }
-  if (any(margins <= 0 | !is.finite(margins))) {
-    stop("'margins' must be positive and finite.")
+  if (is.null(margin_observed)) {
+    if (any(margins <= 0 | !is.finite(margins))) {
+      stop("'margins' must be positive and finite.")
+    }
+  } else {
+    if (length(margin_observed) != N) {
+      stop("'margin_observed' must have the same length as 'prices'.")
+    }
+    observed <- as.logical(margin_observed) & !is.na(margin_observed)
+    observed_margins <- margins[observed]
+    if (any(observed_margins <= 0 | !is.finite(observed_margins))) {
+      stop("'margins' must be positive and finite for observed (margin_observed == TRUE) rows.")
+    }
   }
   if (any(quantities <= 0 | !is.finite(quantities))) {
     stop("'quantities' must be positive and finite.")

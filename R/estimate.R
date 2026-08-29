@@ -56,6 +56,14 @@
 #' @param stan_options Named list of arguments passed to
 #'   \code{\link[rstan]{sampling}} (e.g., \code{chains}, \code{iter},
 #'   \code{warmup}, \code{cores}).
+#' @param margin_observed Optional logical vector (length \code{N}, one per
+#'   row) indicating which observations have a usable margin. \code{NA} is
+#'   treated as \code{FALSE}. Rows with \code{margin_observed == FALSE} are
+#'   excluded from the margin/conduct likelihood term (and \code{margins} may
+#'   be \code{NA}/invalid for those rows) but still fully participate in the
+#'   share equation and the market share denominator -- shares are never
+#'   renormalized to exclude masked rows. Default \code{NULL} treats every
+#'   row as observed (current behavior).
 #' @param ... Additional arguments (currently unused).
 #'
 #' @details
@@ -156,6 +164,7 @@ bayes_est <- function(prices, quantities, margins,
                       X_s0 = NULL,
                       priors = list(),
                       stan_options = list(),
+                      margin_observed = NULL,
                       ...) {
   cl <- match.call()
   demand_model <- match.arg(demand_model)
@@ -168,7 +177,14 @@ bayes_est <- function(prices, quantities, margins,
     stop("CES estimation currently supports output markets only; use ",
          "demand_model = \"logit\" for input markets.")
   }
-  if (market_side == "output" && any(margins >= 1)) {
+  if (!is.null(margin_observed)) {
+    if (length(margin_observed) != length(prices)) {
+      stop("'margin_observed' must have the same length as 'prices'.")
+    }
+    margin_observed <- as.logical(margin_observed) & !is.na(margin_observed)
+  }
+  observed_margins <- if (is.null(margin_observed)) margins else margins[margin_observed]
+  if (market_side == "output" && any(observed_margins >= 1)) {
     stop("Output-market Lerner indices must be strictly less than 1. ",
          "Use market_side = \"input\" for positive markdown ratios.")
   }
@@ -192,7 +208,8 @@ bayes_est <- function(prices, quantities, margins,
     use_cutoff <- FALSE
   }
   # Validate
-  validate_inputs(prices, quantities, margins, market, year, group)
+  validate_inputs(prices, quantities, margins, market, year, group,
+                  margin_observed = margin_observed)
 
   # Build data frame (store raw inputs for later use in simulation)
   df <- data.frame(
@@ -204,6 +221,7 @@ bayes_est <- function(prices, quantities, margins,
     group = group,
     stringsAsFactors = FALSE
   )
+  df$margin_observed <- if (is.null(margin_observed)) TRUE else margin_observed
 
   # Default Stan options. Defaults favor stable geometry; users can relax these
   # when a particular application is well behaved.
@@ -264,7 +282,8 @@ bayes_est <- function(prices, quantities, margins,
       use_hmt      = use_hmt,
       priors       = priors,
       X_s0         = X_s0,
-      grainsize    = grainsize
+      grainsize    = grainsize,
+      margin_observed = margin_observed
     )
     stan_mod <- stanmodels[["logit_supply"]]
     price_sd_val <- stan_data$price_sd
@@ -288,7 +307,8 @@ bayes_est <- function(prices, quantities, margins,
       use_alpha_market_pool = use_alpha_market_pool,
       use_s0_market_year_pool = use_s0_market_year_pool,
       use_centered_alpha = use_centered_alpha,
-      use_centered_s0_pool = use_centered_s0_pool
+      use_centered_s0_pool = use_centered_s0_pool,
+      margin_observed = margin_observed
     )
     stan_mod <- stanmodels[["ces_supply"]]
     price_sd_val <- stan_data$log_price_sd
