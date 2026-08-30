@@ -23,7 +23,7 @@ FOC prior. Conditional inside shares do not identify this quantity.}
 
 \item{mky_int}{Integer vector mapping observations to market-years.}
 
-\item{supply_model}{Integer 1--4 (Bertrand, MonCom, Cournot, Auction).}
+\item{supply_model}{Integer 1--5.}
 
 \item{price_sd}{Standard deviation of prices used by the standardized Stan
 coefficient. The FOC-implied structural alpha is multiplied by this

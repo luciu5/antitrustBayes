@@ -5,8 +5,10 @@ data(pnb)
 cat("PNB data:", nrow(pnb), "banks\n")
 print(head(pnb))
 
-# Estimate under 4 supply models
-supply_models <- c("bertrand", "monopolistic", "cournot", "auction")
+# Estimate under the four-model retail-deposit candidate set. Auction receives
+# lower prior mass because its institutional interpretation is less direct.
+supply_models <- c("bertrand", "cournot", "auction", "monopolistic")
+model_priors <- bank_model_priors(supply_models)
 
 fits <- lapply(supply_models, function(sm) {
   cat("\n=== Estimating:", sm, "===\n")
@@ -18,6 +20,8 @@ fits <- lapply(supply_models, function(sm) {
     group   = pnb$group,
     supply_model = sm,
     use_rho = FALSE,
+    prior_manifest = "baseline",
+    model_prior = model_priors[[sm]],
     stan_options = list(
       chains = 4, iter = 2000, warmup = 1000,
       cores = 4, seed = 1960,
@@ -25,7 +29,7 @@ fits <- lapply(supply_models, function(sm) {
     )
   )
 })
-names(fits) <- c("Bertrand", "MonCom", "Cournot", "Auction")
+names(fits) <- c("Bertrand", "Cournot", "Auction", "MonCom")
 
 # Show Bertrand fit
 cat("\n=== Bertrand Fit ===\n")
@@ -35,9 +39,10 @@ fits$Bertrand
 cat("\n=== Model Comparison ===\n")
 comp <- bayes_compare(
   Bertrand = fits$Bertrand,
-  MonCom   = fits$MonCom,
   Cournot  = fits$Cournot,
-  Auction  = fits$Auction
+  Auction  = fits$Auction,
+  MonCom   = fits$MonCom,
+  prior_weights = model_priors
 )
 print(comp)
 

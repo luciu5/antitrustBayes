@@ -8,12 +8,13 @@
 #' @slot stanfit A \code{stanfit} object from \pkg{rstan}.
 #' @slot data A \code{data.frame} of the original input data.
 #' @slot stan_data A \code{list} of the data passed to Stan.
-#' @slot supply_model Integer (1--4) identifying the supply model.
+#' @slot supply_model Integer (1--5) identifying the supply model.
 #' @slot demand_model Character: \code{"logit"} or \code{"ces"}.
 #' @slot market_side Character: \code{"input"} or \code{"output"}.
 #' @slot price_sd Numeric scalar: the standard deviation of prices (logit) or
 #'   log-prices (CES) used for standardization.
 #' @slot call The matched call to \code{\link{bayes_est}}.
+#' @slot metadata Provenance and prior-manifest metadata.
 #'
 #' @export
 setClass(
@@ -26,8 +27,10 @@ setClass(
     demand_model = "character",
     market_side  = "character",
     price_sd     = "numeric",
-    call         = "call"
-  )
+    call         = "call",
+    metadata     = "list"
+  ),
+  prototype = list(metadata = list())
 )
 
 # Internal antitrust-compatible classes.  They inherit antitrust's demand,
@@ -40,7 +43,8 @@ setClass(
     supply_model = "integer",
     use_cutoff = "logical",
     cutoff_share = "numeric",
-    cutoff_scale = "numeric"
+    cutoff_scale = "numeric",
+    bargaining_power = "numeric"
   )
 )
 
@@ -51,7 +55,8 @@ setClass(
     supply_model = "integer",
     use_cutoff = "logical",
     cutoff_share = "numeric",
-    cutoff_scale = "numeric"
+    cutoff_scale = "numeric",
+    bargaining_power = "numeric"
   )
 )
 
@@ -83,6 +88,7 @@ setClass(
 #' @slot failures A named list containing simulation failure messages by
 #'   market and draw.
 #' @slot call The matched call to \code{\link{bayes_sim}}.
+#' @slot metadata Provenance and source-model metadata.
 #'
 #' @export
 setClass(
@@ -99,6 +105,8 @@ setClass(
     n_draws        = "integer",
     n_valid        = "integer",
     failures       = "list",
-    call           = "call"
-  )
+    call           = "call",
+    metadata       = "list"
+  ),
+  prototype = list(metadata = list())
 )

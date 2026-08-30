@@ -4,7 +4,14 @@
 \alias{bayes_compare}
 \title{Compare Bayesian Models Using Information Criteria and Bridge Sampling}
 \usage{
-bayes_compare(..., bridge = TRUE, bridge_maxiter = 5000L, prior_weights = NULL)
+bayes_compare(
+  ...,
+  bridge = TRUE,
+  bridge_maxiter = 5000L,
+  bridge_repetitions = 3L,
+  loo_unit = c("cluster", "period", "market", "observation"),
+  prior_weights = NULL
+)
 }
 \arguments{
 \item{...}{One or more \code{BayesLogit} objects, optionally named.}
@@ -16,9 +23,16 @@ factor model comparison. If \code{FALSE}, only LOO/WAIC are computed.}
 \item{bridge_maxiter}{Maximum iterations for bridge sampling.
 Default 5000.}
 
+\item{bridge_repetitions}{Number of independently initialized bridge runs
+per model. The reported log marginal likelihood is their median.}
+
+\item{loo_unit}{Natural predictive unit: observation, period, market, or
+cluster. Cluster uses the identifiers supplied to \code{bayes_est}.}
+
 \item{prior_weights}{Optional numeric vector of prior model probabilities.
 Must be the same length as the number of models and sum to 1. If
-\code{NULL} (default), equal prior probabilities are used.}
+\code{NULL} (default), recorded \code{model_prior} values are used when all
+are available; otherwise equal probabilities are used.}
 }
 \value{
 A data frame with columns for model name, supply model, LOOIC,
@@ -39,7 +53,8 @@ weights reflect predictive performance.}
 \item{WAIC}{Widely Applicable Information Criterion.}
 \item{Bridge Sampling}{Computes the log marginal likelihood
 \eqn{p(y | M_k)} via \code{\link[bridgesampling]{bridge_sampler}}.
-Posterior model probabilities assume equal prior model probabilities.
+Posterior model probabilities use \code{prior_weights}, or the
+model-specific probabilities recorded by \code{bayes_est}.
 Bayes factors are computed relative to the best model.}
 }
 

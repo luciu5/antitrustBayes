@@ -2,8 +2,9 @@
 library(antitrustBayes)
 data(pnb)
 
-models <- c("bertrand", "monopolistic", "cournot", "auction")
-model_names <- c("Bertrand", "MonCom", "Cournot", "Auction")
+models <- c("bertrand", "cournot", "auction", "monopolistic")
+model_names <- c("Bertrand", "Cournot", "Auction", "MonCom")
+model_priors <- bank_model_priors(models)
 
 fits <- list()
 for (i in seq_along(models)) {
@@ -12,6 +13,7 @@ for (i in seq_along(models)) {
     prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
     market = rep("PHL", nrow(pnb)), group = pnb$group,
     supply_model = models[i], use_cutoff = TRUE, use_rho = FALSE,
+    prior_manifest = "baseline", model_prior = model_priors[[models[i]]],
     stan_options = list(chains = 4, iter = 2000, warmup = 1000, cores = 4,
       seed = 1960, control = list(adapt_delta = 0.95, max_treedepth = 15))
   )
@@ -30,8 +32,9 @@ sapply(fits, function(f) {
 
 cat("\n=== Model Comparison ===\n")
 comp <- bayes_compare(
-  Bertrand = fits$Bertrand, MonCom = fits$MonCom,
-  Cournot = fits$Cournot, Auction = fits$Auction
+  Bertrand = fits$Bertrand, Cournot = fits$Cournot,
+  Auction = fits$Auction, MonCom = fits$MonCom,
+  prior_weights = model_priors
 )
 print(comp)
 

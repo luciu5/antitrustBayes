@@ -2,7 +2,7 @@ validate_comparison_contract <- function(fits) {
   reference <- fits[[1L]]
   columns <- c(
     "prices", "quantities", "margins", "market", "year", "group",
-    "margin_observed", "outside_price"
+    "loo_cluster", "margin_observed", "outside_price"
   )
   missing <- setdiff(columns, names(reference@data))
   if (length(missing)) {
@@ -23,8 +23,10 @@ validate_comparison_contract <- function(fits) {
       stop("Models must be fitted to the same ordered observations, margin ",
            "mask, identifiers, and outside prices.")
     }
-    common_outcomes <- c("shareIn", "log_shareIn", "marginNormInv",
-                         "log_marginNormInv", "margin_obs")
+    common_outcomes <- c(
+      "shareIn", "clr_shareIn", "marginNormInv", "log_marginNormInv",
+      "margin_obs", "market_year_idx", "cluster", "likelihood_mode"
+    )
     if (!all(common_outcomes %in% names(candidate@stan_data)) ||
         !all(common_outcomes %in% names(reference@stan_data)) ||
         !isTRUE(all.equal(
@@ -33,6 +35,18 @@ validate_comparison_contract <- function(fits) {
           check.attributes = FALSE
         ))) {
       stop("Models do not share the current quantity-space likelihood contract.")
+    }
+    shared_prior_names <- setdiff(
+      names(reference@metadata$resolved_priors),
+      grep("^bargaining_", names(reference@metadata$resolved_priors), value = TRUE)
+    )
+    if (!identical(candidate@metadata$prior_manifest,
+                   reference@metadata$prior_manifest) ||
+        !isTRUE(all.equal(
+          candidate@metadata$resolved_priors[shared_prior_names],
+          reference@metadata$resolved_priors[shared_prior_names]
+        ))) {
+      stop("Models must use the same prior manifest on shared parameters.")
     }
   }
   invisible(TRUE)
@@ -50,9 +64,14 @@ validate_comparison_contract <- function(fits) {
 #'   factor model comparison. If \code{FALSE}, only LOO/WAIC are computed.
 #' @param bridge_maxiter Maximum iterations for bridge sampling.
 #'   Default 5000.
+#' @param bridge_repetitions Number of independently initialized bridge runs
+#'   per model. The reported log marginal likelihood is their median.
+#' @param loo_unit Natural predictive unit: observation, period, market, or
+#'   cluster. Cluster uses the identifiers supplied to \code{bayes_est}.
 #' @param prior_weights Optional numeric vector of prior model probabilities.
 #'   Must be the same length as the number of models and sum to 1. If
-#'   \code{NULL} (default), equal prior probabilities are used.
+#'   \code{NULL} (default), recorded \code{model_prior} values are used when
+#'   all are available; otherwise equal probabilities are used.
 #'
 #' @return A data frame with columns for model name, supply model, LOOIC,
 #'   WAIC, stacking weights, and (if \code{bridge = TRUE}) log marginal
@@ -67,7 +86,8 @@ validate_comparison_contract <- function(fits) {
 #'   \item{WAIC}{Widely Applicable Information Criterion.}
 #'   \item{Bridge Sampling}{Computes the log marginal likelihood
 #'     \eqn{p(y | M_k)} via \code{\link[bridgesampling]{bridge_sampler}}.
-#'     Posterior model probabilities assume equal prior model probabilities.
+#'     Posterior model probabilities use \code{prior_weights}, or the
+#'     model-specific probabilities recorded by \code{bayes_est}.
 #'     Bayes factors are computed relative to the best model.}
 #' }
 #'
@@ -87,8 +107,16 @@ validate_comparison_contract <- function(fits) {
 #'
 #' @export
 bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
+                          bridge_repetitions = 3L,
+                          loo_unit = c("cluster", "period", "market", "observation"),
                           prior_weights = NULL) {
   args <- list(...)
+  loo_unit <- match.arg(loo_unit)
+  if (length(bridge_repetitions) != 1L || !is.finite(bridge_repetitions) ||
+      bridge_repetitions < 1 || bridge_repetitions != as.integer(bridge_repetitions)) {
+    stop("'bridge_repetitions' must be a positive integer.")
+  }
+  bridge_repetitions <- as.integer(bridge_repetitions)
 
   # Separate BayesLogit objects from named arguments
   fits <- args[vapply(args, is, logical(1), "BayesLogit")]
@@ -109,7 +137,15 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
 
   # Prior model probabilities
   if (is.null(prior_weights)) {
-    prior_weights <- rep(1 / length(fits), length(fits))
+    recorded <- vapply(fits, function(x) {
+      value <- x@metadata$model_prior
+      if (length(value) == 1L && is.numeric(value)) as.numeric(value) else NA_real_
+    }, numeric(1))
+    if (all(is.finite(recorded)) && sum(recorded) > 0) {
+      prior_weights <- recorded / sum(recorded)
+    } else {
+      prior_weights <- rep(1 / length(fits), length(fits))
+    }
   } else {
     if (length(prior_weights) != length(fits)) {
       stop("'prior_weights' must have the same length as ",
@@ -124,41 +160,66 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
     }
   }
 
-  supply_names <- c("Bertrand", "Monopolistic", "Cournot", "Auction")
+  supply_names <- c(
+    "Bertrand", "Monopolistic", "Cournot", "Auction", "Bargaining"
+  )
 
   loo_list  <- list()
   waic_list <- list()
   bridge_list <- list()
+  parameter_name <- switch(loo_unit,
+    observation = "log_lik",
+    period = "log_lik_period",
+    market = "log_lik_market",
+    cluster = "log_lik_cluster"
+  )
+  loo_available <- TRUE
 
   for (i in seq_along(fits)) {
     fit <- fits[[i]]
 
-    log_lik <- loo::extract_log_lik(fit@stanfit, parameter_name = "log_lik",
+    log_lik <- loo::extract_log_lik(fit@stanfit, parameter_name = parameter_name,
                                      merge_chains = FALSE)
-    r_eff <- loo::relative_eff(exp(log_lik))
-
-    loo_list[[i]]  <- loo::loo(log_lik, r_eff = r_eff)
-    waic_list[[i]] <- loo::waic(log_lik)
+    n_units <- dim(log_lik)[3L]
+    if (is.null(n_units)) n_units <- 1L
+    if (n_units < 2L) {
+      loo_available <- FALSE
+      loo_list[[i]] <- NULL
+      waic_list[[i]] <- NULL
+    } else {
+      r_eff <- loo::relative_eff(exp(log_lik))
+      loo_list[[i]]  <- loo::loo(log_lik, r_eff = r_eff)
+      waic_list[[i]] <- loo::waic(log_lik)
+    }
 
     # Bridge sampling for marginal likelihood
     if (bridge) {
-      bridge_list[[i]] <- tryCatch(
-        bridgesampling::bridge_sampler(fit@stanfit, silent = TRUE,
-                                        maxiter = bridge_maxiter),
-        error = function(e) {
-          warning("Bridge sampling failed for model ", nms[i], ": ",
-                  conditionMessage(e))
-          NULL
-        }
-      )
+      bridge_list[[i]] <- lapply(seq_len(bridge_repetitions), function(rep_id) {
+        tryCatch(
+          bridgesampling::bridge_sampler(
+            fit@stanfit, silent = TRUE, maxiter = bridge_maxiter
+          ),
+          error = function(e) {
+            warning("Bridge sampling failed for model ", nms[i],
+                    ", repetition ", rep_id, ": ", conditionMessage(e))
+            NULL
+          }
+        )
+      })
     }
   }
 
-  names(loo_list) <- nms
-  comp <- loo::loo_compare(loo_list)
-
-  # Stacking weights from LOO
-  weights_stacking <- loo::loo_model_weights(loo_list, method = "stacking")
+  names(loo_list) <- names(waic_list) <- nms
+  if (bridge) names(bridge_list) <- nms
+  if (loo_available) {
+    comp <- loo::loo_compare(loo_list)
+    weights_stacking <- loo::loo_model_weights(loo_list, method = "stacking")
+  } else {
+    warning("LOO/WAIC require at least two ", loo_unit,
+            " units; returning NA predictive summaries.", call. = FALSE)
+    comp <- NULL
+    weights_stacking <- rep(NA_real_, length(fits))
+  }
 
   result <- data.frame(
     model         = nms,
@@ -166,22 +227,36 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
       supply_names[f@supply_model], character(1)),
     demand_model  = vapply(fits, slot, character(1), "demand_model"),
     market_side   = vapply(fits, slot, character(1), "market_side"),
-    looic         = vapply(loo_list, function(x) x$estimates["looic", "Estimate"],
-                           numeric(1)),
-    looic_se      = vapply(loo_list, function(x) x$estimates["looic", "SE"],
-                           numeric(1)),
-    p_loo         = vapply(loo_list, function(x) x$estimates["p_loo", "Estimate"],
-                           numeric(1)),
-    waic          = vapply(waic_list, function(x) x$estimates["waic", "Estimate"],
-                           numeric(1)),
+    prior_manifest = vapply(fits, function(x) x@metadata$prior_manifest,
+                            character(1)),
+    model_prior = prior_weights,
+    loo_unit = loo_unit,
+    looic = if (loo_available) vapply(
+      loo_list, function(x) x$estimates["looic", "Estimate"], numeric(1)
+    ) else rep(NA_real_, length(fits)),
+    looic_se = if (loo_available) vapply(
+      loo_list, function(x) x$estimates["looic", "SE"], numeric(1)
+    ) else rep(NA_real_, length(fits)),
+    p_loo = if (loo_available) vapply(
+      loo_list, function(x) x$estimates["p_loo", "Estimate"], numeric(1)
+    ) else rep(NA_real_, length(fits)),
+    waic = if (loo_available) vapply(
+      waic_list, function(x) x$estimates["waic", "Estimate"], numeric(1)
+    ) else rep(NA_real_, length(fits)),
     weight_stacking = as.numeric(weights_stacking),
     stringsAsFactors = FALSE
   )
 
   # Add bridge sampling results
   if (bridge && length(bridge_list) > 0L) {
-    logml <- vapply(bridge_list, function(b) {
-      if (!is.null(b)) b$logml else NA_real_
+    bridge_logml <- lapply(bridge_list, function(reps) {
+      vapply(reps, function(b) if (!is.null(b)) b$logml else NA_real_, numeric(1))
+    })
+    logml <- vapply(bridge_logml, function(x) {
+      if (any(is.finite(x))) stats::median(x[is.finite(x)]) else NA_real_
+    }, numeric(1))
+    logml_sd <- vapply(bridge_logml, function(x) {
+      if (sum(is.finite(x)) > 1L) stats::sd(x[is.finite(x)]) else NA_real_
     }, numeric(1))
 
     finite <- is.finite(logml)
@@ -197,6 +272,7 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
     }
 
     result$logml        <- logml
+    result$logml_sd     <- logml_sd
     result$bf_vs_best   <- bf_vs_best
     result$post_prob    <- post_prob
   }
@@ -206,7 +282,38 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
   attr(result, "loo_compare") <- comp
   attr(result, "loo_list") <- loo_list
   if (bridge) attr(result, "bridge_list") <- bridge_list
+  attr(result, "prior_weights") <- prior_weights
+  attr(result, "loo_unit") <- loo_unit
   result
+}
+
+#' Decompose Joint and Conditional-Margin Model Evidence
+#'
+#' Since the compositional share likelihood and shared-parameter priors are
+#' common across conduct models, subtracting a separately fitted share-only
+#' log marginal likelihood isolates \eqn{\log p(M\mid S,M_k)}.
+#'
+#' @param comparison A bridge-sampling table returned by \code{bayes_compare}.
+#' @param share_logml Scalar or model-aligned vector of log marginal
+#'   likelihoods from share-only fits. A scalar is recycled when the share
+#'   evidence is common across conduct models.
+#' @return The comparison table with common-share and conditional-margin
+#'   evidence columns.
+#' @export
+bayes_evidence_decomposition <- function(comparison, share_logml) {
+  if (!"logml" %in% names(comparison)) {
+    stop("'comparison' must contain bridge-sampling log marginal likelihoods.")
+  }
+  if (!is.numeric(share_logml) || !length(share_logml) ||
+      any(!is.finite(share_logml)) ||
+      !(length(share_logml) %in% c(1L, nrow(comparison)))) {
+    stop("'share_logml' must be one finite value or one value per model.")
+  }
+  if (length(share_logml) == 1L) share_logml <- rep(share_logml, nrow(comparison))
+  out <- comparison
+  out$logml_share <- share_logml
+  out$logml_margin_given_share <- out$logml - share_logml
+  out
 }
 
 #' Extract Model Weights from a Comparison Table
@@ -352,7 +459,7 @@ bayes_avg <- function(sims, weights, n_draws = 1000L) {
     selected[[i]] <- sample(common_valid, n_per_model[i], replace = TRUE)
   }
   source_order <- rep(seq_along(sims), n_per_model)
-  source_position <- ave(source_order, source_order, FUN = seq_along)
+  source_position <- stats::ave(source_order, source_order, FUN = seq_along)
   permutation <- sample.int(n_draws)
   source_order <- source_order[permutation]
   source_position <- source_position[permutation]
@@ -403,6 +510,12 @@ bayes_avg <- function(sims, weights, n_draws = 1000L) {
     pooled_n_valid[mk]   <- n_draws
   }
 
+  pooled_metadata <- list(
+    source_models = names(sims),
+    weights = weights,
+    component_metadata = lapply(sims, slot, "metadata")
+  )
+
   new("BayesSim",
     sims           = pooled_sims,
     price_pre      = pooled_ppre,
@@ -419,6 +532,7 @@ bayes_avg <- function(sims, weights, n_draws = 1000L) {
                 simplify = FALSE),
       all_markets
     ),
-    call           = match.call()
+    call           = match.call(),
+    metadata       = pooled_metadata
   )
 }

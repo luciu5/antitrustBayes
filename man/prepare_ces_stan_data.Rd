@@ -25,7 +25,9 @@ prepare_ces_stan_data(
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
   margin_observed = NULL,
-  outside_price = 1
+  outside_price = 1,
+  likelihood_mode = 1L,
+  loo_cluster = market
 )
 }
 \arguments{
@@ -42,7 +44,7 @@ greater than 1 are valid for input-market markdowns.}
 
 \item{group}{Factor or vector identifying product groups (e.g., firms).}
 
-\item{supply_model}{Integer 1--4.}
+\item{supply_model}{Integer 1--5.}
 
 \item{use_cutoff}{Logical.}
 
@@ -71,6 +73,10 @@ greater than 1 are valid for input-market markdowns.}
 \item{margin_observed}{Optional logical margin-observation mask.}
 
 \item{outside_price}{Positive scalar or one value per market-year.}
+
+\item{likelihood_mode}{Integer: 1 joint, 2 share only, 3 margin only.}
+
+\item{loo_cluster}{Optional natural predictive-cluster identifier.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.

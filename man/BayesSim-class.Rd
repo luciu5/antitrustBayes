@@ -88,5 +88,7 @@ market.}
 market and draw.}
 
 \item{\code{call}}{The matched call to \code{\link{bayes_sim}}.}
+
+\item{\code{metadata}}{Provenance and source-model metadata.}
 }}
 

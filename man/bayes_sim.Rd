@@ -87,7 +87,7 @@ for post-merger equilibrium prices using
 }
 
 Internal subclasses of \pkg{antitrust}'s \code{Logit} and \code{CES}
-classes override only the margin equation. This lets all four estimated
+classes override only the margin equation. This lets all five estimated
 conduct models (including the posterior fringe cutoff) use the upstream
 equilibrium, elasticity, diversion, welfare, and HMT machinery.
 }

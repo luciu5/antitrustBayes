@@ -23,7 +23,7 @@ convert conditional inside shares to unconditional shares.}
 
 \item{mky_int}{Integer vector mapping observations to market-years.}
 
-\item{supply_model}{Integer 1--4 (Bertrand, MonCom, Cournot, Auction).}
+\item{supply_model}{Integer 1--5.}
 
 \item{log_price_sd}{Scale used to convert structural gamma to the
 standardized coefficient estimated by the Stan model.}

@@ -155,7 +155,9 @@ setMethod("wtp_convert", "BayesLogit", function(object, to_gamma = TRUE) {
 #' @rdname BayesLogit-class
 #' @exportMethod show
 setMethod("show", "BayesLogit", function(object) {
-  supply_names <- c("Bertrand", "Monopolistic", "Cournot", "Auction")
+  supply_names <- c(
+    "Bertrand", "Monopolistic", "Cournot", "Auction", "Bargaining"
+  )
   demand_label <- if (length(object@demand_model) > 0 &&
     object@demand_model == "ces") {
     "CES"

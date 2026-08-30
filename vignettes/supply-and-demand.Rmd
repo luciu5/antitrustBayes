@@ -16,7 +16,7 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-This vignette describes the theoretical underpinnings of the demand and supply models implemented in `antitrustBayes`. We begin by outlining the indirect utility functions for the Constant Elasticity of Substitution (CES) and Logit demand frameworks, and then present the equilibrium first-order conditions (Lerner conditions) for our four supply models under both demand systems.
+This vignette describes the theoretical underpinnings of the demand and supply models implemented in `antitrustBayes`. We begin by outlining the indirect utility functions for the Constant Elasticity of Substitution (CES) and Logit demand frameworks, and then present the equilibrium first-order conditions (Lerner conditions) for the candidate conduct models under both demand systems. Candidate sets should be justified by the trading institution; bargaining is available in the general API but is not automatically part of the retail-deposit set.
 
 ---
 
@@ -60,7 +60,7 @@ This elegant linkage confirms how models parametrically convert into one another
 
 ## 2. Equilibrium Supply Models
 
-In `antitrustBayes`, we implement four distinct models of supply-side competition. The theoretical implications of these models can be summarized by their equilibrium margin conditions. 
+In `antitrustBayes`, we implement four primary strategic/competitive models of supply-side competition—Bertrand, monopolistic competition, Cournot, and second-score auction—and an optional fifth model for Nash bargaining. The theoretical implications of these models can be summarized by their equilibrium margin conditions.
 
 For notation:
 - Suppose there are $K$ firms, and each firm $k \in K$ produces a subset of products $\mathcal{J}_k$.
@@ -99,3 +99,34 @@ The Second-Score Auction model (or second-price auction) can be used to characte
 \[ m_j = \frac{1}{\alpha p_j} \left( \frac{-\log\left(1 - \sum_{l \in \mathcal{J}_k} s_l\right)}{\sum_{l \in \mathcal{J}_k} s_l} \right) \]
 * **CES:** 
 \[ m_j = 1 - \left(1 - \sum_{l \in \mathcal{J}_k} r_l\right)^{\frac{1}{\gamma - 1}} \]
+
+### Nash Bargaining (Optional)
+
+The bargaining extension is deliberately separated from the primary banking
+candidate set. Under CES demand its inverse-Lerner schedule is a Bertrand
+schedule divided by $(1-\beta)$, where $\beta$ is the buyer-side bargaining
+weight. Thus bargaining power and a free demand scale are confounded in CES
+data. The implementation uses a neutral baseline prior on
+$\beta \in [0,0.9999)$; a high-power prior is a sensitivity analysis, not the
+default.
+
+## 3. Shape-Based Conduct Information
+
+Write an inverse-margin schedule as
+\[
+m_{ij}^{-1} = \alpha g_k(q_{ij},s_{0j}).
+\]
+With one observation, a change in $\alpha$ can often make two conduct models
+observationally equivalent. With two or more different firm shares, model
+separation comes from the shape of $g_k$:
+\[
+\frac{g_k(q_1,s_0)}{g_k(q_2,s_0)}
+\neq
+\frac{g_\ell(q_1,s_0)}{g_\ell(q_2,s_0)}.
+\]
+When $s_0$ is uncertain, `conduct_distance()` profiles the comparison model
+over both its scale and outside share. The resulting Gaussian/KL information
+distance predicts when sparse equilibrium data can and cannot learn conduct.
+Use `conduct_information_matrix()` to inspect pairwise separation and
+`conduct_validation()` for targeted weak-separation, strong-separation,
+Cournot-separation, outside-share, bargaining, and misspecification designs.

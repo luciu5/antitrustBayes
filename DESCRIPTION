@@ -1,6 +1,6 @@
 Package: antitrustBayes
 Title: Bayesian Merger Simulation for Antitrust Analysis
-Version: 0.1.1
+Version: 0.2.0
 Author: Charles Taragin
 Maintainer: Charles Taragin <ctaragin+antitrustr@gmail.com>
 Authors@R: c(
@@ -25,6 +25,7 @@ Depends:
 Imports:
     antitrust (>= 0.99.27),
     bridgesampling (>= 1.1.0),
+    digest,
     loo (>= 2.5.0),
     Rcpp (>= 0.12.0),
     RcppParallel (>= 5.0.1),
@@ -45,11 +46,15 @@ Collate:
     'bma.R'
     'conduct.R'
     'data.R'
+    'decisions.R'
     'estimate.R'
     'helpers.R'
     'methods.R'
+    'priors.R'
     'simulate.R'
     'stanmodels.R'
+    'theory.R'
+    'validation.R'
 URL: https://github.com/luciu5/antitrustBayes
 Biarch: true
 LinkingTo: 

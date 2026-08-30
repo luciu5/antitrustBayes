@@ -94,13 +94,14 @@ test_that("prepare_stan_data returns correct structure", {
   expect_equal(length(sd$shareIn), N)
   expect_equal(length(sd$marginNormInv), N)
   expect_equal(length(sd$log_shareIn), N)
+  expect_equal(length(sd$clr_shareIn), N)
   expect_equal(length(sd$log_marginNormInv), N)
   expect_equal(sd$log_shareIn, log(sd$shareIn))
   expect_equal(sd$log_marginNormInv, log(sd$marginNormInv))
   expect_equal(length(sd$price_std), N)
   expect_true(sd$price_sd > 0)
   expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 4L)
+  expect_equal(attr(sd, "model_spec_version"), 5L)
   expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
 })
 
@@ -125,7 +126,19 @@ test_that("default outside-share prior has mean 20% and 5th percentile 10%", {
   expect_equal(prior_q05, 0.10, tolerance = 1e-8)
 })
 
-test_that("custom outside-share prior sets the FOC calibration reference", {
+test_that("single-market CES vector data retain Stan dimensions", {
+  sd <- prepare_ces_stan_data(
+    prices = c(1, 1.2, 1.4), quantities = c(10, 20, 30),
+    margins = rep(0.3, 3), market = rep("m", 3), year = rep(1, 3),
+    group = 1:3, supply_model = 1L, use_cutoff = FALSE, use_rho = FALSE,
+    use_hmt = FALSE, priors = list()
+  )
+  expect_equal(dim(sd$outside_price), 1L)
+  expect_equal(dim(sd$inside_price_index), 1L)
+  expect_equal(dim(sd$mky_n), 1L)
+})
+
+test_that("custom outside-share prior does not calibrate alpha from outcomes", {
   prices <- c(1, 2, 3, 4)
   quantities <- c(40, 30, 20, 10)
   margins <- rep(0.3, 4)
@@ -149,20 +162,9 @@ test_that("custom outside-share prior sets the FOC calibration reference", {
   )
 
   expected_reference <- logit_normal_mean(custom_location, custom_scale)
-  # The alpha prior is always calibrated against the monopolistic-competition
-  # FOC (supply_model = 2L), shared across all four supply models, regardless
-  # of the fit's own supply_model = 1L (Bertrand).
-  expected_alpha <- compute_alpha_prior(
-    sd$shareIn,
-    margins * prices,
-    expected_reference,
-    rep(1L, length(prices)),
-    2L,
-    sd$price_sd
-  )
   expect_equal(attr(sd, "s0_prior_reference"), expected_reference)
-  expect_equal(sd$prior_alpha_mean, expected_alpha$mean)
-  expect_equal(sd$prior_alpha_sd, expected_alpha$sd)
+  expect_equal(sd$prior_alpha_mean, 0)
+  expect_equal(sd$prior_alpha_sd, 1)
 })
 
 test_that("prepare_stan_data computes quantity shares correctly", {
@@ -185,6 +187,32 @@ test_that("prepare_stan_data computes quantity shares correctly", {
 
   expected_shares <- quantities / sum(quantities)
   expect_equal(sd$shareIn, expected_shares)
+  expect_equal(sum(sd$clr_shareIn), 0, tolerance = 1e-12)
+})
+
+test_that("compositional share outcomes are scale invariant", {
+  args <- list(
+    prices = c(1, 2, 3, 4), quantities = c(10, 20, 30, 40),
+    margins = rep(0.3, 4), market = rep("m", 4), year = rep(1, 4),
+    group = letters[1:4], supply_model = 1L, use_cutoff = FALSE,
+    use_rho = FALSE, use_hmt = FALSE, priors = list()
+  )
+  base <- do.call(prepare_stan_data, args)
+  args$quantities <- args$quantities * 100
+  scaled <- do.call(prepare_stan_data, args)
+  expect_equal(base$clr_shareIn, scaled$clr_shareIn)
+})
+
+test_that("predictive clusters must respect equilibrium cells", {
+  expect_error(
+    prepare_stan_data(
+      prices = c(1, 2), quantities = c(1, 1), margins = c(0.2, 0.2),
+      market = c("m", "m"), year = c(1, 1), group = c("a", "b"),
+      supply_model = 1L, use_cutoff = FALSE, use_rho = FALSE,
+      use_hmt = FALSE, priors = list(), loo_cluster = c("x", "y")
+    ),
+    "constant within each market-year"
+  )
 })
 
 test_that("strategic FOCs receive firm shares and market direction", {
@@ -423,13 +451,14 @@ test_that("prepare_ces_stan_data returns correct structure", {
   expect_equal(length(sd$shareIn), N)
   expect_equal(length(sd$marginNormInv), N)
   expect_equal(length(sd$log_shareIn), N)
+  expect_equal(length(sd$clr_shareIn), N)
   expect_equal(length(sd$log_marginNormInv), N)
   expect_equal(sd$log_shareIn, log(sd$shareIn))
   expect_equal(sd$log_marginNormInv, log(sd$marginNormInv))
   expect_equal(length(sd$log_price_std), N)
   expect_true(sd$log_price_sd > 0)
   expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 4L)
+  expect_equal(attr(sd, "model_spec_version"), 5L)
   expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
   # Revenue shares should sum to ~1 within each market
   for (m in 1:sd$N_market_year) {
@@ -463,7 +492,7 @@ test_that("prepare_ces_stan_data computes revenue shares correctly", {
   expect_equal(sd$marginNormInv, rep(1 / 0.3, N))
 })
 
-test_that("CES prior is calibrated on standardized a scale", {
+test_that("CES uses the data-independent standardized prior", {
   N <- 6
   prices <- seq(1, 3, length.out = N)
   sd <- prepare_ces_stan_data(
@@ -480,9 +509,8 @@ test_that("CES prior is calibrated on standardized a scale", {
     priors       = list()
   )
 
-  expected_a <- (1 / 0.3 - 1) * stats::sd(log(prices))
-  expect_equal(sd$prior_alpha_mean, log(expected_a), tolerance = 1e-8)
-  expect_true(sd$prior_alpha_sd > 0)
+  expect_equal(sd$prior_alpha_mean, 0)
+  expect_equal(sd$prior_alpha_sd, 1)
 })
 
 test_that("CES FOC priors use unconditional revenue shares", {

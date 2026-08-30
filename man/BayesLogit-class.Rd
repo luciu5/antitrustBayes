@@ -28,7 +28,7 @@ logit demand and supply model via Stan.
 
 \item{\code{stan_data}}{A \code{list} of the data passed to Stan.}
 
-\item{\code{supply_model}}{Integer (1--4) identifying the supply model.}
+\item{\code{supply_model}}{Integer (1--5) identifying the supply model.}
 
 \item{\code{demand_model}}{Character: \code{"logit"} or \code{"ces"}.}
 
@@ -38,5 +38,7 @@ logit demand and supply model via Stan.
 log-prices (CES) used for standardization.}
 
 \item{\code{call}}{The matched call to \code{\link{bayes_est}}.}
+
+\item{\code{metadata}}{Provenance and prior-manifest metadata.}
 }}
 

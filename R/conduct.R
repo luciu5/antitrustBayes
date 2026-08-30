@@ -70,6 +70,19 @@ setMethod(
           -log1p(-firm_share[positive])
         w + (1 - w) * auction_conduct
       },
+      "5" = {
+        beta <- object@bargaining_power
+        if (length(beta) != 1L || !is.finite(beta) || beta < 0 || beta >= 1) {
+          stop("Bargaining power must lie in [0, 1).")
+        }
+        kappa <- beta / (1 - beta)
+        barg_conduct <- (
+          kappa * firm_share - (1 - firm_share) * log1p(-firm_share)
+        ) / -log1p(-firm_share)
+        small <- firm_share <= 1e-10
+        barg_conduct[small] <- 1
+        w + (1 - w) * barg_conduct
+      },
       stop("Unknown supply model in BayesConductLogit.")
     )
 
@@ -110,6 +123,14 @@ setMethod(
         auction_inv <- 1 /
           (1 - (1 - firm_share)^(1 / (gamma - 1)))
         w * gamma + (1 - w) * auction_inv
+      },
+      "5" = {
+        beta <- object@bargaining_power
+        if (length(beta) != 1L || !is.finite(beta) || beta < 0 || beta >= 1) {
+          stop("Bargaining power must lie in [0, 1).")
+        }
+        bertrand_inv <- gamma - (gamma - 1) * firm_share
+        w * gamma + (1 - w) * bertrand_inv / (1 - beta)
       },
       stop("Unknown supply model in BayesConductCES.")
     )

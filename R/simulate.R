@@ -54,7 +54,7 @@
 #' }
 #'
 #' Internal subclasses of \pkg{antitrust}'s \code{Logit} and \code{CES}
-#' classes override only the margin equation. This lets all four estimated
+#' classes override only the margin equation. This lets all five estimated
 #' conduct models (including the posterior fringe cutoff) use the upstream
 #' equilibrium, elasticity, diversion, welfare, and HMT machinery.
 #'
@@ -330,6 +330,12 @@ bayes_sim <- function(fit, ownerPost,
         plogis(draws$s0_logit[i, mky_int_val])
       }
 
+      bargaining_draw <- if (fit@supply_model == 5L) {
+        as.numeric(draws$bargaining_power[i])
+      } else {
+        0
+      }
+
       # Compute unconditional quantity shares and invert demand at observed
       # prices. These parameterizations reproduce the fitted shares exactly
       # under antitrust::calcShares().
@@ -394,7 +400,8 @@ bayes_sim <- function(fit, ownerPost,
           supply_model = fit@supply_model,
           use_cutoff   = isTRUE(fit@stan_data$use_cutoff == 1L),
           cutoff_share = as.numeric(cutoff_draw),
-          cutoff_scale = 0.2
+          cutoff_scale = 0.2,
+          bargaining_power = bargaining_draw
         )
 
         obj@slopes <- slopes
@@ -459,6 +466,10 @@ bayes_sim <- function(fit, ownerPost,
             call. = FALSE)
   }
 
+  sim_metadata <- fit@metadata
+  sim_metadata$source_supply_model <- fit@supply_model
+  sim_metadata$posterior_draws_requested <- n_draws_actual
+
   new("BayesSim",
     sims           = all_sims,
     price_pre      = price_pre,
@@ -471,6 +482,7 @@ bayes_sim <- function(fit, ownerPost,
     n_draws        = as.integer(n_draws_actual),
     n_valid        = n_valid_vec,
     failures       = failures,
-    call           = cl
+    call           = cl,
+    metadata       = sim_metadata
   )
 }

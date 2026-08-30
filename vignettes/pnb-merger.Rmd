@@ -23,10 +23,12 @@ The merger between Philadelphia National Bank (PNB) and Girard Trust
 would have created the largest bank in the Philadelphia metropolitan
 area. The Court found the merger violated Section 7 of the Clayton Act.
 
-We estimate Bayesian logit demand models under four supply assumptions,
-simulate the merger's price effects with full posterior uncertainty,
-compare models via bridge sampling and LOO-IC, and compute
-model-averaged predictions.
+We estimate Bayesian logit demand models under an institutionally disciplined
+candidate set, simulate the merger's price effects with full posterior
+uncertainty, compare models via bridge sampling and clustered LOO-IC, and
+compute model-averaged predictions. The candidate-set prior is explicit: the
+auction model receives less prior mass than Bertrand, Cournot, and
+monopolistic competition.
 
 ## Data
 
@@ -45,12 +47,15 @@ identifier (`group`).
 
 ## Step 1: Estimate Under Multiple Supply Models
 
-We estimate the Bayesian logit demand model under four supply
-assumptions: Nash-Bertrand, Monopolistic Competition, Cournot, and
-Second-Score Auction.
+We estimate the Bayesian logit demand model under four supply assumptions:
+Nash-Bertrand, Monopolistic Competition, Cournot, and Second-Score Auction.
+Nash bargaining is available in the general API, but is not included in this
+retail-deposit candidate set because its institutional interpretation is less
+direct.
 
 ```{r estimate, results='hide', message=FALSE}
-supply_models <- c("bertrand", "monopolistic", "cournot", "auction")
+supply_models <- c("bertrand", "cournot", "auction", "monopolistic")
+model_priors <- bank_model_priors(supply_models)
 
 fits <- lapply(supply_models, function(sm) {
   bayes_est(
@@ -61,6 +66,7 @@ fits <- lapply(supply_models, function(sm) {
     group   = pnb$group,
     supply_model = sm,
     use_rho = FALSE,
+    model_prior = model_priors[[sm]],
     stan_options = list(
       chains = 4, iter = 2000, warmup = 1000,
       cores = 4, seed = 1960,
@@ -68,7 +74,7 @@ fits <- lapply(supply_models, function(sm) {
     )
   )
 })
-names(fits) <- c("Bertrand", "MonCom", "Cournot", "Auction")
+names(fits) <- c("Bertrand", "Cournot", "Auction", "MonCom")
 ```
 
 Check MCMC diagnostics --- the number of divergent transitions should be
@@ -95,9 +101,10 @@ Compare models using LOO-IC and bridge sampling:
 ```{r compare}
 comp <- bayes_compare(
   Bertrand = fits$Bertrand,
-  MonCom   = fits$MonCom,
   Cournot  = fits$Cournot,
-  Auction  = fits$Auction
+  Auction  = fits$Auction,
+  MonCom   = fits$MonCom,
+  prior_weights = model_priors
 )
 print(comp)
 ```
@@ -154,6 +161,19 @@ summary(avg_sim)
 summary(avg_sim, market = TRUE)
 ```
 
+The model average can be reported as a decision quantity rather than only a
+posterior model table. For input prices, a reduction is harmful, so define harm
+as the negative industry price change and apply a policy threshold:
+
+```{r decision}
+harm_draws <- -rowMeans(avg_sim@price_change[[1]], na.rm = TRUE)
+merger_decision(harm_draws, threshold = 0.01,
+                false_positive_cost = 1, false_negative_cost = 2)
+```
+
+This reports the posterior probability that the merger exceeds the threshold
+and the Bayes challenge/clear action under the stated loss ratio.
+
 ## Step 5: Additional Competition Metrics
 
 All standard antitrust metrics are available with posterior uncertainty:
@@ -185,5 +205,9 @@ HypoMonTest(sims$Bertrand, prodIndex = party_idx)
 - The outside share (`s0`) is small (~1%) for this market, reflecting
   limited substitution outside the 39 observed banks in 1960
   Philadelphia. This amplifies unilateral effects.
-- Bridge sampling requires proper priors on all parameters; the model
-  uses informative priors calibrated from the data and supply FOCs.
+- Bridge sampling requires proper priors on all parameters. The baseline
+  manifest is prespecified and data-independent; use `bayes_prior_manifest()`
+  to make tight/diffuse prior sensitivity transparent.
+- Predictive validation should use the natural equilibrium cluster. For a
+  pooled case exercise, pass a case identifier through `loo_cluster` and
+  compare with a market-level specification as a robustness check.

@@ -71,25 +71,34 @@ make_contract_fit <- function(demand_model = "logit") {
   stan_data <- list(
     N = 2L,
     shareIn = c(0.4, 0.6),
-    log_shareIn = log(c(0.4, 0.6)),
+    clr_shareIn = log(c(0.4, 0.6)) - mean(log(c(0.4, 0.6))),
     marginNormInv = c(4, 5),
     log_marginNormInv = log(c(4, 5)),
-    margin_obs = c(1L, 1L)
+    margin_obs = c(1L, 1L),
+    market_year_idx = c(1L, 1L),
+    cluster = c(1L, 1L),
+    likelihood_mode = 1L
   )
-  attr(stan_data, "model_spec_version") <- 4L
+  attr(stan_data, "model_spec_version") <- 5L
   new("BayesLogit",
     stanfit = NULL,
     data = data.frame(
       prices = c(1, 2), quantities = c(4, 6), margins = c(0.25, 0.2),
       market = c("m", "m"), year = c("1", "1"), group = c("a", "b"),
-      margin_observed = c(TRUE, TRUE), outside_price = c(1, 1)
+      loo_cluster = c("case", "case"), margin_observed = c(TRUE, TRUE),
+      outside_price = c(1, 1)
     ),
     stan_data = stan_data,
     supply_model = 1L,
     demand_model = demand_model,
     market_side = "output",
     price_sd = 1,
-    call = call("bayes_est")
+    call = call("bayes_est"),
+    metadata = list(
+      prior_manifest = "baseline",
+      resolved_priors = bayes_prior_manifest("baseline"),
+      model_prior = NA_real_
+    )
   )
 }
 
@@ -106,5 +115,17 @@ test_that("comparison contract rejects different observations", {
   expect_error(
     validate_comparison_contract(list(fit1, fit2)),
     "same ordered observations"
+  )
+})
+
+test_that("evidence decomposition accepts common or model-specific share evidence", {
+  comparison <- data.frame(model = c("a", "b"), logml = c(4, 6))
+  common <- bayes_evidence_decomposition(comparison, 2)
+  expect_equal(common$logml_margin_given_share, c(2, 4))
+  specific <- bayes_evidence_decomposition(comparison, c(1, 4))
+  expect_equal(specific$logml_margin_given_share, c(3, 2))
+  expect_error(
+    bayes_evidence_decomposition(comparison, c(1, 2, 3)),
+    "one finite value or one value per model"
   )
 })

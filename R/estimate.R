@@ -3,7 +3,7 @@
 #' Estimates a hierarchical Bayesian model of differentiated products demand
 #' (logit or CES) and supply using Stan MCMC. The model jointly estimates
 #' demand parameters (price sensitivity, mean valuations, outside share) and
-#' supply parameters under one of four supply models.
+#' supply parameters under one of five supply models.
 #'
 #' @param prices Numeric vector of product prices. Must be positive.
 #' @param quantities Numeric vector of product quantities (e.g., units sold,
@@ -31,11 +31,11 @@
 #'   \code{"output"}.
 #' @param supply_model Character string specifying the supply model:
 #'   \code{"bertrand"} (default), \code{"monopolistic"}, \code{"cournot"},
-#'   or \code{"auction"}.
+#'   \code{"auction"}, or \code{"bargaining"}.
 #' @param use_cutoff Logical. If \code{TRUE}, estimate a fringe-firm share
 #'   cutoff. Default \code{FALSE}.
-#' @param use_rho Logical. If \code{TRUE}, estimate share-margin error
-#'   correlation. Default \code{TRUE}.
+#' @param use_rho Deprecated. Share and margin likelihoods are factored in the
+#'   current specification, so this must be \code{FALSE}.
 #' @param use_market_resid_scale Logical. If \code{TRUE}, allow market-level
 #'   share and inverse-margin residual scales with hierarchical shrinkage.
 #'   Default \code{FALSE}.
@@ -56,7 +56,18 @@
 #'   quantity and revenue shares on a common scale. Supply a scalar (default
 #'   \code{1}) or one value per market-year. Stored for Logit fits as part of
 #'   the common Logit/CES comparison contract, but otherwise unused by Logit.
+#' @param prior_manifest Prespecified proper prior manifest: \code{"baseline"},
+#'   \code{"tight"}, or \code{"diffuse"}. User-supplied \code{priors}
+#'   override individual entries in the selected manifest.
 #' @param priors Named list of prior hyperparameters. See Details.
+#' @param likelihood Which likelihood block to fit: \code{"joint"} (default),
+#'   \code{"share"}, or \code{"margin"}. Share-only fits permit an exact
+#'   marginal-likelihood decomposition.
+#' @param loo_cluster Optional vector identifying the natural predictive
+#'   cluster (for example, a Supreme Court case). Defaults to \code{market}.
+#' @param model_prior Optional scalar recording the prespecified prior
+#'   probability assigned to this conduct model. It is provenance metadata;
+#'   posterior model odds are computed by \code{bayes_compare}.
 #' @param stan_options Named list of arguments passed to
 #'   \code{\link[rstan]{sampling}} (e.g., \code{chains}, \code{iter},
 #'   \code{warmup}, \code{cores}).
@@ -81,18 +92,19 @@
 #'     gamma (= sigma) controls substitution patterns.}
 #' }
 #'
-#' Four supply models are supported:
+#' Five supply models are supported:
 #' \describe{
 #'   \item{1. \code{"bertrand"}}{Nash-Bertrand differentiated products pricing.}
 #'   \item{2. \code{"monopolistic"}}{Monopolistic competition
 #'     (single-product Bertrand).}
 #'   \item{3. \code{"cournot"}}{Cournot quantity competition.}
 #'   \item{4. \code{"auction"}}{Second-score auction.}
+#'   \item{5. \code{"bargaining"}}{Nash bargaining with an estimated
+#'     buyer-side bargaining weight.}
 #' }
 #'
-#' By default, the prior on the standardized price coefficient is calibrated
-#' from the data and supply model's first-order conditions on the log scale.
-#' This can be overridden via \code{priors}.
+#' The default prior on the standardized price coefficient is fixed at
+#' \eqn{N(0,1)} on the log scale and does not use the estimation sample.
 #'
 #' The \code{priors} argument accepts a named list with any of:
 #' \describe{
@@ -103,17 +115,25 @@
 #'   \item{\code{prior_sigma_meanval_strat}}{Half-normal scale for strategic
 #'     group mean-value SD (default 1.0).}
 #'   \item{\code{prior_alpha_mean}}{Prior mean for the log standardized
-#'     price coefficient (default: calibrated from data on the log scale).}
+#'     price coefficient (default 0).}
 #'   \item{\code{prior_alpha_sd}}{Prior SD for the log standardized price
-#'     coefficient (default: calibrated from data).}
+#'     coefficient (default 1).}
 #'   \item{\code{s0_prior_mean}}{Prior location for the outside share on the
 #'     logit scale (default -1.4467864). Together with the default scale, this
 #'     gives an arithmetic prior mean of 20 percent.}
 #'   \item{\code{s0_prior_sd}}{Prior SD for the outside share on the logit
 #'     scale (default 0.4562340). The default prior's 5th percentile is
 #'     10 percent.}
-#'   \item{\code{prior_lkj}}{LKJ prior parameter for share-margin correlation
-#'     (default 2.0).}
+#'   \item{\code{prior_log_sigma_share_sd}}{Prior SD for the log share-error
+#'     scale (default 0.5).}
+#'   \item{\code{prior_log_sigma_margin_sd}}{Prior SD for the log
+#'     inverse-margin-error scale (default 1).}
+#'   \item{\code{margin_df}}{Degrees of freedom for the Student-t
+#'     inverse-margin likelihood (default 5).}
+#'   \item{\code{bargaining_prior_lower}, \code{bargaining_prior_upper}}{Bounds
+#'     for the bargaining-power prior (default 0 and 0.9999). The baseline is
+#'     uniform on this interval; beta shape parameters provide a high-power
+#'     sensitivity specification.}
 #' }
 #'
 #' @return A \code{\linkS4class{BayesLogit}} object.
@@ -155,10 +175,10 @@ bayes_est <- function(prices, quantities, margins,
                       market_side = NULL,
                       supply_model = c(
                         "bertrand", "monopolistic",
-                        "cournot", "auction"
+                        "cournot", "auction", "bargaining"
                       ),
                       use_cutoff = FALSE,
-                      use_rho = TRUE,
+                      use_rho = FALSE,
                       use_market_resid_scale = FALSE,
                       use_alpha_market_pool = TRUE,
                       use_s0_market_year_pool = FALSE,
@@ -166,13 +186,19 @@ bayes_est <- function(prices, quantities, margins,
                       use_centered_s0_pool = FALSE,
                       use_hmt = FALSE,
                       X_s0 = NULL,
+                      prior_manifest = c("baseline", "tight", "diffuse"),
                       priors = list(),
+                      likelihood = c("joint", "share", "margin"),
+                      loo_cluster = NULL,
+                      model_prior = NA_real_,
                       stan_options = list(),
                       margin_observed = NULL,
                       outside_price = 1,
                       ...) {
   cl <- match.call()
   demand_model <- match.arg(demand_model)
+  prior_manifest <- match.arg(prior_manifest)
+  likelihood <- match.arg(likelihood)
   if (is.null(market_side)) {
     market_side <- if (demand_model == "ces") "output" else "input"
   } else {
@@ -193,12 +219,22 @@ bayes_est <- function(prices, quantities, margins,
     bertrand      = 1L,
     monopolistic  = 2L,
     cournot       = 3L,
-    auction       = 4L
+    auction       = 4L,
+    bargaining    = 5L
   )
 
   # Default year if not supplied
   if (is.null(year)) {
     year <- rep(1L, length(prices))
+  }
+  if (is.null(loo_cluster)) loo_cluster <- market
+  if (length(loo_cluster) != length(prices) || anyNA(loo_cluster)) {
+    stop("'loo_cluster' must have one non-missing value per observation.")
+  }
+  if (length(model_prior) != 1L ||
+      (!is.na(model_prior) && (!is.finite(model_prior) || model_prior < 0 ||
+                               model_prior > 1))) {
+    stop("'model_prior' must be NA or a probability in [0, 1].")
   }
 
   # Cutoff is meaningless under monopolistic competition (all firms are
@@ -214,6 +250,10 @@ bayes_est <- function(prices, quantities, margins,
   if (market_side == "output" && any(observed_margins >= 1)) {
     stop("Output-market Lerner indices must be strictly less than 1. ",
          "Use market_side = \"input\" for positive markdown ratios.")
+  }
+  if (isTRUE(use_rho)) {
+    stop("'use_rho' is no longer supported: the compositional-share and ",
+         "robust-margin likelihoods are factored.")
   }
   flags <- list(
     use_cutoff = use_cutoff,
@@ -234,9 +274,7 @@ bayes_est <- function(prices, quantities, margins,
     stop("The following arguments must be non-missing logical scalars: ",
          paste(bad_flags, collapse = ", "), ".")
   }
-  if (!is.list(priors) || (length(priors) && is.null(names(priors)))) {
-    stop("'priors' must be a named list.")
-  }
+  priors <- resolve_prior_manifest(prior_manifest, priors)
   if (use_hmt && length(observed_margins) == 0L) {
     stop("use_hmt = TRUE requires at least one observed margin.")
   }
@@ -249,6 +287,7 @@ bayes_est <- function(prices, quantities, margins,
     market = as.character(market),
     year = as.character(year),
     group = as.character(group),
+    loo_cluster = as.character(loo_cluster),
     stringsAsFactors = FALSE
   )
   df$margin_observed <- if (is.null(margin_observed)) TRUE else margin_observed
@@ -311,6 +350,8 @@ bayes_est <- function(prices, quantities, margins,
       use_centered_s0_pool = use_centered_s0_pool,
       use_hmt      = use_hmt,
       priors       = priors,
+      likelihood_mode = match(likelihood, c("joint", "share", "margin")),
+      loo_cluster = loo_cluster,
       X_s0         = X_s0,
       outside_price = outside_price,
       grainsize    = grainsize,
@@ -332,6 +373,8 @@ bayes_est <- function(prices, quantities, margins,
       use_rho      = use_rho,
       use_hmt      = use_hmt,
       priors       = priors,
+      likelihood_mode = match(likelihood, c("joint", "share", "margin")),
+      loo_cluster = loo_cluster,
       X_s0         = X_s0,
       outside_price = outside_price,
       grainsize    = grainsize,
@@ -358,6 +401,12 @@ bayes_est <- function(prices, quantities, margins,
     default_stan
   ))
 
+  metadata <- package_provenance(df, prior_manifest, model_prior)
+  metadata$likelihood <- likelihood
+  metadata$supply_model <- supply_model
+  metadata$demand_model <- demand_model
+  metadata$resolved_priors <- priors
+
   new("BayesLogit",
     stanfit      = stanfit,
     data         = df,
@@ -366,6 +415,7 @@ bayes_est <- function(prices, quantities, margins,
     demand_model = demand_model,
     market_side  = market_side,
     price_sd     = price_sd_val,
-    call         = cl
+    call         = cl,
+    metadata     = metadata
   )
 }
