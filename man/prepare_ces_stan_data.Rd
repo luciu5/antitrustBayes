@@ -23,7 +23,9 @@ prepare_ces_stan_data(
   use_alpha_market_pool = FALSE,
   use_s0_market_year_pool = FALSE,
   use_centered_alpha = FALSE,
-  use_centered_s0_pool = FALSE
+  use_centered_s0_pool = FALSE,
+  margin_observed = NULL,
+  outside_price = 1
 )
 }
 \arguments{
@@ -31,7 +33,8 @@ prepare_ces_stan_data(
 
 \item{quantities}{Numeric vector of product quantities.}
 
-\item{margins}{Numeric vector of positive Lerner indices (p-c)/p.}
+\item{margins}{Numeric vector of positive price-normalized margins. Values
+greater than 1 are valid for input-market markdowns.}
 
 \item{market}{Factor or vector identifying markets.}
 
@@ -51,7 +54,7 @@ prepare_ces_stan_data(
 
 \item{X_s0}{Optional model matrix for s0 covariates.}
 
-\item{market_side}{Character; CES currently supports \code{"output"} only.}
+\item{market_side}{Character: \code{"input"} or \code{"output"}.}
 
 \item{grainsize}{Positive integer reduce-sum chunk size.}
 
@@ -64,13 +67,18 @@ prepare_ces_stan_data(
 \item{use_centered_alpha}{Logical.}
 
 \item{use_centered_s0_pool}{Logical.}
+
+\item{margin_observed}{Optional logical margin-observation mask.}
+
+\item{outside_price}{Positive scalar or one value per market-year.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.
 }
 \description{
 Transforms user-supplied vectors into the list expected by the CES Stan
-model. Computes revenue shares from prices and quantities, and converts
-bounded Lerner margins to inverse Lerner indices and log residual inputs.
+model. The likelihood uses the same conditional quantity-share and inverse
+normalized-margin outcomes as the Logit model; revenue shares are retained
+for the CES supply first-order conditions.
 }
 \keyword{internal}

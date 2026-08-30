@@ -11,7 +11,7 @@ pnb_raw <- pnb_raw[pnb_raw$margin >= 0.1 & is.finite(1/pnb_raw$margin) & pnb_raw
 
 # Build the example data frame
 # quantities = total_deposits (raw, in bank-level units)
-# margins = Lerner index (p-c)/p computed from absolute margins
+# margins = price-normalized input margin/markdown ratio
 pnb <- data.frame(
   bank       = pnb_raw$bank_name,
   group      = as.character(pnb_raw$tophold),

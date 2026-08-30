@@ -11,9 +11,9 @@ supply_models <- c("bertrand", "monopolistic", "cournot", "auction")
 fits <- lapply(supply_models, function(sm) {
   cat("\n=== Estimating:", sm, "===\n")
   bayes_est(
-    prices  = pnb$prices,
-    shares  = pnb$shares,
-    margins = pnb$margins,
+    prices     = pnb$prices,
+    quantities = pnb$quantities,
+    margins    = pnb$margins,
     market  = rep("PHL", nrow(pnb)),
     group   = pnb$group,
     supply_model = sm,

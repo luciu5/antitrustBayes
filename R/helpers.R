@@ -4,36 +4,41 @@ safe_sd <- function(x, floor = 1e-8) {
   if (!is.finite(s) || s < floor) 1.0 else s
 }
 
-#' Prepare Stan Data for logit Demand
-#'
-#' Transforms user-supplied vectors into the list expected by the logit Stan
-#' model. Computes quantity shares from raw quantities and converts positive
-#' price-normalized margins to inverse absolute margins and log residual inputs.
-#'
-#' @param prices Numeric vector of product prices.
-#' @param quantities Numeric vector of product quantities.
-#' @param margins Numeric vector of positive price-normalized margins. Values
-#'   greater than 1 are valid for input-market markdowns.
-#' @param market Factor or vector identifying markets.
-#' @param year Factor or vector identifying time periods.
-#' @param group Factor or vector identifying product groups (e.g., firms).
-#' @param supply_model Integer 1--4.
-#' @param market_side Character: \code{"input"} or \code{"output"}.
-#' @param use_cutoff Logical.
-#' @param use_rho Logical.
-#' @param use_market_resid_scale Logical.
-#' @param use_alpha_market_pool Logical.
-#' @param use_s0_market_year_pool Logical.
-#' @param use_hmt Logical.
-#' @param use_centered_alpha Logical.
-#' @param use_centered_s0_pool Logical.
-#' @param priors Named list of prior hyperparameters.
-#' @param X_s0 Optional model matrix for s0 covariates.
-#' @param grainsize Positive integer reduce-sum chunk size.
-#' @return A list suitable for passing to \code{rstan::sampling}.
-#' @keywords internal
 bounded01 <- function(x, eps = 1e-6) {
   pmin(pmax(x, eps), 1 - eps)
+}
+
+# Resolve a scalar or market-year vector of outside-good prices.
+resolve_outside_price <- function(outside_price, N_market_year) {
+  if (!is.numeric(outside_price) ||
+      !length(outside_price) %in% c(1L, N_market_year) ||
+      any(!is.finite(outside_price)) || any(outside_price <= 0)) {
+    stop("'outside_price' must be a positive finite scalar or have one value per market-year.")
+  }
+  if (length(outside_price) == 1L) {
+    rep(as.numeric(outside_price), N_market_year)
+  } else {
+    as.numeric(outside_price)
+  }
+}
+
+validate_priors <- function(priors) {
+  if (!is.list(priors) || is.null(names(priors))) {
+    stop("'priors' must be a named list.")
+  }
+  for (nm in names(priors)) {
+    value <- priors[[nm]]
+    if (!is.numeric(value) || length(value) != 1L || !is.finite(value)) {
+      stop("Prior '", nm, "' must be a finite numeric scalar.")
+    }
+  }
+  positive <- setdiff(names(priors), c("prior_alpha_mean", "s0_prior_mean"))
+  bad <- positive[vapply(priors[positive], function(x) x <= 0, logical(1))]
+  if (length(bad)) {
+    stop("Prior scale/shape parameters must be strictly positive: ",
+         paste(bad, collapse = ", "), ".")
+  }
+  invisible(TRUE)
 }
 
 #' Convert Positive Draws to Log-Normal Prior Parameters
@@ -114,6 +119,35 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
   )
 }
 
+#' Prepare Stan Data for Logit Demand
+#'
+#' Transforms user-supplied vectors into the list expected by the Logit Stan
+#' model. Computes conditional quantity shares and inverse normalized margins.
+#'
+#' @param prices Numeric vector of product prices.
+#' @param quantities Numeric vector of product quantities.
+#' @param margins Numeric vector of positive price-normalized margins. Values
+#'   greater than 1 are valid for input-market markdowns.
+#' @param market Factor or vector identifying markets.
+#' @param year Factor or vector identifying time periods.
+#' @param group Factor or vector identifying product groups (e.g., firms).
+#' @param supply_model Integer 1--4.
+#' @param market_side Character: \code{"input"} or \code{"output"}.
+#' @param use_cutoff Logical.
+#' @param use_rho Logical.
+#' @param use_market_resid_scale Logical.
+#' @param use_alpha_market_pool Logical.
+#' @param use_s0_market_year_pool Logical.
+#' @param use_hmt Logical.
+#' @param use_centered_alpha Logical.
+#' @param use_centered_s0_pool Logical.
+#' @param priors Named list of prior hyperparameters.
+#' @param X_s0 Optional model matrix for s0 covariates.
+#' @param outside_price Positive scalar or one value per market-year.
+#' @param grainsize Positive integer reduce-sum chunk size.
+#' @param margin_observed Optional logical margin-observation mask.
+#' @return A list suitable for passing to \code{rstan::sampling}.
+#' @keywords internal
 prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               supply_model, use_cutoff = FALSE,
                               market_side = "input",
@@ -126,7 +160,8 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               use_centered_s0_pool = FALSE,
                               priors = list(), X_s0 = NULL,
                               grainsize = 1L,
-                              margin_observed = NULL) {
+                              margin_observed = NULL,
+                              outside_price = 1) {
   N <- length(prices)
   market_side <- match.arg(market_side, c("input", "output"))
   market_sign <- if (market_side == "input") 1L else -1L
@@ -134,12 +169,12 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   if (is.null(margin_observed)) {
     margin_observed <- rep(TRUE, N)
   }
-  margin_observed <- as.logical(margin_observed)
+  margin_observed <- as.logical(margin_observed) & !is.na(margin_observed)
 
   # Encode factors
-  market_f <- as.factor(market)
-  year_f <- as.factor(year)
-  group_f <- as.factor(group)
+  market_f <- droplevels(as.factor(market))
+  year_f <- droplevels(as.factor(year))
+  group_f <- droplevels(as.factor(group))
 
   market_int <- as.integer(market_f)
   year_int <- as.integer(year_f)
@@ -156,6 +191,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   mky_f <- as.factor(mky_labels)
   mky_int <- as.integer(mky_f)
   N_market_year <- nlevels(mky_f)
+  outside_price <- resolve_outside_price(outside_price, N_market_year)
 
   # Build market_year -> market and market_year -> year maps
   mky_to_market <- integer(N_market_year)
@@ -189,15 +225,16 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   price_sd <- safe_sd(prices)
   price_std <- (prices - mean(prices)) / price_sd
 
-  # Convert price-normalized margin to inverse absolute margin. Masked rows
+  # Put both demand systems on the same inverse normalized-margin response.
+  # Masked rows
   # (margin_observed == FALSE) may carry NA/invalid margins -- Stan never
   # reads their margin likelihood term, but the vectors must still be finite,
-  # so substitute a dummy placeholder margin of 1 before computing marginInv.
+  # so substitute a dummy placeholder margin of 1 before transforming it.
   margins_for_stan <- margins
   margins_for_stan[!margin_observed] <- 1.0
-  marginInv <- 1.0 / (margins_for_stan * prices)
+  marginNormInv <- 1.0 / margins_for_stan
   log_shareIn <- log(pmax(shares, 1e-12))
-  log_marginInv <- log(pmax(marginInv, 1e-12))
+  log_marginNormInv <- log(pmax(marginNormInv, 1e-12))
 
   # S0 covariates
   if (is.null(X_s0)) {
@@ -207,6 +244,9 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     X_s0_mat <- as.matrix(X_s0)
     if (nrow(X_s0_mat) != N_market_year) {
       stop("'X_s0' must have one row per market-year.")
+    }
+    if (!is.numeric(X_s0_mat) || any(!is.finite(X_s0_mat))) {
+      stop("'X_s0' must be a finite numeric matrix.")
     }
     K_s0 <- ncol(X_s0_mat)
   }
@@ -266,10 +306,15 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   if (is.na(default_priors$prior_alpha_sd)) {
     default_priors$prior_alpha_sd <- alpha_prior$sd
   }
+  validate_priors(default_priors)
 
-  # HMT data (uses absolute margins)
+  # HMT data use a dimensionless normalized margin, matching the elasticity.
   avg_price_hmt <- mean(prices)
-  avg_margin_hmt <- mean(margins_abs[margin_observed])
+  avg_margin_hmt <- if (any(margin_observed)) {
+    mean(margins[margin_observed])
+  } else {
+    0.0
+  }
   ssnip_hmt <- 0.05
 
   stan_data <- c(
@@ -277,11 +322,13 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       N = N,
       shareIn = shares,
       firm_shareIn = firm_shareIn,
-      marginInv = marginInv,
+      marginNormInv = marginNormInv,
       log_shareIn = log_shareIn,
-      log_marginInv = log_marginInv,
+      log_marginNormInv = log_marginNormInv,
+      price = as.numeric(prices),
       price_std = price_std,
       price_sd = price_sd,
+      outside_price = outside_price,
       market_sign = market_sign,
       N_market = N_market,
       market = market_int,
@@ -329,8 +376,9 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
 #' Prepare Stan Data for CES Demand
 #'
 #' Transforms user-supplied vectors into the list expected by the CES Stan
-#' model. Computes revenue shares from prices and quantities, and converts
-#' bounded Lerner margins to inverse Lerner indices and log residual inputs.
+#' model. The likelihood uses the same conditional quantity-share and inverse
+#' normalized-margin outcomes as the Logit model; revenue shares are retained
+#' for the CES supply first-order conditions.
 #'
 #' @inheritParams prepare_stan_data
 #' @return A list suitable for passing to \code{rstan::sampling}.
@@ -345,7 +393,8 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   use_s0_market_year_pool = FALSE,
                                   use_centered_alpha = FALSE,
                                   use_centered_s0_pool = FALSE,
-                                  margin_observed = NULL) {
+                                  margin_observed = NULL,
+                                  outside_price = 1) {
   N <- length(prices)
   market_side <- match.arg(market_side, c("input", "output"))
   if (market_side != "output") {
@@ -357,11 +406,11 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   if (is.null(margin_observed)) {
     margin_observed <- rep(TRUE, N)
   }
-  margin_observed <- as.logical(margin_observed)
+  margin_observed <- as.logical(margin_observed) & !is.na(margin_observed)
 
   # Masked rows may carry NA/invalid margins -- their likelihood term is
   # never read by Stan, so substitute a dummy placeholder before validating
-  # and computing lernerInv.
+  # and computing the inverse normalized margin.
   margins[!margin_observed] <- 0.5
 
   # CES FOCs require L < 1 (positive marginal costs), checked on observed rows.
@@ -372,9 +421,9 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   }
 
   # Encode factors
-  market_f <- as.factor(market)
-  year_f <- as.factor(year)
-  group_f <- as.factor(group)
+  market_f <- droplevels(as.factor(market))
+  year_f <- droplevels(as.factor(year))
+  group_f <- droplevels(as.factor(group))
 
   market_int <- as.integer(market_f)
   year_int <- as.integer(year_f)
@@ -391,6 +440,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   mky_f <- as.factor(mky_labels)
   mky_int <- as.integer(mky_f)
   N_market_year <- nlevels(mky_f)
+  outside_price <- resolve_outside_price(outside_price, N_market_year)
 
   # Build market_year -> market and market_year -> year maps
   mky_to_market <- integer(N_market_year)
@@ -400,13 +450,19 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     mky_to_year[mky_int[i]] <- year_int[i]
   }
 
-  # Compute revenue shares within each market-year
+  # Compute the common conditional quantity-share response plus the
+  # conditional revenue shares needed by CES supply FOCs.
+  shareIn <- numeric(N)
   revenue <- prices * quantities
   revShare <- numeric(N)
+  inside_price_index <- numeric(N_market_year)
   for (m in seq_len(N_market_year)) {
     idx <- which(mky_int == m)
+    total_q <- sum(quantities[idx])
     total_rev <- sum(revenue[idx])
+    shareIn[idx] <- quantities[idx] / total_q
     revShare[idx] <- revenue[idx] / total_rev
+    inside_price_index[m] <- sum(prices[idx] * shareIn[idx])
   }
 
   firm_revShare <- numeric(N)
@@ -423,10 +479,10 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   log_price_sd <- safe_sd(log_prices)
   log_price_std <- (log_prices - mean(log_prices)) / log_price_sd
 
-  # Inverse Lerner index: 1/L = p/(p-c)
-  lernerInv <- 1.0 / margins
-  log_revShare <- log(pmax(revShare, 1e-12))
-  log_lernerInv <- log(pmax(lernerInv, 1e-12))
+  # Common Logit/CES likelihood responses.
+  marginNormInv <- 1.0 / margins
+  log_shareIn <- log(pmax(shareIn, 1e-12))
+  log_marginNormInv <- log(pmax(marginNormInv, 1e-12))
 
   # S0 covariates
   if (is.null(X_s0)) {
@@ -436,6 +492,9 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     X_s0_mat <- as.matrix(X_s0)
     if (nrow(X_s0_mat) != N_market_year) {
       stop("'X_s0' must have one row per market-year.")
+    }
+    if (!is.numeric(X_s0_mat) || any(!is.finite(X_s0_mat))) {
+      stop("'X_s0' must be a finite numeric matrix.")
     }
     K_s0 <- ncol(X_s0_mat)
   }
@@ -451,7 +510,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     prior_alpha_sd = NA_real_,
     s0_prior_mean = -1.446786403764666,
     s0_prior_sd = 0.456234014550216,
-    prior_sigma_alpha = 1.0,
+    prior_sigma_alpha = 0.5,
     prior_sigma_s0_pool = 0.5,
     prior_sigma_beta_s0 = 1.0,
     prior_sigma_resid_market = 0.35,
@@ -478,8 +537,12 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   # prior for a quantity they don't inform. The reference FOC is always
   # monopolistic competition (gamma = 1/margin), shared across all four
   # supply models -- see the analogous note in prepare_stan_data().
+  R0_prior_reference <- stats::plogis(
+    stats::qlogis(s0_prior_reference) + log(outside_price) -
+      log(inside_price_index)
+  )
   gamma_prior <- compute_gamma_prior(
-    revShare[margin_observed], margins[margin_observed], s0_prior_reference,
+    revShare[margin_observed], margins[margin_observed], R0_prior_reference,
     mky_int[margin_observed], 2L, log_price_sd
   )
   if (is.na(default_priors$prior_alpha_mean)) {
@@ -488,22 +551,31 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   if (is.na(default_priors$prior_alpha_sd)) {
     default_priors$prior_alpha_sd <- gamma_prior$sd
   }
+  validate_priors(default_priors)
 
   # HMT data (uses Lerner index directly for CES)
   avg_price_hmt <- mean(prices)
-  avg_margin_hmt <- mean(margins[margin_observed])
+  avg_margin_hmt <- if (any(margin_observed)) {
+    mean(margins[margin_observed])
+  } else {
+    0.0
+  }
   ssnip_hmt <- 0.05
 
   stan_data <- c(
     list(
       N = N,
+      shareIn = shareIn,
       revShare = revShare,
       firm_revShare = firm_revShare,
-      lernerInv = lernerInv,
-      log_revShare = log_revShare,
-      log_lernerInv = log_lernerInv,
+      marginNormInv = marginNormInv,
+      log_shareIn = log_shareIn,
+      log_marginNormInv = log_marginNormInv,
+      price = as.numeric(prices),
       log_price_std = log_price_std,
       log_price_sd = log_price_sd,
+      outside_price = outside_price,
+      inside_price_index = inside_price_index,
       market_sign = market_sign,
       N_market = N_market,
       market = market_int,
@@ -653,6 +725,13 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
                              margin_observed = NULL) {
   N <- length(prices)
 
+  if (N == 0L) {
+    stop("At least one observation is required.")
+  }
+  if (!is.numeric(prices) || !is.numeric(quantities) || !is.numeric(margins)) {
+    stop("'prices', 'quantities', and 'margins' must be numeric vectors.")
+  }
+
   if (length(quantities) != N) {
     stop("'quantities' must have the same length as 'prices'.")
   }
@@ -688,13 +767,16 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
   if (length(group) != N) {
     stop("'group' must have the same length as 'prices'.")
   }
+  if (anyNA(market) || anyNA(year) || anyNA(group)) {
+    stop("'market', 'year', and 'group' identifiers may not be missing.")
+  }
 
   invisible(TRUE)
 }
 # Current fitted-object/model contract. Increment whenever the Stan likelihood
 # changes in a way that makes serialized fits unsuitable for comparison or
 # simulation under the current package.
-.antitrust_bayes_model_spec_version <- 3L
+.antitrust_bayes_model_spec_version <- 4L
 
 # Arithmetic mean of a logistic-normal random variable. The outside-share
 # prior is parameterized on the logit scale in Stan, while FOC prior

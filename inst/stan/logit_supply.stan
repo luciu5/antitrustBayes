@@ -16,8 +16,8 @@ functions {
   }
 
   real partial_sum_fn(array[] int slice_idx, int start, int end,
-                      vector marginInv, vector shareIn, vector firm_shareIn, vector log_shareIn,
-                      vector log_marginInv, vector price_std,
+                      vector marginNormInv, vector shareIn, vector firm_shareIn, vector log_shareIn,
+                      vector log_marginNormInv, vector price, vector price_std,
                       array[] int market, array[] int group, array[] int year,
                       array[] int market_year_idx, array[] int margin_obs,
                       vector a_market, vector alpha_structural_market, vector b_market, vector b_quality_all,
@@ -46,7 +46,7 @@ functions {
 
       real w = 0;
       if (use_cutoff == 1) {
-        real x = -(shareIn[i] - cutoff_share[m]) / k;
+        real x = -(firm_shareIn[i] - cutoff_share[m]) / k;
         if (x > 10) w = 1.0; else if (x < -10) w = 0.0; else w = inv_logit(x);
       }
 
@@ -78,14 +78,16 @@ functions {
         inv_markup = alpha_structural * (w + (1-w) * (denom / -log1m(denom)));
       }
 
-      real mu2 = inv_markup;
-      real pred_log_marginInv = log(mu2 + 1e-9);
+      // Convert inverse absolute margin to the common inverse normalized
+      // margin response: 1/L = p/(p-c) (or the input-market analogue).
+      real pred_marginNormInv = price[i] * inv_markup;
+      real pred_log_marginNormInv = log(pred_marginNormInv + 1e-9);
       real err_share = log_shareIn[i] - pred_log_s;
-      real mu2_cond = pred_log_marginInv + slope_cond * err_share;
+      real mu2_cond = pred_log_marginNormInv + slope_cond * err_share;
 
       lp += normal_lpdf(log_shareIn[i] | pred_log_s, sigma_share);
       if (margin_obs[i] == 1) {
-        lp += normal_lpdf(log_marginInv[i] | mu2_cond, sigma_cond);
+        lp += normal_lpdf(log_marginNormInv[i] | mu2_cond, sigma_cond);
       }
     }
     return lp;
@@ -96,9 +98,10 @@ data {
   int<lower=1> N;
   vector[N] shareIn;
   vector[N] firm_shareIn;
-  vector[N] marginInv;
+  vector[N] marginNormInv;
   vector[N] log_shareIn;
-  vector[N] log_marginInv;
+  vector[N] log_marginNormInv;
+  vector[N] price;
   vector[N] price_std;
   real<lower=0> price_sd;
   int<lower=-1, upper=1> market_sign;
@@ -391,8 +394,8 @@ model {
   }
 
   target += reduce_sum(partial_sum_fn, seq, grainsize,
-                       marginInv, shareIn, firm_shareIn, log_shareIn, log_marginInv,
-                       price_std, market, group, year,
+                       marginNormInv, shareIn, firm_shareIn, log_shareIn, log_marginNormInv,
+                       price, price_std, market, group, year,
                        market_year_idx, margin_obs,
                        a_market, alpha_structural_market, b_market, b_quality_all, sigma_b_strat,
                        mu_b_fringe,
@@ -404,7 +407,7 @@ model {
 
 generated quantities {
   vector[N] pred_shareIn;
-  vector[N] pred_marginInv;
+  vector[N] pred_marginNormInv;
   vector[N] log_lik;
 
   {
@@ -420,7 +423,7 @@ generated quantities {
 
       real w = 0;
       if (use_cutoff == 1) {
-        real x = -(shareIn[n] - cutoff_share[m]) / k;
+        real x = -(firm_shareIn[n] - cutoff_share[m]) / k;
         if (x > 10) w = 1.0; else if (x < -10) w = 0.0; else w = inv_logit(x);
       }
 
@@ -452,16 +455,16 @@ generated quantities {
         inv_markup = alpha_structural * (w + (1-w) * (denom / -log1m(denom)));
       }
 
-      pred_marginInv[n] = inv_markup;
+      pred_marginNormInv[n] = price[n] * inv_markup;
 
       // Pointwise log-likelihood for LOO/WAIC. The margin term is gated by
       // margin_obs so masked (fringe/NA-margin) rows contribute only their
       // share likelihood, matching partial_sum_fn's training objective.
       real err_share = log_shareIn[n] - pred_log_s;
-      real mu2_cond = log(inv_markup + 1e-9) + slope_cond * err_share;
+      real mu2_cond = log(pred_marginNormInv[n] + 1e-9) + slope_cond * err_share;
       log_lik[n] = normal_lpdf(log_shareIn[n] | pred_log_s, sigma_share_n);
       if (margin_obs[n] == 1) {
-        log_lik[n] += normal_lpdf(log_marginInv[n] | mu2_cond, sigma_cond);
+        log_lik[n] += normal_lpdf(log_marginNormInv[n] | mu2_cond, sigma_cond);
       }
     }
   }

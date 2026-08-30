@@ -25,6 +25,8 @@ bayes_est(
   X_s0 = NULL,
   priors = list(),
   stan_options = list(),
+  margin_observed = NULL,
+  outside_price = 1,
   ...
 )
 }
@@ -33,8 +35,8 @@ bayes_est(
 
 \item{quantities}{Numeric vector of product quantities (e.g., units sold,
 deposits). Must be positive. Within each market-year, the package
-normalizes these into conditional inside quantity shares for logit or
-conditional inside revenue shares for CES. The outside-share level is a
+normalizes these into conditional inside quantity shares for both Logit
+and CES. The outside-share level is a
 model parameter identified jointly with the supply FOCs.}
 
 \item{margins}{Numeric vector of positive price-normalized margins. For
@@ -85,8 +87,7 @@ outside shares with hierarchical shrinkage. Default \code{FALSE}.}
 parameterization for market-level price coefficients. Default \code{FALSE}.}
 
 \item{use_centered_s0_pool}{Logical. If \code{TRUE}, use the centered
-parameterization for market-year outside-share pooling. Default
-\code{FALSE}.}
+parameterization for market-year outside-share pooling. Default \code{FALSE}.}
 
 \item{use_hmt}{Logical. If \code{TRUE}, apply a soft Hypothetical
 Monopolist Test penalty. Default \code{FALSE}.}
@@ -100,6 +101,20 @@ the input data after factor encoding.}
 \item{stan_options}{Named list of arguments passed to
 \code{\link[rstan]{sampling}} (e.g., \code{chains}, \code{iter},
 \code{warmup}, \code{cores}).}
+
+\item{margin_observed}{Optional logical vector (length \code{N}, one per
+row) indicating which observations have a usable margin. \code{NA} is
+treated as \code{FALSE}. Rows with \code{margin_observed == FALSE} are
+excluded from the margin/conduct likelihood term (and \code{margins} may
+be \code{NA}/invalid for those rows) but still fully participate in the
+share equation and the market share denominator -- shares are never
+renormalized to exclude masked rows. Default \code{NULL} treats every
+row as observed (current behavior).}
+
+\item{outside_price}{Positive outside-good price used to put CES outside
+quantity and revenue shares on a common scale. Supply a scalar (default
+\code{1}) or one value per market-year. Stored for Logit fits as part of
+the common Logit/CES comparison contract, but otherwise unused by Logit.}
 
 \item{...}{Additional arguments (currently unused).}
 }

@@ -84,6 +84,9 @@ one per market.}
 \item{\code{n_valid}}{A named integer vector: number of successful simulations per
 market.}
 
+\item{\code{failures}}{A named list containing simulation failure messages by
+market and draw.}
+
 \item{\code{call}}{The matched call to \code{\link{bayes_sim}}.}
 }}
 

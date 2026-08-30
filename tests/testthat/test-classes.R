@@ -24,6 +24,7 @@ test_that("BayesSim class can be instantiated", {
     product_labels = list(),
     n_draws        = 0L,
     n_valid        = integer(0),
+    failures       = list(),
     call           = call("bayes_sim")
   )
   expect_s4_class(obj, "BayesSim")
@@ -43,7 +44,7 @@ test_that("fit specification validation rejects stale fits", {
   expect_error(validate_fit_spec(stale), "Refit it with bayes_est")
 
   current_data <- list(N = 1L)
-  attr(current_data, "model_spec_version") <- 3L
+  attr(current_data, "model_spec_version") <- 4L
   current <- stale
   current@stan_data <- current_data
   expect_invisible(validate_fit_spec(current))

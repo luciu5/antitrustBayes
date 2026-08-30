@@ -44,7 +44,10 @@ Bayes factors are computed relative to the best model.}
 }
 
 Requires that the Stan model includes a \code{log_lik} generated quantity
-(for LOO/WAIC).
+(for LOO/WAIC). All fits must use the same ordered observations, market
+side, outside prices, margin mask, and current quantity-space likelihood.
+This permits Logit/CES comparison without comparing likelihoods defined on
+different observed outcomes.
 }
 \examples{
 \donttest{

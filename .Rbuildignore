@@ -3,6 +3,8 @@
 ^\.git$
 ^\.gitignore$
 ^\.claude$
+^\.agents$
+^\.codex$
 ^LICENSE$
 ^LICENSE\.md$
 ^README\.md$

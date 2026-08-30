@@ -2,7 +2,7 @@
 % Please edit documentation in R/helpers.R
 \name{prepare_stan_data}
 \alias{prepare_stan_data}
-\title{Prepare Stan Data for logit Demand}
+\title{Prepare Stan Data for Logit Demand}
 \usage{
 prepare_stan_data(
   prices,
@@ -23,7 +23,9 @@ prepare_stan_data(
   use_centered_s0_pool = FALSE,
   priors = list(),
   X_s0 = NULL,
-  grainsize = 1L
+  grainsize = 1L,
+  margin_observed = NULL,
+  outside_price = 1
 )
 }
 \arguments{
@@ -42,19 +44,19 @@ greater than 1 are valid for input-market markdowns.}
 
 \item{supply_model}{Integer 1--4.}
 
-\item{market_side}{Character: \code{"input"} or \code{"output"}.}
-
 \item{use_cutoff}{Logical.}
+
+\item{market_side}{Character: \code{"input"} or \code{"output"}.}
 
 \item{use_rho}{Logical.}
 
 \item{use_market_resid_scale}{Logical.}
 
+\item{use_hmt}{Logical.}
+
 \item{use_alpha_market_pool}{Logical.}
 
 \item{use_s0_market_year_pool}{Logical.}
-
-\item{use_hmt}{Logical.}
 
 \item{use_centered_alpha}{Logical.}
 
@@ -65,13 +67,16 @@ greater than 1 are valid for input-market markdowns.}
 \item{X_s0}{Optional model matrix for s0 covariates.}
 
 \item{grainsize}{Positive integer reduce-sum chunk size.}
+
+\item{margin_observed}{Optional logical margin-observation mask.}
+
+\item{outside_price}{Positive scalar or one value per market-year.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.
 }
 \description{
-Transforms user-supplied vectors into the list expected by the logit Stan
-model. Computes quantity shares from raw quantities and converts positive
-price-normalized margins to inverse absolute margins and log residual inputs.
+Transforms user-supplied vectors into the list expected by the Logit Stan
+model. Computes conditional quantity shares and inverse normalized margins.
 }
 \keyword{internal}

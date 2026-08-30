@@ -40,7 +40,7 @@ str(pnb)
 ```
 
 Each row is a bank with deposit rate (`prices`), total deposits
-(`quantities`), Lerner index (`margins`), and holding company
+(`quantities`), price-normalized input margin/markdown (`margins`), and holding company
 identifier (`group`).
 
 ## Step 1: Estimate Under Multiple Supply Models

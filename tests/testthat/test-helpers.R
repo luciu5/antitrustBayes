@@ -9,6 +9,18 @@ test_that("validate_inputs catches mismatched lengths", {
   )
 })
 
+test_that("validate_inputs rejects empty data and missing identifiers", {
+  expect_error(
+    validate_inputs(numeric(), numeric(), numeric(), character(),
+                    character(), character()),
+    "At least one observation"
+  )
+  expect_error(
+    validate_inputs(1, 1, 0.2, NA_character_, "1", "g"),
+    "identifiers may not be missing"
+  )
+})
+
 test_that("validate_inputs catches bad margins", {
   expect_error(
     validate_inputs(
@@ -43,8 +55,8 @@ test_that("logit preparation allows input markdown ratios above one", {
     priors       = list()
   )
 
-  expect_equal(sd$marginInv, 1 / (margins * prices))
-  expect_equal(sd$log_marginInv, log(sd$marginInv))
+  expect_equal(sd$marginNormInv, 1 / margins)
+  expect_equal(sd$log_marginNormInv, log(sd$marginNormInv))
 })
 
 test_that("validate_inputs catches bad quantities", {
@@ -80,15 +92,15 @@ test_that("prepare_stan_data returns correct structure", {
   expect_equal(sd$use_rho, 1L)
   expect_equal(sd$use_cutoff, 0L)
   expect_equal(length(sd$shareIn), N)
-  expect_equal(length(sd$marginInv), N)
+  expect_equal(length(sd$marginNormInv), N)
   expect_equal(length(sd$log_shareIn), N)
-  expect_equal(length(sd$log_marginInv), N)
+  expect_equal(length(sd$log_marginNormInv), N)
   expect_equal(sd$log_shareIn, log(sd$shareIn))
-  expect_equal(sd$log_marginInv, log(sd$marginInv))
+  expect_equal(sd$log_marginNormInv, log(sd$marginNormInv))
   expect_equal(length(sd$price_std), N)
   expect_true(sd$price_sd > 0)
   expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 3L)
+  expect_equal(attr(sd, "model_spec_version"), 4L)
   expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
 })
 
@@ -322,6 +334,52 @@ test_that("prepare_stan_data validates s0 covariate rows", {
   )
 })
 
+test_that("preparation validates outside prices, priors, and covariates", {
+  args <- list(
+    prices = c(1, 2), quantities = c(1, 1), margins = c(0.2, 0.2),
+    market = c("m", "m"), year = c(1, 1), group = c("a", "b"),
+    supply_model = 1L, use_cutoff = FALSE, use_rho = FALSE,
+    use_hmt = FALSE
+  )
+  expect_error(
+    do.call(prepare_stan_data, c(args, list(
+      priors = list(), outside_price = 0
+    ))),
+    "outside_price"
+  )
+  expect_error(
+    do.call(prepare_stan_data, c(args, list(
+      priors = list(prior_sigma_share = 0)
+    ))),
+    "strictly positive"
+  )
+  expect_error(
+    do.call(prepare_stan_data, c(args, list(
+      priors = list(), X_s0 = matrix(c(1, Inf), nrow = 1)
+    ))),
+    "finite numeric matrix"
+  )
+})
+
+test_that("all-masked margins remain finite when HMT is disabled", {
+  sd <- prepare_stan_data(
+    prices = c(1, 2), quantities = c(1, 2), margins = c(NA, NA),
+    market = c("m", "m"), year = c(1, 1), group = c("a", "b"),
+    supply_model = 1L, use_cutoff = FALSE, use_rho = FALSE,
+    use_hmt = FALSE, priors = list(), margin_observed = c(FALSE, FALSE)
+  )
+  expect_true(all(is.finite(sd$marginNormInv)))
+  expect_equal(sd$avg_margin_hmt, 0)
+  expect_error(
+    bayes_est(
+      prices = c(1, 2), quantities = c(1, 2), margins = c(NA_real_, NA_real_),
+      market = c("m", "m"), group = c("a", "b"),
+      use_hmt = TRUE, margin_observed = c(FALSE, FALSE)
+    ),
+    "requires at least one observed margin"
+  )
+})
+
 test_that("prepare_stan_data warns on unknown prior", {
   N <- 5
   expect_warning(
@@ -362,15 +420,16 @@ test_that("prepare_ces_stan_data returns correct structure", {
   expect_equal(sd$N, N)
   expect_equal(sd$N_market, 2L)
   expect_equal(length(sd$revShare), N)
-  expect_equal(length(sd$lernerInv), N)
-  expect_equal(length(sd$log_revShare), N)
-  expect_equal(length(sd$log_lernerInv), N)
-  expect_equal(sd$log_revShare, log(sd$revShare))
-  expect_equal(sd$log_lernerInv, log(sd$lernerInv))
+  expect_equal(length(sd$shareIn), N)
+  expect_equal(length(sd$marginNormInv), N)
+  expect_equal(length(sd$log_shareIn), N)
+  expect_equal(length(sd$log_marginNormInv), N)
+  expect_equal(sd$log_shareIn, log(sd$shareIn))
+  expect_equal(sd$log_marginNormInv, log(sd$marginNormInv))
   expect_equal(length(sd$log_price_std), N)
   expect_true(sd$log_price_sd > 0)
   expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 3L)
+  expect_equal(attr(sd, "model_spec_version"), 4L)
   expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
   # Revenue shares should sum to ~1 within each market
   for (m in 1:sd$N_market_year) {
@@ -400,8 +459,8 @@ test_that("prepare_ces_stan_data computes revenue shares correctly", {
   revenue <- prices * quantities
   expected_rev_shares <- revenue / sum(revenue)
   expect_equal(sd$revShare, expected_rev_shares)
-  # lernerInv = 1/L
-  expect_equal(sd$lernerInv, rep(1 / 0.3, N))
+  expect_equal(sd$shareIn, quantities / sum(quantities))
+  expect_equal(sd$marginNormInv, rep(1 / 0.3, N))
 })
 
 test_that("CES prior is calibrated on standardized a scale", {

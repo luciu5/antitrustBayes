@@ -9,7 +9,7 @@ fits <- list()
 for (i in seq_along(models)) {
   cat("\n=== Estimating:", model_names[i], "with use_cutoff=TRUE ===\n")
   fits[[model_names[i]]] <- bayes_est(
-    prices = pnb$prices, shares = pnb$shares, margins = pnb$margins,
+    prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
     market = rep("PHL", nrow(pnb)), group = pnb$group,
     supply_model = models[i], use_cutoff = TRUE, use_rho = FALSE,
     stan_options = list(chains = 4, iter = 2000, warmup = 1000, cores = 4,

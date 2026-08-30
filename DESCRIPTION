@@ -43,6 +43,7 @@ Collate:
     'AllClasses.R'
     'antitrustBayes-package.R'
     'bma.R'
+    'conduct.R'
     'data.R'
     'estimate.R'
     'helpers.R'

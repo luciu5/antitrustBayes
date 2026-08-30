@@ -6,7 +6,7 @@ models <- c("bertrand", "monopolistic", "cournot", "auction")
 for (sm in models) {
   cat("=== Estimating:", sm, "===\n")
   fit <- bayes_est(
-    prices = pnb$prices, shares = pnb$shares, margins = pnb$margins,
+    prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
     market = rep("PHL", nrow(pnb)), group = pnb$group,
     supply_model = sm, use_rho = FALSE,
     stan_options = list(chains = 4, iter = 2000, warmup = 1000, cores = 4,

@@ -1,3 +1,43 @@
+validate_comparison_contract <- function(fits) {
+  reference <- fits[[1L]]
+  columns <- c(
+    "prices", "quantities", "margins", "market", "year", "group",
+    "margin_observed", "outside_price"
+  )
+  missing <- setdiff(columns, names(reference@data))
+  if (length(missing)) {
+    stop("The reference fit lacks comparison data: ",
+         paste(missing, collapse = ", "), ". Refit all models.")
+  }
+
+  for (i in seq_along(fits)[-1L]) {
+    candidate <- fits[[i]]
+    if (!identical(candidate@market_side, reference@market_side)) {
+      stop("Models must use the same market_side for comparison.")
+    }
+    if (!all(columns %in% names(candidate@data)) ||
+        !isTRUE(all.equal(
+          candidate@data[columns], reference@data[columns],
+          check.attributes = FALSE
+        ))) {
+      stop("Models must be fitted to the same ordered observations, margin ",
+           "mask, identifiers, and outside prices.")
+    }
+    common_outcomes <- c("shareIn", "log_shareIn", "marginNormInv",
+                         "log_marginNormInv", "margin_obs")
+    if (!all(common_outcomes %in% names(candidate@stan_data)) ||
+        !all(common_outcomes %in% names(reference@stan_data)) ||
+        !isTRUE(all.equal(
+          candidate@stan_data[common_outcomes],
+          reference@stan_data[common_outcomes],
+          check.attributes = FALSE
+        ))) {
+      stop("Models do not share the current quantity-space likelihood contract.")
+    }
+  }
+  invisible(TRUE)
+}
+
 #' Compare Bayesian Models Using Information Criteria and Bridge Sampling
 #'
 #' Computes LOO-IC, WAIC, and optionally log marginal likelihoods via bridge
@@ -32,7 +72,10 @@
 #' }
 #'
 #' Requires that the Stan model includes a \code{log_lik} generated quantity
-#' (for LOO/WAIC).
+#' (for LOO/WAIC). All fits must use the same ordered observations, market
+#' side, outside prices, margin mask, and current quantity-space likelihood.
+#' This permits Logit/CES comparison without comparing likelihoods defined on
+#' different observed outcomes.
 #'
 #' @examples
 #' \donttest{
@@ -53,6 +96,7 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
     stop("At least one BayesLogit fit is required.")
   }
   invisible(lapply(fits, validate_fit_spec))
+  validate_comparison_contract(fits)
 
   # Handle named and unnamed arguments
   nms <- names(fits)
@@ -70,6 +114,10 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
     if (length(prior_weights) != length(fits)) {
       stop("'prior_weights' must have the same length as ",
            "the number of models.")
+    }
+    if (!is.numeric(prior_weights) || any(!is.finite(prior_weights)) ||
+        any(prior_weights < 0) || sum(prior_weights) <= 0) {
+      stop("'prior_weights' must be finite, non-negative probabilities.")
     }
     if (abs(sum(prior_weights) - 1) > 1e-6) {
       stop("'prior_weights' must sum to 1.")
@@ -116,6 +164,8 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
     model         = nms,
     supply_model  = vapply(fits, function(f)
       supply_names[f@supply_model], character(1)),
+    demand_model  = vapply(fits, slot, character(1), "demand_model"),
+    market_side   = vapply(fits, slot, character(1), "market_side"),
     looic         = vapply(loo_list, function(x) x$estimates["looic", "Estimate"],
                            numeric(1)),
     looic_se      = vapply(loo_list, function(x) x$estimates["looic", "SE"],
@@ -134,14 +184,17 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
       if (!is.null(b)) b$logml else NA_real_
     }, numeric(1))
 
-    max_logml <- max(logml, na.rm = TRUE)
-    diff_logml <- logml - max_logml
-    bf_vs_best <- exp(diff_logml)
-
-    # Posterior model probabilities
-    unnorm <- exp(diff_logml) * prior_weights
-    unnorm[is.na(unnorm)] <- 0
-    post_prob <- unnorm / sum(unnorm)
+    finite <- is.finite(logml)
+    diff_logml <- bf_vs_best <- post_prob <- rep(NA_real_, length(logml))
+    if (any(finite)) {
+      max_logml <- max(logml[finite])
+      diff_logml[finite] <- logml[finite] - max_logml
+      bf_vs_best[finite] <- exp(diff_logml[finite])
+      unnorm <- exp(diff_logml[finite]) * prior_weights[finite]
+      if (sum(unnorm) > 0) {
+        post_prob[finite] <- unnorm / sum(unnorm)
+      }
+    }
 
     result$logml        <- logml
     result$bf_vs_best   <- bf_vs_best
@@ -181,17 +234,23 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
 bayes_weights <- function(comp, method = c("bridge", "stacking")) {
   method <- match.arg(method)
 
-  if (method == "bridge" && "post_prob" %in% names(comp)) {
+  bridge_ok <- "post_prob" %in% names(comp) &&
+    any(is.finite(comp$post_prob) & comp$post_prob > 0)
+  if (method == "bridge" && bridge_ok) {
     w <- comp$post_prob
+    w[!is.finite(w)] <- 0
   } else {
-    if (method == "bridge" && !"post_prob" %in% names(comp)) {
+    if (method == "bridge" && !bridge_ok) {
       message("Bridge sampling results not available; using stacking weights.")
     }
     w <- comp$weight_stacking
   }
 
   names(w) <- comp$model
-  w
+  if (any(!is.finite(w)) || any(w < 0) || sum(w) <= 0) {
+    stop("The requested model weights are not finite non-negative values.")
+  }
+  w / sum(w)
 }
 
 
@@ -239,13 +298,24 @@ bayes_avg <- function(sims, weights, n_draws = 1000L) {
   if (!is.list(sims) || length(sims) < 2L) {
     stop("'sims' must be a list of at least 2 BayesSim objects.")
   }
+  if (!all(vapply(sims, is, logical(1), "BayesSim"))) {
+    stop("Every element of 'sims' must be a BayesSim object.")
+  }
   if (length(sims) != length(weights)) {
     stop("'sims' and 'weights' must have the same length.")
+  }
+  if (!is.numeric(weights) || any(!is.finite(weights)) || any(weights < 0) ||
+      sum(weights) <= 0) {
+    stop("'weights' must be finite and non-negative, with a positive sum.")
   }
   if (abs(sum(weights) - 1) > 1e-6) {
     stop("'weights' must sum to 1.")
   }
-
+  weights <- weights / sum(weights)
+  if (length(n_draws) != 1L || !is.finite(n_draws) || n_draws < 1 ||
+      n_draws != as.integer(n_draws)) {
+    stop("'n_draws' must be a positive integer.")
+  }
   n_draws <- as.integer(n_draws)
 
   # Get common markets
@@ -254,8 +324,38 @@ bayes_avg <- function(sims, weights, n_draws = 1000L) {
     stop("No common markets across simulation objects.")
   }
 
-  # Number of draws to take from each model
-  n_per_model <- pmax(1L, round(weights * n_draws))
+  # Largest-remainder allocation preserves zero weights and returns exactly
+  # n_draws, unlike independent rounding with a minimum of one per model.
+  raw_counts <- weights * n_draws
+  n_per_model <- floor(raw_counts)
+  remainder <- n_draws - sum(n_per_model)
+  if (remainder > 0L) {
+    take_extra <- order(raw_counts - n_per_model, decreasing = TRUE)[
+      seq_len(remainder)
+    ]
+    n_per_model[take_extra] <- n_per_model[take_extra] + 1L
+  }
+  n_per_model <- as.integer(n_per_model)
+
+  # Draw indices are selected once per source model and reused in every
+  # market, preserving the joint posterior draw across markets.
+  selected <- vector("list", length(sims))
+  for (i in seq_along(sims)) {
+    if (n_per_model[i] == 0L) next
+    common_valid <- Reduce(intersect, lapply(all_markets, function(mk) {
+      which(!vapply(sims[[i]]@sims[[mk]], is.null, logical(1)))
+    }))
+    if (length(common_valid) == 0L) {
+      stop("Simulation model ", i,
+           " has no draw that is valid in every common market.")
+    }
+    selected[[i]] <- sample(common_valid, n_per_model[i], replace = TRUE)
+  }
+  source_order <- rep(seq_along(sims), n_per_model)
+  source_position <- ave(source_order, source_order, FUN = seq_along)
+  permutation <- sample.int(n_draws)
+  source_order <- source_order[permutation]
+  source_position <- source_position[permutation]
 
   pooled_sims     <- list()
   pooled_ppre     <- list()
@@ -274,38 +374,34 @@ bayes_avg <- function(sims, weights, n_draws = 1000L) {
     mk_spre  <- NULL
     mk_spost <- NULL
 
+    reference_labels <- sims[[1L]]@product_labels[[mk]]
     for (i in seq_along(sims)) {
-      s <- sims[[i]]
-      sims_mk <- s@sims[[mk]]
-      valid <- which(!vapply(sims_mk, is.null, logical(1)))
-      if (length(valid) == 0L) next
-
-      # Resample from this model's valid draws
-      n_take <- min(n_per_model[i], length(valid))
-      sel <- sample(valid, n_take, replace = TRUE)
-
-      for (j in sel) {
-        mk_sims <- c(mk_sims, list(sims_mk[[j]]))
+      if (!identical(sims[[i]]@product_labels[[mk]], reference_labels)) {
+        stop("Product labels or ordering differ across models in market '",
+             mk, "'.")
       }
-
-      mk_ppre  <- rbind(mk_ppre,  s@price_pre[[mk]][sel, , drop = FALSE])
-      mk_ppost <- rbind(mk_ppost, s@price_post[[mk]][sel, , drop = FALSE])
-      mk_spre  <- rbind(mk_spre,  s@shares_pre[[mk]][sel, , drop = FALSE])
-      mk_spost <- rbind(mk_spost, s@shares_post[[mk]][sel, , drop = FALSE])
     }
 
-    n_total <- length(mk_sims)
+    for (row in seq_len(n_draws)) {
+      i <- source_order[row]
+      j <- selected[[i]][source_position[row]]
+      s <- sims[[i]]
+      mk_sims[[row]] <- s@sims[[mk]][[j]]
+      mk_ppre <- rbind(mk_ppre, s@price_pre[[mk]][j, , drop = FALSE])
+      mk_ppost <- rbind(mk_ppost, s@price_post[[mk]][j, , drop = FALSE])
+      mk_spre <- rbind(mk_spre, s@shares_pre[[mk]][j, , drop = FALSE])
+      mk_spost <- rbind(mk_spost, s@shares_post[[mk]][j, , drop = FALSE])
+    }
+
     pooled_sims[[mk]]    <- mk_sims
     pooled_ppre[[mk]]    <- mk_ppre
     pooled_ppost[[mk]]   <- mk_ppost
-    pooled_pchg[[mk]]    <- if (n_total > 0L) mk_ppost / mk_ppre - 1 else NULL
+    pooled_pchg[[mk]]    <- mk_ppost / mk_ppre - 1
     pooled_spre[[mk]]    <- mk_spre
     pooled_spost[[mk]]   <- mk_spost
-    pooled_labels[[mk]]  <- sims[[1]]@product_labels[[mk]]
-    pooled_n_valid[mk]   <- n_total
+    pooled_labels[[mk]]  <- reference_labels
+    pooled_n_valid[mk]   <- n_draws
   }
-
-  n_actual <- max(vapply(pooled_sims, length, integer(1)))
 
   new("BayesSim",
     sims           = pooled_sims,
@@ -316,8 +412,13 @@ bayes_avg <- function(sims, weights, n_draws = 1000L) {
     shares_post    = pooled_spost,
     market_ids     = all_markets,
     product_labels = pooled_labels,
-    n_draws        = n_actual,
+    n_draws        = n_draws,
     n_valid        = pooled_n_valid,
+    failures       = stats::setNames(
+      replicate(length(all_markets), rep(NA_character_, n_draws),
+                simplify = FALSE),
+      all_markets
+    ),
     call           = match.call()
   )
 }

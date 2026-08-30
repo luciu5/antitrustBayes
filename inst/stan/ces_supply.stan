@@ -1,7 +1,7 @@
 // Bayesian CES Demand + Supply Model for Merger Simulation
 // Hierarchical model with market-level random effects
 // Supports 4 supply models: Bertrand, Monopolistic Competition, Cournot, 2nd Score Auction
-// CES: revenue shares, log-prices, gamma = elasticity of substitution
+// CES: conditional quantity shares, log-prices, gamma = elasticity of substitution
 
 functions {
   real bounded_inv_logit(real eta) {
@@ -17,14 +17,17 @@ functions {
   }
 
   real partial_sum_fn(array[] int slice_idx, int start, int end,
-                      vector lernerInv, vector revShare, vector firm_revShare, vector log_revShare,
-                      vector log_lernerInv, vector log_price_std,
+                      vector marginNormInv, vector shareIn, vector revShare,
+                      vector firm_revShare, vector log_shareIn,
+                      vector log_marginNormInv, vector log_price_std,
                       array[] int market, array[] int group, array[] int year,
                       array[] int market_year_idx, array[] int margin_obs,
                       vector a_market, vector gamma_structural_market,
                       vector b_market, vector b_quality_all,
                       real sigma_b_strat, real mu_b_fringe,
-                      vector s0_prob,
+                      vector s0_prob, vector R0_prob,
+                      vector outside_price,
+                      real log_price_sd,
                       vector cutoff_share,
                       vector sigma_share_market, vector sigma_margin_market,
                       real rho,
@@ -44,59 +47,59 @@ functions {
       real sigma_cond = sigma_margin * sqrt(1.0 - square(rho));
       real slope_cond = rho * (sigma_margin / sigma_share);
 
-      real R_0 = s0_prob[mky];
+      real q_0 = s0_prob[mky];
+      real R_0 = R0_prob[mky];
 
       real w = 0;
       if (use_cutoff == 1) {
-        real x = -(revShare[i] - cutoff_share[m]) / k;
+        real x = -(firm_revShare[i] - cutoff_share[m]) / k;
         if (x > 10) w = 1.0; else if (x < -10) w = 0.0; else w = inv_logit(x);
       }
 
       real b_quality = b_quality_all[group[i]] + (w * mu_b_fringe);
-      // CES: negative sign on price (gamma > 1 requires negative coeff on log price)
+      // CES conditional quantity demand has log-price coefficient -gamma.
       real delta = b_market[m] + b_quality +
-        (market_sign * a_market[m] * log_price_std[i]);
+        (market_sign * (a_market[m] + log_price_sd) * log_price_std[i]) +
+        gamma_structural_market[m] * log(outside_price[mky]);
 
-      // revShare is normalized over inside goods. For structural outside
-      // revenue share R_0, log(r_j | inside) = logit(R_0) + delta_j.
-      real pred_log_r = logit(R_0) + delta;
+      // q_j | inside = (q_j / q_0) * q_0 / (1 - q_0).
+      real pred_log_q = logit(q_0) + delta;
 
       real gamma_structural = gamma_structural_market[m];
 
       // Unconditional revenue share: outside option disciplines the markup
       // (aggregative game). revShare is the inside/conditional share.
-      real pred_lernerInv;
+      real pred_marginNormInv;
       if (supply_model == 1) {
-        // Bertrand: lernerInv = gamma - (gamma-1)*r_unc
-        pred_lernerInv = w * gamma_structural + (1-w) *
+        // Bertrand: 1/L = gamma - (gamma-1)*r_unc
+        pred_marginNormInv = w * gamma_structural + (1-w) *
           (gamma_structural - (gamma_structural - 1.0) *
            (firm_revShare[i] * (1.0 - R_0)));
       } else if (supply_model == 2) {
-        // Monopolistic competition: lernerInv = gamma
-        pred_lernerInv = gamma_structural;
+        // Monopolistic competition: inverse normalized margin = gamma
+        pred_marginNormInv = gamma_structural;
       } else if (supply_model == 3) {
-        // Cournot: L = (1 + (gamma-1)*r_unc) / gamma => lernerInv = gamma / (1 + (gamma-1)*r_unc)
-        real cournot_lernerInv = gamma_structural /
+        // Cournot: L = (1 + (gamma-1)*r_unc) / gamma
+        real cournot_marginNormInv = gamma_structural /
           (1.0 + (gamma_structural - 1.0) *
            (firm_revShare[i] * (1.0 - R_0)));
-        pred_lernerInv = w * gamma_structural + (1-w) * cournot_lernerInv;
+        pred_marginNormInv = w * gamma_structural + (1-w) * cournot_marginNormInv;
       } else {
         // 2nd Score Auction: p/mc = (1 - R_F)^(-1/(gamma-1))
-        // lernerInv = 1 / (1 - (1 - r_unc)^(1/(gamma-1)))
+        // 1/L = 1 / (1 - (1 - r_unc)^(1/(gamma-1)))
         real r_unc_auc = fmin(0.99, firm_revShare[i] * (1.0 - R_0));
         real gamma_minus_one = fmax(gamma_structural - 1.0, 1e-6);
-        real base_lernerInv = 1.0 / (1.0 - pow(1.0 - r_unc_auc, 1.0 / gamma_minus_one));
-        pred_lernerInv = w * gamma_structural + (1-w) * base_lernerInv;
+        real base_marginNormInv = 1.0 / (1.0 - pow(1.0 - r_unc_auc, 1.0 / gamma_minus_one));
+        pred_marginNormInv = w * gamma_structural + (1-w) * base_marginNormInv;
       }
 
-      real mu2 = pred_lernerInv;
-      real pred_log_lernerInv = log(mu2 + 1e-9);
-      real err_share = log_revShare[i] - pred_log_r;
-      real mu2_cond = pred_log_lernerInv + slope_cond * err_share;
+      real pred_log_marginNormInv = log(pred_marginNormInv + 1e-9);
+      real err_share = log_shareIn[i] - pred_log_q;
+      real mu2_cond = pred_log_marginNormInv + slope_cond * err_share;
 
-      lp += normal_lpdf(log_revShare[i] | pred_log_r, sigma_share);
+      lp += normal_lpdf(log_shareIn[i] | pred_log_q, sigma_share);
       if (margin_obs[i] == 1) {
-        lp += normal_lpdf(log_lernerInv[i] | mu2_cond, sigma_cond);
+        lp += normal_lpdf(log_marginNormInv[i] | mu2_cond, sigma_cond);
       }
     }
     return lp;
@@ -105,11 +108,13 @@ functions {
 
 data {
   int<lower=1> N;
+  vector[N] shareIn;
   vector[N] revShare;
   vector[N] firm_revShare;
-  vector[N] lernerInv;
-  vector[N] log_revShare;
-  vector[N] log_lernerInv;
+  vector[N] marginNormInv;
+  vector[N] log_shareIn;
+  vector[N] log_marginNormInv;
+  vector[N] price;
   vector[N] log_price_std;
   real<lower=0> log_price_sd;
   int<lower=-1, upper=1> market_sign;
@@ -123,6 +128,8 @@ data {
   int<lower=0, upper=1> use_cutoff;
   int<lower=1> grainsize;
   int<lower=1> N_market_year;
+  vector<lower=0>[N_market_year] outside_price;
+  vector<lower=0>[N_market_year] inside_price_index;
   array[N] int<lower=1> market_year_idx;
   array[N] int<lower=0, upper=1> margin_obs;
   int<lower=0> K_s0;
@@ -207,6 +214,7 @@ transformed parameters {
   real mu_b_fringe = 0.0;
   vector[N_market_year] s0;
   vector[N_market_year] s0_prob;
+  vector[N_market_year] R0_prob;
   vector[N_market] mean_logit_s0_market = rep_vector(0.0, N_market);
   vector[N_market] gamma_structural_market;
 
@@ -248,10 +256,14 @@ transformed parameters {
      }
      s0[m] = base_logit + x_beta;
      s0_prob[m] = bounded_inv_logit(s0[m]);
+     R0_prob[m] = bounded_inv_logit(
+       logit(s0_prob[m]) + log(outside_price[m]) -
+       log(inside_price_index[m])
+     );
   }
 
   // Rotate the market intercept by mean logit(s0). This removes arbitrary
-  // outside-share level information from conditional inside revenue shares.
+  // outside-share level information from conditional inside quantity shares.
   for (mky in 1:N_market_year) {
     mean_logit_s0_market[mky_to_market[mky]] += logit(s0_prob[mky]);
   }
@@ -353,29 +365,33 @@ model {
      real R_0_sum = 0.0;
      real R_0_check;
      for (m in 1:N_market_year) {
-       R_0_sum += bounded_inv_logit(s0[m]);
+       R_0_sum += R0_prob[m];
      }
      R_0_check = R_0_sum / N_market_year;
-     real agg_elasticity = abs((gamma_check - 1.0) * R_0_check);
+     // Matches antitrust::elast(CES, market = TRUE): a uniform inside-price
+     // change has quantity elasticity 1 + (gamma - 1) * outside revenue share.
+     real agg_elasticity = 1.0 + (gamma_check - 1.0) * R_0_check;
      real max_elasticity = 1.0 / (ssnip_hmt + avg_margin_hmt);
      target += soft_hmt_penalty(agg_elasticity, max_elasticity, 0.1);
   }
 
   target += reduce_sum(partial_sum_fn, seq, grainsize,
-                       lernerInv, revShare, firm_revShare, log_revShare, log_lernerInv,
+                       marginNormInv, shareIn, revShare, firm_revShare,
+                       log_shareIn, log_marginNormInv,
                        log_price_std, market, group, year,
                        market_year_idx, margin_obs,
                        a_market, gamma_structural_market, b_market, b_quality_all, sigma_b_strat,
                        mu_b_fringe,
-                       s0_prob, cutoff_share,
+                       s0_prob, R0_prob, outside_price, log_price_sd,
+                       cutoff_share,
                        sigma_share_market, sigma_margin_market,
                        rho, supply_model, market_sign,
                        use_cutoff, is_single_market);
 }
 
 generated quantities {
-  vector[N] pred_revShare;
-  vector[N] pred_lernerInv;
+  vector[N] pred_shareIn;
+  vector[N] pred_marginNormInv;
   vector[N] log_lik;
 
   {
@@ -391,51 +407,52 @@ generated quantities {
 
       real w = 0;
       if (use_cutoff == 1) {
-        real x = -(revShare[n] - cutoff_share[m]) / k;
+        real x = -(firm_revShare[n] - cutoff_share[m]) / k;
         if (x > 10) w = 1.0; else if (x < -10) w = 0.0; else w = inv_logit(x);
       }
 
       real b_quality = b_quality_all[group[n]] + (w * mu_b_fringe);
       real delta = b_market[m] + b_quality +
-        (market_sign * a_market[m] * log_price_std[n]);
+        (market_sign * (a_market[m] + log_price_sd) * log_price_std[n]) +
+        gamma_structural_market[m] * log(outside_price[mky]);
 
-      real R_0 = s0_prob[mky];
-      real pred_log_r = logit(R_0) + delta;
-      pred_revShare[n] = exp(pred_log_r);
+      real q_0 = s0_prob[mky];
+      real pred_log_q = logit(q_0) + delta;
+      pred_shareIn[n] = exp(pred_log_q);
 
       real gamma_structural = gamma_structural_market[m];
 
-      real r_unc = firm_revShare[n] * (1.0 - R_0);
+      real r_unc = firm_revShare[n] * (1.0 - R0_prob[mky]);
 
       real pred_lInv;
       if (supply_model == 1) {
-        // Bertrand: lernerInv = gamma - (gamma-1)*r_unc
+        // Bertrand: 1/L = gamma - (gamma-1)*r_unc
         pred_lInv = w * gamma_structural + (1-w) * (gamma_structural - (gamma_structural - 1.0) * r_unc);
       } else if (supply_model == 2) {
-        // Monopolistic competition: lernerInv = gamma
+        // Monopolistic competition: 1/L = gamma
         pred_lInv = gamma_structural;
       } else if (supply_model == 3) {
-        // Cournot: L = (1 + (gamma-1)*r_unc) / gamma => lernerInv = gamma / (1 + (gamma-1)*r_unc)
+        // Cournot: L = (1 + (gamma-1)*r_unc) / gamma
         real cournot_lInv = gamma_structural / (1.0 + (gamma_structural - 1.0) * r_unc);
         pred_lInv = w * gamma_structural + (1-w) * cournot_lInv;
       } else {
-        // 2nd Score Auction: lernerInv = 1 / (1 - (1-r_unc)^(1/(gamma-1)))
+        // 2nd Score Auction: 1/L = 1 / (1 - (1-r_unc)^(1/(gamma-1)))
         real r_unc_auc = fmin(0.99, r_unc);
         real gamma_minus_one = fmax(gamma_structural - 1.0, 1e-6);
         real base_lInv = 1.0 / (1.0 - pow(1.0 - r_unc_auc, 1.0 / gamma_minus_one));
         pred_lInv = w * gamma_structural + (1-w) * base_lInv;
       }
 
-      pred_lernerInv[n] = pred_lInv;
+      pred_marginNormInv[n] = pred_lInv;
 
       // Pointwise log-likelihood for LOO/WAIC. The margin term is gated by
       // margin_obs so masked (fringe/NA-margin) rows contribute only their
       // share likelihood, matching partial_sum_fn's training objective.
-      real err_share = log_revShare[n] - pred_log_r;
+      real err_share = log_shareIn[n] - pred_log_q;
       real mu2_cond = log(pred_lInv + 1e-9) + slope_cond * err_share;
-      log_lik[n] = normal_lpdf(log_revShare[n] | pred_log_r, sigma_share_n);
+      log_lik[n] = normal_lpdf(log_shareIn[n] | pred_log_q, sigma_share_n);
       if (margin_obs[n] == 1) {
-        log_lik[n] += normal_lpdf(log_lernerInv[n] | mu2_cond, sigma_cond);
+        log_lik[n] += normal_lpdf(log_marginNormInv[n] | mu2_cond, sigma_cond);
       }
     }
   }

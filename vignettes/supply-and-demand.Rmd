@@ -35,6 +35,13 @@ $$ r_j = \frac{V_j^{\gamma-1}}{\sum_k V_k^{\gamma-1}} = \frac{\delta_j^{\gamma-1
 
 To match standard macroeconomic and trade formulations of CES—where the exponent on price is strictly $1-\gamma$, or $-(\gamma-1)$—we require $\sigma(\gamma-1) = -(\gamma-1)$. This implies that functionally $\sigma = -1$, yielding the underlying base deterministic utility $V_j = \delta_j / p_j$.
 
+For estimation, both demand systems use conditional quantity shares as the
+observed demand outcome. CES revenue shares are computed from price and
+quantity and enter only the CES supply first-order conditions. If $q_0$ is the
+outside quantity share, $p_0$ the outside price, and $\bar p_I$ the observed
+inside quantity-weighted price, the corresponding outside revenue share is
+$r_0 = q_0p_0/(q_0p_0 + (1-q_0)\bar p_I)$.
+
 ### Logit Demand and the Gumbel Distribution
 
 If we take the natural logarithm of the CES utility formulation—a monotone transformation that preserves choice properties—Logit demand naturally emerges. The multiplicative index becomes an additive random utility model:
@@ -81,7 +88,7 @@ Under static Nash-Bertrand competition, firms choose prices to maximize profits 
 Under Cournot competition, firms choose quantities rather than prices. This model yields margins that scale differently with market share compared to Bertrand.
 
 * **Logit:** 
-\[ m_j = \frac{1}{\alpha p_j} \left( \frac{s_0 + \sum_{l \in \mathcal{J}_k} s_{l|I}}{s_0} \right) \]
+\[ m_j = \frac{1}{\alpha p_j} \left( \frac{s_0 + \sum_{l \in \mathcal{J}_k} s_l}{s_0} \right) \]
 * **CES:** 
 \[ m_j = \frac{1 + (\gamma - 1) \sum_{l \in \mathcal{J}_k} r_l}{\gamma} \]
 

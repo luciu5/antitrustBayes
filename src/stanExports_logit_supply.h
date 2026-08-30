@@ -27,347 +27,349 @@ namespace model_logit_supply_namespace {
 using stan::model::model_base_crtp;
 using namespace stan::math;
 stan::math::profile_map profiles__;
-static constexpr std::array<const char*, 397> locations_array__ =
+static constexpr std::array<const char*, 399> locations_array__ =
   {" (found before start of program)",
-  " (in 'logit_supply', line 145, column 2 to column 56)",
-  " (in 'logit_supply', line 146, column 2 to column 68)",
-  " (in 'logit_supply', line 147, column 2 to column 60)",
-  " (in 'logit_supply', line 148, column 2 to column 30)",
-  " (in 'logit_supply', line 149, column 2 to column 30)",
-  " (in 'logit_supply', line 150, column 2 to column 50)",
-  " (in 'logit_supply', line 151, column 2 to column 79)",
-  " (in 'logit_supply', line 152, column 2 to column 69)",
-  " (in 'logit_supply', line 153, column 2 to column 114)",
-  " (in 'logit_supply', line 154, column 2 to column 117)",
-  " (in 'logit_supply', line 155, column 2 to column 79)",
-  " (in 'logit_supply', line 156, column 2 to column 89)",
-  " (in 'logit_supply', line 157, column 2 to column 68)",
-  " (in 'logit_supply', line 158, column 2 to column 62)",
-  " (in 'logit_supply', line 159, column 2 to column 74)",
-  " (in 'logit_supply', line 160, column 2 to column 102)",
-  " (in 'logit_supply', line 161, column 2 to column 102)",
+  " (in 'logit_supply', line 148, column 2 to column 56)",
+  " (in 'logit_supply', line 149, column 2 to column 68)",
+  " (in 'logit_supply', line 150, column 2 to column 60)",
+  " (in 'logit_supply', line 151, column 2 to column 30)",
+  " (in 'logit_supply', line 152, column 2 to column 30)",
+  " (in 'logit_supply', line 153, column 2 to column 50)",
+  " (in 'logit_supply', line 154, column 2 to column 79)",
+  " (in 'logit_supply', line 155, column 2 to column 69)",
+  " (in 'logit_supply', line 156, column 2 to column 114)",
+  " (in 'logit_supply', line 157, column 2 to column 117)",
+  " (in 'logit_supply', line 158, column 2 to column 79)",
+  " (in 'logit_supply', line 159, column 2 to column 89)",
+  " (in 'logit_supply', line 160, column 2 to column 68)",
+  " (in 'logit_supply', line 161, column 2 to column 62)",
   " (in 'logit_supply', line 162, column 2 to column 74)",
-  " (in 'logit_supply', line 163, column 2 to column 39)",
-  " (in 'logit_supply', line 164, column 2 to column 23)",
-  " (in 'logit_supply', line 165, column 2 to column 24)",
-  " (in 'logit_supply', line 166, column 2 to column 80)",
-  " (in 'logit_supply', line 167, column 2 to column 81)",
-  " (in 'logit_supply', line 168, column 2 to column 84)",
-  " (in 'logit_supply', line 169, column 2 to column 85)",
-  " (in 'logit_supply', line 170, column 2 to column 23)",
-  " (in 'logit_supply', line 173, column 2 to column 42)",
-  " (in 'logit_supply', line 174, column 2 to column 44)",
-  " (in 'logit_supply', line 175, column 2 to column 38)",
-  " (in 'logit_supply', line 176, column 2 to column 39)",
-  " (in 'logit_supply', line 177, column 2 to column 17)",
-  " (in 'logit_supply', line 178, column 2 to column 25)",
-  " (in 'logit_supply', line 179, column 2 to column 16)",
-  " (in 'logit_supply', line 180, column 2 to column 28)",
-  " (in 'logit_supply', line 181, column 2 to column 68)",
-  " (in 'logit_supply', line 182, column 2 to column 28)",
-  " (in 'logit_supply', line 183, column 2 to column 84)",
-  " (in 'logit_supply', line 184, column 2 to column 25)",
-  " (in 'logit_supply', line 185, column 2 to column 27)",
-  " (in 'logit_supply', line 186, column 2 to column 32)",
-  " (in 'logit_supply', line 187, column 2 to column 66)",
-  " (in 'logit_supply', line 188, column 2 to column 68)",
-  " (in 'logit_supply', line 189, column 2 to column 43)",
-  " (in 'logit_supply', line 373, column 2 to column 25)",
-  " (in 'logit_supply', line 374, column 2 to column 27)",
-  " (in 'logit_supply', line 375, column 2 to column 20)",
-  " (in 'logit_supply', line 202, column 4 to column 59)",
-  " (in 'logit_supply', line 203, column 4 to column 61)",
-  " (in 'logit_supply', line 201, column 9 to line 204, column 3)",
-  " (in 'logit_supply', line 192, column 6 to line 195, column 8)",
-  " (in 'logit_supply', line 196, column 6 to line 199, column 8)",
-  " (in 'logit_supply', line 191, column 26 to line 200, column 5)",
-  " (in 'logit_supply', line 191, column 4 to line 200, column 5)",
-  " (in 'logit_supply', line 190, column 35 to line 201, column 3)",
-  " (in 'logit_supply', line 190, column 2 to line 204, column 3)",
-  " (in 'logit_supply', line 205, column 20 to column 50)",
-  " (in 'logit_supply', line 205, column 2 to column 50)",
-  " (in 'logit_supply', line 207, column 4 to column 37)",
-  " (in 'logit_supply', line 206, column 33 to line 208, column 3)",
-  " (in 'logit_supply', line 206, column 2 to line 208, column 3)",
+  " (in 'logit_supply', line 163, column 2 to column 102)",
+  " (in 'logit_supply', line 164, column 2 to column 102)",
+  " (in 'logit_supply', line 165, column 2 to column 74)",
+  " (in 'logit_supply', line 166, column 2 to column 39)",
+  " (in 'logit_supply', line 167, column 2 to column 23)",
+  " (in 'logit_supply', line 168, column 2 to column 24)",
+  " (in 'logit_supply', line 169, column 2 to column 80)",
+  " (in 'logit_supply', line 170, column 2 to column 81)",
+  " (in 'logit_supply', line 171, column 2 to column 84)",
+  " (in 'logit_supply', line 172, column 2 to column 85)",
+  " (in 'logit_supply', line 173, column 2 to column 23)",
+  " (in 'logit_supply', line 176, column 2 to column 42)",
+  " (in 'logit_supply', line 177, column 2 to column 44)",
+  " (in 'logit_supply', line 178, column 2 to column 38)",
+  " (in 'logit_supply', line 179, column 2 to column 39)",
+  " (in 'logit_supply', line 180, column 2 to column 17)",
+  " (in 'logit_supply', line 181, column 2 to column 25)",
+  " (in 'logit_supply', line 182, column 2 to column 16)",
+  " (in 'logit_supply', line 183, column 2 to column 28)",
+  " (in 'logit_supply', line 184, column 2 to column 68)",
+  " (in 'logit_supply', line 185, column 2 to column 28)",
+  " (in 'logit_supply', line 186, column 2 to column 84)",
+  " (in 'logit_supply', line 187, column 2 to column 25)",
+  " (in 'logit_supply', line 188, column 2 to column 27)",
+  " (in 'logit_supply', line 189, column 2 to column 32)",
+  " (in 'logit_supply', line 190, column 2 to column 66)",
+  " (in 'logit_supply', line 191, column 2 to column 68)",
+  " (in 'logit_supply', line 192, column 2 to column 43)",
+  " (in 'logit_supply', line 376, column 2 to column 25)",
+  " (in 'logit_supply', line 377, column 2 to column 31)",
+  " (in 'logit_supply', line 378, column 2 to column 20)",
+  " (in 'logit_supply', line 205, column 4 to column 59)",
+  " (in 'logit_supply', line 206, column 4 to column 61)",
+  " (in 'logit_supply', line 204, column 9 to line 207, column 3)",
+  " (in 'logit_supply', line 195, column 6 to line 198, column 8)",
+  " (in 'logit_supply', line 199, column 6 to line 202, column 8)",
+  " (in 'logit_supply', line 194, column 26 to line 203, column 5)",
+  " (in 'logit_supply', line 194, column 4 to line 203, column 5)",
+  " (in 'logit_supply', line 193, column 35 to line 204, column 3)",
+  " (in 'logit_supply', line 193, column 2 to line 207, column 3)",
+  " (in 'logit_supply', line 208, column 20 to column 50)",
+  " (in 'logit_supply', line 208, column 2 to column 50)",
   " (in 'logit_supply', line 210, column 4 to column 37)",
-  " (in 'logit_supply', line 209, column 23 to line 211, column 3)",
+  " (in 'logit_supply', line 209, column 33 to line 211, column 3)",
   " (in 'logit_supply', line 209, column 2 to line 211, column 3)",
-  " (in 'logit_supply', line 213, column 5 to column 21)",
-  " (in 'logit_supply', line 214, column 5 to column 58)",
-  " (in 'logit_supply', line 220, column 7 to column 32)",
-  " (in 'logit_supply', line 219, column 12 to line 221, column 6)",
-  " (in 'logit_supply', line 216, column 7 to line 218, column 69)",
-  " (in 'logit_supply', line 215, column 39 to line 219, column 6)",
-  " (in 'logit_supply', line 215, column 5 to line 221, column 6)",
-  " (in 'logit_supply', line 222, column 5 to column 33)",
-  " (in 'logit_supply', line 223, column 5 to column 43)",
-  " (in 'logit_supply', line 212, column 29 to line 224, column 3)",
-  " (in 'logit_supply', line 212, column 2 to line 224, column 3)",
-  " (in 'logit_supply', line 234, column 4 to column 32)",
-  " (in 'logit_supply', line 235, column 4 to column 48)",
-  " (in 'logit_supply', line 236, column 4 to column 52)",
-  " (in 'logit_supply', line 233, column 31 to line 237, column 3)",
-  " (in 'logit_supply', line 233, column 2 to line 237, column 3)",
-  " (in 'logit_supply', line 239, column 4 to column 51)",
-  " (in 'logit_supply', line 240, column 4 to column 53)",
-  " (in 'logit_supply', line 238, column 25 to line 241, column 3)",
-  " (in 'logit_supply', line 238, column 2 to line 241, column 3)",
-  " (in 'logit_supply', line 258, column 8 to column 40)",
-  " (in 'logit_supply', line 255, column 13 to line 259, column 7)",
-  " (in 'logit_supply', line 254, column 8 to column 67)",
-  " (in 'logit_supply', line 250, column 36 to line 255, column 7)",
-  " (in 'logit_supply', line 250, column 6 to line 259, column 7)",
-  " (in 'logit_supply', line 249, column 27 to line 260, column 5)",
-  " (in 'logit_supply', line 249, column 4 to line 260, column 5)",
-  " (in 'logit_supply', line 248, column 9 to line 261, column 3)",
-  " (in 'logit_supply', line 247, column 4 to column 41)",
-  " (in 'logit_supply', line 242, column 29 to line 248, column 3)",
-  " (in 'logit_supply', line 242, column 2 to line 261, column 3)",
-  " (in 'logit_supply', line 276, column 4 to column 65)",
-  " (in 'logit_supply', line 277, column 4 to column 41)",
-  " (in 'logit_supply', line 278, column 4 to column 32)",
-  " (in 'logit_supply', line 275, column 9 to line 279, column 3)",
-  " (in 'logit_supply', line 272, column 4 to column 48)",
-  " (in 'logit_supply', line 273, column 4 to column 52)",
-  " (in 'logit_supply', line 274, column 4 to column 51)",
-  " (in 'logit_supply', line 271, column 40 to line 275, column 3)",
-  " (in 'logit_supply', line 271, column 9 to line 279, column 3)",
-  " (in 'logit_supply', line 263, column 4 to column 32)",
-  " (in 'logit_supply', line 269, column 6 to column 62)",
-  " (in 'logit_supply', line 268, column 11 to line 270, column 5)",
-  " (in 'logit_supply', line 267, column 6 to column 40)",
-  " (in 'logit_supply', line 266, column 40 to line 268, column 5)",
-  " (in 'logit_supply', line 266, column 11 to line 270, column 5)",
-  " (in 'logit_supply', line 265, column 6 to column 53)",
-  " (in 'logit_supply', line 264, column 61 to line 266, column 5)",
-  " (in 'logit_supply', line 264, column 4 to line 270, column 5)",
-  " (in 'logit_supply', line 262, column 23 to line 271, column 3)",
-  " (in 'logit_supply', line 262, column 2 to line 279, column 3)",
-  " (in 'logit_supply', line 280, column 2 to column 48)",
-  " (in 'logit_supply', line 377, column 4 to column 17)",
-  " (in 'logit_supply', line 379, column 6 to column 24)",
-  " (in 'logit_supply', line 380, column 6 to column 35)",
-  " (in 'logit_supply', line 381, column 6 to column 49)",
-  " (in 'logit_supply', line 382, column 6 to column 51)",
-  " (in 'logit_supply', line 383, column 6 to column 65)",
-  " (in 'logit_supply', line 384, column 6 to column 63)",
-  " (in 'logit_supply', line 385, column 6 to column 17)",
-  " (in 'logit_supply', line 387, column 8 to column 53)",
-  " (in 'logit_supply', line 388, column 61 to column 78)",
-  " (in 'logit_supply', line 388, column 47 to column 55)",
-  " (in 'logit_supply', line 388, column 34 to column 78)",
-  " (in 'logit_supply', line 388, column 20 to column 28)",
-  " (in 'logit_supply', line 388, column 8 to column 78)",
-  " (in 'logit_supply', line 386, column 27 to line 389, column 7)",
-  " (in 'logit_supply', line 386, column 6 to line 389, column 7)",
-  " (in 'logit_supply', line 390, column 6 to column 67)",
-  " (in 'logit_supply', line 391, column 6 to line 392, column 51)",
-  " (in 'logit_supply', line 393, column 6 to column 32)",
-  " (in 'logit_supply', line 394, column 6 to column 45)",
-  " (in 'logit_supply', line 395, column 6 to column 40)",
-  " (in 'logit_supply', line 396, column 6 to column 57)",
-  " (in 'logit_supply', line 397, column 6 to column 22)",
-  " (in 'logit_supply', line 411, column 8 to column 65)",
-  " (in 'logit_supply', line 412, column 8 to column 78)",
-  " (in 'logit_supply', line 409, column 13 to line 413, column 7)",
-  " (in 'logit_supply', line 407, column 8 to line 408, column 63)",
-  " (in 'logit_supply', line 405, column 36 to line 409, column 7)",
-  " (in 'logit_supply', line 405, column 13 to line 413, column 7)",
-  " (in 'logit_supply', line 404, column 8 to column 38)",
-  " (in 'logit_supply', line 402, column 36 to line 405, column 7)",
-  " (in 'logit_supply', line 402, column 13 to line 413, column 7)",
-  " (in 'logit_supply', line 400, column 8 to line 401, column 51)",
-  " (in 'logit_supply', line 398, column 29 to line 402, column 7)",
-  " (in 'logit_supply', line 398, column 6 to line 413, column 7)",
-  " (in 'logit_supply', line 414, column 6 to column 37)",
-  " (in 'logit_supply', line 418, column 6 to column 51)",
-  " (in 'logit_supply', line 419, column 6 to column 70)",
-  " (in 'logit_supply', line 420, column 6 to column 75)",
-  " (in 'logit_supply', line 422, column 8 to column 75)",
-  " (in 'logit_supply', line 421, column 30 to line 423, column 7)",
-  " (in 'logit_supply', line 421, column 6 to line 423, column 7)",
-  " (in 'logit_supply', line 378, column 19 to line 424, column 5)",
-  " (in 'logit_supply', line 378, column 4 to line 424, column 5)",
-  " (in 'logit_supply', line 376, column 2 to line 425, column 3)",
-  " (in 'logit_supply', line 286, column 4 to column 64)",
-  " (in 'logit_supply', line 285, column 9 to line 287, column 3)",
-  " (in 'logit_supply', line 284, column 4 to column 56)",
-  " (in 'logit_supply', line 283, column 52 to line 285, column 3)",
-  " (in 'logit_supply', line 283, column 2 to line 287, column 3)",
-  " (in 'logit_supply', line 289, column 4 to column 51)",
-  " (in 'logit_supply', line 288, column 33 to line 290, column 3)",
-  " (in 'logit_supply', line 288, column 2 to line 290, column 3)",
-  " (in 'logit_supply', line 295, column 6 to column 36)",
-  " (in 'logit_supply', line 294, column 11 to line 296, column 5)",
-  " (in 'logit_supply', line 293, column 6 to column 56)",
-  " (in 'logit_supply', line 292, column 33 to line 294, column 5)",
-  " (in 'logit_supply', line 292, column 4 to line 296, column 5)",
-  " (in 'logit_supply', line 291, column 52 to line 297, column 3)",
-  " (in 'logit_supply', line 291, column 2 to line 297, column 3)",
-  " (in 'logit_supply', line 299, column 4 to column 57)",
-  " (in 'logit_supply', line 298, column 52 to line 300, column 3)",
-  " (in 'logit_supply', line 298, column 2 to line 300, column 3)",
-  " (in 'logit_supply', line 306, column 4 to column 37)",
-  " (in 'logit_supply', line 307, column 4 to column 40)",
-  " (in 'logit_supply', line 311, column 4 to column 65)",
-  " (in 'logit_supply', line 301, column 29 to line 312, column 3)",
-  " (in 'logit_supply', line 301, column 2 to line 312, column 3)",
-  " (in 'logit_supply', line 313, column 2 to column 29)",
-  " (in 'logit_supply', line 315, column 2 to column 57)",
-  " (in 'logit_supply', line 317, column 4 to column 63)",
-  " (in 'logit_supply', line 318, column 4 to column 60)",
-  " (in 'logit_supply', line 316, column 23 to line 319, column 3)",
-  " (in 'logit_supply', line 316, column 2 to line 319, column 3)",
-  " (in 'logit_supply', line 329, column 4 to column 50)",
-  " (in 'logit_supply', line 328, column 9 to line 330, column 3)",
-  " (in 'logit_supply', line 321, column 4 to column 56)",
-  " (in 'logit_supply', line 322, column 4 to column 55)",
-  " (in 'logit_supply', line 326, column 6 to column 33)",
-  " (in 'logit_supply', line 325, column 11 to line 327, column 5)",
-  " (in 'logit_supply', line 324, column 6 to column 68)",
-  " (in 'logit_supply', line 323, column 35 to line 325, column 5)",
-  " (in 'logit_supply', line 323, column 4 to line 327, column 5)",
-  " (in 'logit_supply', line 320, column 36 to line 328, column 3)",
-  " (in 'logit_supply', line 320, column 2 to line 330, column 3)",
-  " (in 'logit_supply', line 331, column 2 to column 43)",
-  " (in 'logit_supply', line 336, column 4 to line 337, column 38)",
-  " (in 'logit_supply', line 332, column 20 to line 338, column 3)",
-  " (in 'logit_supply', line 332, column 2 to line 338, column 3)",
-  " (in 'logit_supply', line 341, column 2 to column 56)",
-  " (in 'logit_supply', line 342, column 2 to column 58)",
-  " (in 'logit_supply', line 344, column 4 to column 46)",
-  " (in 'logit_supply', line 345, column 4 to column 47)",
-  " (in 'logit_supply', line 346, column 4 to column 71)",
-  " (in 'logit_supply', line 347, column 4 to column 72)",
-  " (in 'logit_supply', line 343, column 35 to line 348, column 3)",
-  " (in 'logit_supply', line 343, column 2 to line 348, column 3)",
-  " (in 'logit_supply', line 350, column 5 to column 49)",
-  " (in 'logit_supply', line 351, column 5 to column 23)",
-  " (in 'logit_supply', line 352, column 5 to column 19)",
-  " (in 'logit_supply', line 354, column 7 to column 42)",
-  " (in 'logit_supply', line 353, column 32 to line 355, column 6)",
-  " (in 'logit_supply', line 353, column 5 to line 355, column 6)",
-  " (in 'logit_supply', line 356, column 5 to column 39)",
-  " (in 'logit_supply', line 357, column 5 to column 71)",
-  " (in 'logit_supply', line 358, column 5 to column 62)",
-  " (in 'logit_supply', line 359, column 5 to column 69)",
-  " (in 'logit_supply', line 349, column 20 to line 360, column 3)",
-  " (in 'logit_supply', line 349, column 2 to line 360, column 3)",
-  " (in 'logit_supply', line 361, column 2 to line 370, column 53)",
-  " (in 'logit_supply', line 82, column 2 to column 17)",
-  " (in 'logit_supply', line 83, column 9 to column 10)",
-  " (in 'logit_supply', line 83, column 2 to column 20)",
-  " (in 'logit_supply', line 84, column 9 to column 10)",
-  " (in 'logit_supply', line 84, column 2 to column 25)",
+  " (in 'logit_supply', line 213, column 4 to column 37)",
+  " (in 'logit_supply', line 212, column 23 to line 214, column 3)",
+  " (in 'logit_supply', line 212, column 2 to line 214, column 3)",
+  " (in 'logit_supply', line 216, column 5 to column 21)",
+  " (in 'logit_supply', line 217, column 5 to column 58)",
+  " (in 'logit_supply', line 223, column 7 to column 32)",
+  " (in 'logit_supply', line 222, column 12 to line 224, column 6)",
+  " (in 'logit_supply', line 219, column 7 to line 221, column 69)",
+  " (in 'logit_supply', line 218, column 39 to line 222, column 6)",
+  " (in 'logit_supply', line 218, column 5 to line 224, column 6)",
+  " (in 'logit_supply', line 225, column 5 to column 33)",
+  " (in 'logit_supply', line 226, column 5 to column 43)",
+  " (in 'logit_supply', line 215, column 29 to line 227, column 3)",
+  " (in 'logit_supply', line 215, column 2 to line 227, column 3)",
+  " (in 'logit_supply', line 237, column 4 to column 32)",
+  " (in 'logit_supply', line 238, column 4 to column 48)",
+  " (in 'logit_supply', line 239, column 4 to column 52)",
+  " (in 'logit_supply', line 236, column 31 to line 240, column 3)",
+  " (in 'logit_supply', line 236, column 2 to line 240, column 3)",
+  " (in 'logit_supply', line 242, column 4 to column 51)",
+  " (in 'logit_supply', line 243, column 4 to column 53)",
+  " (in 'logit_supply', line 241, column 25 to line 244, column 3)",
+  " (in 'logit_supply', line 241, column 2 to line 244, column 3)",
+  " (in 'logit_supply', line 261, column 8 to column 40)",
+  " (in 'logit_supply', line 258, column 13 to line 262, column 7)",
+  " (in 'logit_supply', line 257, column 8 to column 67)",
+  " (in 'logit_supply', line 253, column 36 to line 258, column 7)",
+  " (in 'logit_supply', line 253, column 6 to line 262, column 7)",
+  " (in 'logit_supply', line 252, column 27 to line 263, column 5)",
+  " (in 'logit_supply', line 252, column 4 to line 263, column 5)",
+  " (in 'logit_supply', line 251, column 9 to line 264, column 3)",
+  " (in 'logit_supply', line 250, column 4 to column 41)",
+  " (in 'logit_supply', line 245, column 29 to line 251, column 3)",
+  " (in 'logit_supply', line 245, column 2 to line 264, column 3)",
+  " (in 'logit_supply', line 279, column 4 to column 65)",
+  " (in 'logit_supply', line 280, column 4 to column 41)",
+  " (in 'logit_supply', line 281, column 4 to column 32)",
+  " (in 'logit_supply', line 278, column 9 to line 282, column 3)",
+  " (in 'logit_supply', line 275, column 4 to column 48)",
+  " (in 'logit_supply', line 276, column 4 to column 52)",
+  " (in 'logit_supply', line 277, column 4 to column 51)",
+  " (in 'logit_supply', line 274, column 40 to line 278, column 3)",
+  " (in 'logit_supply', line 274, column 9 to line 282, column 3)",
+  " (in 'logit_supply', line 266, column 4 to column 32)",
+  " (in 'logit_supply', line 272, column 6 to column 62)",
+  " (in 'logit_supply', line 271, column 11 to line 273, column 5)",
+  " (in 'logit_supply', line 270, column 6 to column 40)",
+  " (in 'logit_supply', line 269, column 40 to line 271, column 5)",
+  " (in 'logit_supply', line 269, column 11 to line 273, column 5)",
+  " (in 'logit_supply', line 268, column 6 to column 53)",
+  " (in 'logit_supply', line 267, column 61 to line 269, column 5)",
+  " (in 'logit_supply', line 267, column 4 to line 273, column 5)",
+  " (in 'logit_supply', line 265, column 23 to line 274, column 3)",
+  " (in 'logit_supply', line 265, column 2 to line 282, column 3)",
+  " (in 'logit_supply', line 283, column 2 to column 48)",
+  " (in 'logit_supply', line 380, column 4 to column 17)",
+  " (in 'logit_supply', line 382, column 6 to column 24)",
+  " (in 'logit_supply', line 383, column 6 to column 35)",
+  " (in 'logit_supply', line 384, column 6 to column 49)",
+  " (in 'logit_supply', line 385, column 6 to column 51)",
+  " (in 'logit_supply', line 386, column 6 to column 65)",
+  " (in 'logit_supply', line 387, column 6 to column 63)",
+  " (in 'logit_supply', line 388, column 6 to column 17)",
+  " (in 'logit_supply', line 390, column 8 to column 58)",
+  " (in 'logit_supply', line 391, column 61 to column 78)",
+  " (in 'logit_supply', line 391, column 47 to column 55)",
+  " (in 'logit_supply', line 391, column 34 to column 78)",
+  " (in 'logit_supply', line 391, column 20 to column 28)",
+  " (in 'logit_supply', line 391, column 8 to column 78)",
+  " (in 'logit_supply', line 389, column 27 to line 392, column 7)",
+  " (in 'logit_supply', line 389, column 6 to line 392, column 7)",
+  " (in 'logit_supply', line 393, column 6 to column 67)",
+  " (in 'logit_supply', line 394, column 6 to line 395, column 51)",
+  " (in 'logit_supply', line 396, column 6 to column 32)",
+  " (in 'logit_supply', line 397, column 6 to column 45)",
+  " (in 'logit_supply', line 398, column 6 to column 40)",
+  " (in 'logit_supply', line 399, column 6 to column 57)",
+  " (in 'logit_supply', line 400, column 6 to column 22)",
+  " (in 'logit_supply', line 414, column 8 to column 65)",
+  " (in 'logit_supply', line 415, column 8 to column 78)",
+  " (in 'logit_supply', line 412, column 13 to line 416, column 7)",
+  " (in 'logit_supply', line 410, column 8 to line 411, column 63)",
+  " (in 'logit_supply', line 408, column 36 to line 412, column 7)",
+  " (in 'logit_supply', line 408, column 13 to line 416, column 7)",
+  " (in 'logit_supply', line 407, column 8 to column 38)",
+  " (in 'logit_supply', line 405, column 36 to line 408, column 7)",
+  " (in 'logit_supply', line 405, column 13 to line 416, column 7)",
+  " (in 'logit_supply', line 403, column 8 to line 404, column 51)",
+  " (in 'logit_supply', line 401, column 29 to line 405, column 7)",
+  " (in 'logit_supply', line 401, column 6 to line 416, column 7)",
+  " (in 'logit_supply', line 417, column 6 to column 52)",
+  " (in 'logit_supply', line 421, column 6 to column 51)",
+  " (in 'logit_supply', line 422, column 6 to column 81)",
+  " (in 'logit_supply', line 423, column 6 to column 75)",
+  " (in 'logit_supply', line 425, column 8 to column 79)",
+  " (in 'logit_supply', line 424, column 30 to line 426, column 7)",
+  " (in 'logit_supply', line 424, column 6 to line 426, column 7)",
+  " (in 'logit_supply', line 381, column 19 to line 427, column 5)",
+  " (in 'logit_supply', line 381, column 4 to line 427, column 5)",
+  " (in 'logit_supply', line 379, column 2 to line 428, column 3)",
+  " (in 'logit_supply', line 289, column 4 to column 64)",
+  " (in 'logit_supply', line 288, column 9 to line 290, column 3)",
+  " (in 'logit_supply', line 287, column 4 to column 56)",
+  " (in 'logit_supply', line 286, column 52 to line 288, column 3)",
+  " (in 'logit_supply', line 286, column 2 to line 290, column 3)",
+  " (in 'logit_supply', line 292, column 4 to column 51)",
+  " (in 'logit_supply', line 291, column 33 to line 293, column 3)",
+  " (in 'logit_supply', line 291, column 2 to line 293, column 3)",
+  " (in 'logit_supply', line 298, column 6 to column 36)",
+  " (in 'logit_supply', line 297, column 11 to line 299, column 5)",
+  " (in 'logit_supply', line 296, column 6 to column 56)",
+  " (in 'logit_supply', line 295, column 33 to line 297, column 5)",
+  " (in 'logit_supply', line 295, column 4 to line 299, column 5)",
+  " (in 'logit_supply', line 294, column 52 to line 300, column 3)",
+  " (in 'logit_supply', line 294, column 2 to line 300, column 3)",
+  " (in 'logit_supply', line 302, column 4 to column 57)",
+  " (in 'logit_supply', line 301, column 52 to line 303, column 3)",
+  " (in 'logit_supply', line 301, column 2 to line 303, column 3)",
+  " (in 'logit_supply', line 309, column 4 to column 37)",
+  " (in 'logit_supply', line 310, column 4 to column 40)",
+  " (in 'logit_supply', line 314, column 4 to column 65)",
+  " (in 'logit_supply', line 304, column 29 to line 315, column 3)",
+  " (in 'logit_supply', line 304, column 2 to line 315, column 3)",
+  " (in 'logit_supply', line 316, column 2 to column 29)",
+  " (in 'logit_supply', line 318, column 2 to column 57)",
+  " (in 'logit_supply', line 320, column 4 to column 63)",
+  " (in 'logit_supply', line 321, column 4 to column 60)",
+  " (in 'logit_supply', line 319, column 23 to line 322, column 3)",
+  " (in 'logit_supply', line 319, column 2 to line 322, column 3)",
+  " (in 'logit_supply', line 332, column 4 to column 50)",
+  " (in 'logit_supply', line 331, column 9 to line 333, column 3)",
+  " (in 'logit_supply', line 324, column 4 to column 56)",
+  " (in 'logit_supply', line 325, column 4 to column 55)",
+  " (in 'logit_supply', line 329, column 6 to column 33)",
+  " (in 'logit_supply', line 328, column 11 to line 330, column 5)",
+  " (in 'logit_supply', line 327, column 6 to column 68)",
+  " (in 'logit_supply', line 326, column 35 to line 328, column 5)",
+  " (in 'logit_supply', line 326, column 4 to line 330, column 5)",
+  " (in 'logit_supply', line 323, column 36 to line 331, column 3)",
+  " (in 'logit_supply', line 323, column 2 to line 333, column 3)",
+  " (in 'logit_supply', line 334, column 2 to column 43)",
+  " (in 'logit_supply', line 339, column 4 to line 340, column 38)",
+  " (in 'logit_supply', line 335, column 20 to line 341, column 3)",
+  " (in 'logit_supply', line 335, column 2 to line 341, column 3)",
+  " (in 'logit_supply', line 344, column 2 to column 56)",
+  " (in 'logit_supply', line 345, column 2 to column 58)",
+  " (in 'logit_supply', line 347, column 4 to column 46)",
+  " (in 'logit_supply', line 348, column 4 to column 47)",
+  " (in 'logit_supply', line 349, column 4 to column 71)",
+  " (in 'logit_supply', line 350, column 4 to column 72)",
+  " (in 'logit_supply', line 346, column 35 to line 351, column 3)",
+  " (in 'logit_supply', line 346, column 2 to line 351, column 3)",
+  " (in 'logit_supply', line 353, column 5 to column 49)",
+  " (in 'logit_supply', line 354, column 5 to column 23)",
+  " (in 'logit_supply', line 355, column 5 to column 19)",
+  " (in 'logit_supply', line 357, column 7 to column 42)",
+  " (in 'logit_supply', line 356, column 32 to line 358, column 6)",
+  " (in 'logit_supply', line 356, column 5 to line 358, column 6)",
+  " (in 'logit_supply', line 359, column 5 to column 39)",
+  " (in 'logit_supply', line 360, column 5 to column 71)",
+  " (in 'logit_supply', line 361, column 5 to column 62)",
+  " (in 'logit_supply', line 362, column 5 to column 69)",
+  " (in 'logit_supply', line 352, column 20 to line 363, column 3)",
+  " (in 'logit_supply', line 352, column 2 to line 363, column 3)",
+  " (in 'logit_supply', line 364, column 2 to line 373, column 53)",
+  " (in 'logit_supply', line 84, column 2 to column 17)",
   " (in 'logit_supply', line 85, column 9 to column 10)",
-  " (in 'logit_supply', line 85, column 2 to column 22)",
+  " (in 'logit_supply', line 85, column 2 to column 20)",
   " (in 'logit_supply', line 86, column 9 to column 10)",
-  " (in 'logit_supply', line 86, column 2 to column 24)",
+  " (in 'logit_supply', line 86, column 2 to column 25)",
   " (in 'logit_supply', line 87, column 9 to column 10)",
   " (in 'logit_supply', line 87, column 2 to column 26)",
   " (in 'logit_supply', line 88, column 9 to column 10)",
-  " (in 'logit_supply', line 88, column 2 to column 22)",
-  " (in 'logit_supply', line 89, column 2 to column 25)",
-  " (in 'logit_supply', line 90, column 2 to column 37)",
-  " (in 'logit_supply', line 91, column 2 to column 24)",
-  " (in 'logit_supply', line 92, column 8 to column 9)",
-  " (in 'logit_supply', line 92, column 2 to column 31)",
-  " (in 'logit_supply', line 93, column 2 to column 23)",
-  " (in 'logit_supply', line 94, column 8 to column 9)",
-  " (in 'logit_supply', line 94, column 2 to column 30)",
-  " (in 'logit_supply', line 95, column 2 to column 22)",
-  " (in 'logit_supply', line 96, column 8 to column 9)",
-  " (in 'logit_supply', line 96, column 2 to column 29)",
-  " (in 'logit_supply', line 97, column 2 to column 37)",
-  " (in 'logit_supply', line 98, column 2 to column 35)",
-  " (in 'logit_supply', line 99, column 2 to column 25)",
-  " (in 'logit_supply', line 100, column 2 to column 29)",
-  " (in 'logit_supply', line 101, column 8 to column 9)",
-  " (in 'logit_supply', line 101, column 2 to column 40)",
-  " (in 'logit_supply', line 102, column 8 to column 9)",
-  " (in 'logit_supply', line 102, column 2 to column 44)",
-  " (in 'logit_supply', line 103, column 2 to column 20)",
-  " (in 'logit_supply', line 104, column 9 to column 22)",
-  " (in 'logit_supply', line 104, column 24 to column 28)",
-  " (in 'logit_supply', line 104, column 2 to column 35)",
-  " (in 'logit_supply', line 105, column 8 to column 21)",
-  " (in 'logit_supply', line 105, column 2 to column 50)",
-  " (in 'logit_supply', line 106, column 8 to column 21)",
-  " (in 'logit_supply', line 106, column 2 to column 48)",
-  " (in 'logit_supply', line 107, column 2 to column 41)",
-  " (in 'logit_supply', line 108, column 2 to column 32)",
-  " (in 'logit_supply', line 109, column 2 to column 47)",
-  " (in 'logit_supply', line 110, column 2 to column 46)",
-  " (in 'logit_supply', line 111, column 2 to column 48)",
-  " (in 'logit_supply', line 112, column 2 to column 43)",
-  " (in 'logit_supply', line 113, column 2 to column 45)",
-  " (in 'logit_supply', line 114, column 2 to column 32)",
-  " (in 'logit_supply', line 115, column 2 to column 21)",
-  " (in 'logit_supply', line 116, column 2 to column 22)",
-  " (in 'logit_supply', line 117, column 2 to column 17)",
-  " (in 'logit_supply', line 118, column 2 to column 34)",
-  " (in 'logit_supply', line 119, column 2 to column 35)",
-  " (in 'logit_supply', line 120, column 2 to column 42)",
-  " (in 'logit_supply', line 121, column 2 to column 43)",
-  " (in 'logit_supply', line 122, column 2 to column 24)",
-  " (in 'logit_supply', line 123, column 2 to column 31)",
-  " (in 'logit_supply', line 124, column 2 to column 21)",
-  " (in 'logit_supply', line 125, column 2 to column 28)",
-  " (in 'logit_supply', line 126, column 2 to column 34)",
-  " (in 'logit_supply', line 127, column 2 to column 36)",
-  " (in 'logit_supply', line 128, column 2 to column 36)",
-  " (in 'logit_supply', line 129, column 2 to column 41)",
-  " (in 'logit_supply', line 130, column 2 to column 26)",
-  " (in 'logit_supply', line 131, column 2 to column 35)",
-  " (in 'logit_supply', line 132, column 2 to column 34)",
-  " (in 'logit_supply', line 135, column 8 to column 9)",
-  " (in 'logit_supply', line 135, column 2 to column 19)",
-  " (in 'logit_supply', line 136, column 2 to column 47)",
-  " (in 'logit_supply', line 137, column 2 to column 91)",
-  " (in 'logit_supply', line 138, column 8 to column 16)",
-  " (in 'logit_supply', line 138, column 2 to column 64)",
-  " (in 'logit_supply', line 139, column 17 to column 28)",
-  " (in 'logit_supply', line 139, column 2 to column 28)",
-  " (in 'logit_supply', line 141, column 4 to column 46)",
-  " (in 'logit_supply', line 140, column 31 to line 142, column 3)",
-  " (in 'logit_supply', line 140, column 2 to line 142, column 3)",
-  " (in 'logit_supply', line 145, column 9 to column 38)",
-  " (in 'logit_supply', line 146, column 18 to column 47)",
-  " (in 'logit_supply', line 147, column 9 to column 45)",
-  " (in 'logit_supply', line 148, column 9 to column 16)",
-  " (in 'logit_supply', line 150, column 9 to column 32)",
-  " (in 'logit_supply', line 151, column 9 to column 63)",
-  " (in 'logit_supply', line 152, column 18 to column 51)",
-  " (in 'logit_supply', line 153, column 9 to column 97)",
-  " (in 'logit_supply', line 154, column 9 to column 97)",
-  " (in 'logit_supply', line 155, column 9 to column 63)",
-  " (in 'logit_supply', line 156, column 9 to column 70)",
-  " (in 'logit_supply', line 157, column 9 to column 57)",
-  " (in 'logit_supply', line 158, column 9 to column 45)",
-  " (in 'logit_supply', line 159, column 18 to column 54)",
-  " (in 'logit_supply', line 160, column 9 to column 88)",
-  " (in 'logit_supply', line 161, column 9 to column 88)",
-  " (in 'logit_supply', line 162, column 27 to column 59)",
-  " (in 'logit_supply', line 163, column 9 to column 29)",
-  " (in 'logit_supply', line 166, column 9 to column 51)",
-  " (in 'logit_supply', line 167, column 9 to column 51)",
-  " (in 'logit_supply', line 168, column 18 to column 53)",
-  " (in 'logit_supply', line 169, column 18 to column 53)",
-  " (in 'logit_supply', line 170, column 9 to column 13)",
-  " (in 'logit_supply', line 175, column 9 to column 17)",
-  " (in 'logit_supply', line 176, column 9 to column 17)",
-  " (in 'logit_supply', line 180, column 9 to column 17)",
-  " (in 'logit_supply', line 181, column 9 to column 17)",
-  " (in 'logit_supply', line 182, column 9 to column 17)",
-  " (in 'logit_supply', line 183, column 9 to column 16)",
-  " (in 'logit_supply', line 185, column 9 to column 22)",
-  " (in 'logit_supply', line 186, column 9 to column 22)",
-  " (in 'logit_supply', line 187, column 9 to column 17)",
-  " (in 'logit_supply', line 188, column 9 to column 17)",
-  " (in 'logit_supply', line 189, column 9 to column 17)",
-  " (in 'logit_supply', line 373, column 9 to column 10)",
-  " (in 'logit_supply', line 374, column 9 to column 10)",
-  " (in 'logit_supply', line 375, column 9 to column 10)",
+  " (in 'logit_supply', line 88, column 2 to column 24)",
+  " (in 'logit_supply', line 89, column 9 to column 10)",
+  " (in 'logit_supply', line 89, column 2 to column 30)",
+  " (in 'logit_supply', line 90, column 9 to column 10)",
+  " (in 'logit_supply', line 90, column 2 to column 18)",
+  " (in 'logit_supply', line 91, column 9 to column 10)",
+  " (in 'logit_supply', line 91, column 2 to column 22)",
+  " (in 'logit_supply', line 92, column 2 to column 25)",
+  " (in 'logit_supply', line 93, column 2 to column 37)",
+  " (in 'logit_supply', line 94, column 2 to column 24)",
+  " (in 'logit_supply', line 95, column 8 to column 9)",
+  " (in 'logit_supply', line 95, column 2 to column 31)",
+  " (in 'logit_supply', line 96, column 2 to column 23)",
+  " (in 'logit_supply', line 97, column 8 to column 9)",
+  " (in 'logit_supply', line 97, column 2 to column 30)",
+  " (in 'logit_supply', line 98, column 2 to column 22)",
+  " (in 'logit_supply', line 99, column 8 to column 9)",
+  " (in 'logit_supply', line 99, column 2 to column 29)",
+  " (in 'logit_supply', line 100, column 2 to column 37)",
+  " (in 'logit_supply', line 101, column 2 to column 35)",
+  " (in 'logit_supply', line 102, column 2 to column 25)",
+  " (in 'logit_supply', line 103, column 2 to column 29)",
+  " (in 'logit_supply', line 104, column 8 to column 9)",
+  " (in 'logit_supply', line 104, column 2 to column 40)",
+  " (in 'logit_supply', line 105, column 8 to column 9)",
+  " (in 'logit_supply', line 105, column 2 to column 44)",
+  " (in 'logit_supply', line 106, column 2 to column 20)",
+  " (in 'logit_supply', line 107, column 9 to column 22)",
+  " (in 'logit_supply', line 107, column 24 to column 28)",
+  " (in 'logit_supply', line 107, column 2 to column 35)",
+  " (in 'logit_supply', line 108, column 8 to column 21)",
+  " (in 'logit_supply', line 108, column 2 to column 50)",
+  " (in 'logit_supply', line 109, column 8 to column 21)",
+  " (in 'logit_supply', line 109, column 2 to column 48)",
+  " (in 'logit_supply', line 110, column 2 to column 41)",
+  " (in 'logit_supply', line 111, column 2 to column 32)",
+  " (in 'logit_supply', line 112, column 2 to column 47)",
+  " (in 'logit_supply', line 113, column 2 to column 46)",
+  " (in 'logit_supply', line 114, column 2 to column 48)",
+  " (in 'logit_supply', line 115, column 2 to column 43)",
+  " (in 'logit_supply', line 116, column 2 to column 45)",
+  " (in 'logit_supply', line 117, column 2 to column 32)",
+  " (in 'logit_supply', line 118, column 2 to column 21)",
+  " (in 'logit_supply', line 119, column 2 to column 22)",
+  " (in 'logit_supply', line 120, column 2 to column 17)",
+  " (in 'logit_supply', line 121, column 2 to column 34)",
+  " (in 'logit_supply', line 122, column 2 to column 35)",
+  " (in 'logit_supply', line 123, column 2 to column 42)",
+  " (in 'logit_supply', line 124, column 2 to column 43)",
+  " (in 'logit_supply', line 125, column 2 to column 24)",
+  " (in 'logit_supply', line 126, column 2 to column 31)",
+  " (in 'logit_supply', line 127, column 2 to column 21)",
+  " (in 'logit_supply', line 128, column 2 to column 28)",
+  " (in 'logit_supply', line 129, column 2 to column 34)",
+  " (in 'logit_supply', line 130, column 2 to column 36)",
+  " (in 'logit_supply', line 131, column 2 to column 36)",
+  " (in 'logit_supply', line 132, column 2 to column 41)",
+  " (in 'logit_supply', line 133, column 2 to column 26)",
+  " (in 'logit_supply', line 134, column 2 to column 35)",
+  " (in 'logit_supply', line 135, column 2 to column 34)",
+  " (in 'logit_supply', line 138, column 8 to column 9)",
+  " (in 'logit_supply', line 138, column 2 to column 19)",
+  " (in 'logit_supply', line 139, column 2 to column 47)",
+  " (in 'logit_supply', line 140, column 2 to column 91)",
+  " (in 'logit_supply', line 141, column 8 to column 16)",
+  " (in 'logit_supply', line 141, column 2 to column 64)",
+  " (in 'logit_supply', line 142, column 17 to column 28)",
+  " (in 'logit_supply', line 142, column 2 to column 28)",
+  " (in 'logit_supply', line 144, column 4 to column 46)",
+  " (in 'logit_supply', line 143, column 31 to line 145, column 3)",
+  " (in 'logit_supply', line 143, column 2 to line 145, column 3)",
+  " (in 'logit_supply', line 148, column 9 to column 38)",
+  " (in 'logit_supply', line 149, column 18 to column 47)",
+  " (in 'logit_supply', line 150, column 9 to column 45)",
+  " (in 'logit_supply', line 151, column 9 to column 16)",
+  " (in 'logit_supply', line 153, column 9 to column 32)",
+  " (in 'logit_supply', line 154, column 9 to column 63)",
+  " (in 'logit_supply', line 155, column 18 to column 51)",
+  " (in 'logit_supply', line 156, column 9 to column 97)",
+  " (in 'logit_supply', line 157, column 9 to column 97)",
+  " (in 'logit_supply', line 158, column 9 to column 63)",
+  " (in 'logit_supply', line 159, column 9 to column 70)",
+  " (in 'logit_supply', line 160, column 9 to column 57)",
+  " (in 'logit_supply', line 161, column 9 to column 45)",
+  " (in 'logit_supply', line 162, column 18 to column 54)",
+  " (in 'logit_supply', line 163, column 9 to column 88)",
+  " (in 'logit_supply', line 164, column 9 to column 88)",
+  " (in 'logit_supply', line 165, column 27 to column 59)",
+  " (in 'logit_supply', line 166, column 9 to column 29)",
+  " (in 'logit_supply', line 169, column 9 to column 51)",
+  " (in 'logit_supply', line 170, column 9 to column 51)",
+  " (in 'logit_supply', line 171, column 18 to column 53)",
+  " (in 'logit_supply', line 172, column 18 to column 53)",
+  " (in 'logit_supply', line 173, column 9 to column 13)",
+  " (in 'logit_supply', line 178, column 9 to column 17)",
+  " (in 'logit_supply', line 179, column 9 to column 17)",
+  " (in 'logit_supply', line 183, column 9 to column 17)",
+  " (in 'logit_supply', line 184, column 9 to column 17)",
+  " (in 'logit_supply', line 185, column 9 to column 17)",
+  " (in 'logit_supply', line 186, column 9 to column 16)",
+  " (in 'logit_supply', line 188, column 9 to column 22)",
+  " (in 'logit_supply', line 189, column 9 to column 22)",
+  " (in 'logit_supply', line 190, column 9 to column 17)",
+  " (in 'logit_supply', line 191, column 9 to column 17)",
+  " (in 'logit_supply', line 192, column 9 to column 17)",
+  " (in 'logit_supply', line 376, column 9 to column 10)",
+  " (in 'logit_supply', line 377, column 9 to column 10)",
+  " (in 'logit_supply', line 378, column 9 to column 10)",
   " (in 'logit_supply', line 6, column 4 to column 20)",
   " (in 'logit_supply', line 7, column 4 to column 52)",
   " (in 'logit_supply', line 5, column 35 to line 8, column 3)",
@@ -388,7 +390,7 @@ static constexpr std::array<const char*, 397> locations_array__ =
   " (in 'logit_supply', line 38, column 6 to column 59)",
   " (in 'logit_supply', line 39, column 6 to column 32)",
   " (in 'logit_supply', line 40, column 6 to column 17)",
-  " (in 'logit_supply', line 42, column 8 to column 53)",
+  " (in 'logit_supply', line 42, column 8 to column 58)",
   " (in 'logit_supply', line 43, column 61 to column 78)",
   " (in 'logit_supply', line 43, column 47 to column 55)",
   " (in 'logit_supply', line 43, column 34 to column 78)",
@@ -413,18 +415,18 @@ static constexpr std::array<const char*, 397> locations_array__ =
   " (in 'logit_supply', line 55, column 8 to line 56, column 51)",
   " (in 'logit_supply', line 53, column 29 to line 57, column 7)",
   " (in 'logit_supply', line 53, column 6 to line 68, column 7)",
-  " (in 'logit_supply', line 69, column 6 to column 28)",
-  " (in 'logit_supply', line 70, column 6 to column 48)",
-  " (in 'logit_supply', line 71, column 6 to column 51)",
-  " (in 'logit_supply', line 72, column 6 to column 66)",
-  " (in 'logit_supply', line 73, column 6 to column 66)",
-  " (in 'logit_supply', line 75, column 8 to column 67)",
-  " (in 'logit_supply', line 74, column 30 to line 76, column 7)",
-  " (in 'logit_supply', line 74, column 6 to line 76, column 7)",
-  " (in 'logit_supply', line 31, column 25 to line 77, column 5)",
-  " (in 'logit_supply', line 31, column 4 to line 77, column 5)",
-  " (in 'logit_supply', line 78, column 4 to column 14)",
-  " (in 'logit_supply', line 27, column 44 to line 79, column 3)"};
+  " (in 'logit_supply', line 71, column 6 to column 54)",
+  " (in 'logit_supply', line 72, column 6 to column 67)",
+  " (in 'logit_supply', line 73, column 6 to column 51)",
+  " (in 'logit_supply', line 74, column 6 to column 70)",
+  " (in 'logit_supply', line 75, column 6 to column 66)",
+  " (in 'logit_supply', line 77, column 8 to column 71)",
+  " (in 'logit_supply', line 76, column 30 to line 78, column 7)",
+  " (in 'logit_supply', line 76, column 6 to line 78, column 7)",
+  " (in 'logit_supply', line 31, column 25 to line 79, column 5)",
+  " (in 'logit_supply', line 31, column 4 to line 79, column 5)",
+  " (in 'logit_supply', line 80, column 4 to column 14)",
+  " (in 'logit_supply', line 27, column 44 to line 81, column 3)"};
 template <typename T0__,
           stan::require_all_t<stan::is_stan_scalar<T0__>>* = nullptr>
 stan::promote_args_t<T0__>
@@ -437,10 +439,10 @@ stan::promote_args_t<T0__, T1__, T2__>
 soft_hmt_penalty(const T0__& agg_elast, const T1__& max_elast, const T2__&
                  scale, std::ostream* pstream__);
 template <typename T3__, typename T4__, typename T5__, typename T6__,
-          typename T7__, typename T8__, typename T14__, typename T15__,
+          typename T7__, typename T8__, typename T9__, typename T15__,
           typename T16__, typename T17__, typename T18__, typename T19__,
           typename T20__, typename T21__, typename T22__, typename T23__,
-          typename T24__,
+          typename T24__, typename T25__,
           stan::require_all_t<stan::is_col_vector<T3__>,
                               stan::is_vt_not_complex<T3__>,
                               stan::is_col_vector<T4__>,
@@ -453,55 +455,59 @@ template <typename T3__, typename T4__, typename T5__, typename T6__,
                               stan::is_vt_not_complex<T7__>,
                               stan::is_col_vector<T8__>,
                               stan::is_vt_not_complex<T8__>,
-                              stan::is_col_vector<T14__>,
-                              stan::is_vt_not_complex<T14__>,
+                              stan::is_col_vector<T9__>,
+                              stan::is_vt_not_complex<T9__>,
                               stan::is_col_vector<T15__>,
                               stan::is_vt_not_complex<T15__>,
                               stan::is_col_vector<T16__>,
                               stan::is_vt_not_complex<T16__>,
                               stan::is_col_vector<T17__>,
                               stan::is_vt_not_complex<T17__>,
-                              stan::is_stan_scalar<T18__>,
+                              stan::is_col_vector<T18__>,
+                              stan::is_vt_not_complex<T18__>,
                               stan::is_stan_scalar<T19__>,
-                              stan::is_col_vector<T20__>,
-                              stan::is_vt_not_complex<T20__>,
+                              stan::is_stan_scalar<T20__>,
                               stan::is_col_vector<T21__>,
                               stan::is_vt_not_complex<T21__>,
                               stan::is_col_vector<T22__>,
                               stan::is_vt_not_complex<T22__>,
                               stan::is_col_vector<T23__>,
                               stan::is_vt_not_complex<T23__>,
-                              stan::is_stan_scalar<T24__>>* = nullptr>
+                              stan::is_col_vector<T24__>,
+                              stan::is_vt_not_complex<T24__>,
+                              stan::is_stan_scalar<T25__>>* = nullptr>
 stan::promote_args_t<stan::base_type_t<T3__>, stan::base_type_t<T4__>,
   stan::base_type_t<T5__>, stan::base_type_t<T6__>, stan::base_type_t<T7__>,
-  stan::promote_args_t<stan::base_type_t<T8__>, stan::base_type_t<T14__>,
+  stan::promote_args_t<stan::base_type_t<T8__>, stan::base_type_t<T9__>,
     stan::base_type_t<T15__>, stan::base_type_t<T16__>,
     stan::base_type_t<T17__>,
-    stan::promote_args_t<T18__, T19__, stan::base_type_t<T20__>,
+    stan::promote_args_t<stan::base_type_t<T18__>, T19__, T20__,
       stan::base_type_t<T21__>, stan::base_type_t<T22__>,
-      stan::promote_args_t<stan::base_type_t<T23__>, T24__>>>>
+      stan::promote_args_t<stan::base_type_t<T23__>,
+        stan::base_type_t<T24__>, T25__>>>>
 partial_sum_fn(const std::vector<int>& slice_idx, const int& start,
-               const int& end, const T3__& marginInv_arg__, const T4__&
+               const int& end, const T3__& marginNormInv_arg__, const T4__&
                shareIn_arg__, const T5__& firm_shareIn_arg__, const T6__&
-               log_shareIn_arg__, const T7__& log_marginInv_arg__,
-               const T8__& price_std_arg__, const std::vector<int>& market,
-               const std::vector<int>& group, const std::vector<int>& year,
-               const std::vector<int>& market_year_idx,
-               const std::vector<int>& margin_obs, const T14__&
-               a_market_arg__, const T15__& alpha_structural_market_arg__,
-               const T16__& b_market_arg__, const T17__& b_quality_all_arg__,
-               const T18__& sigma_b_strat, const T19__& mu_b_fringe,
-               const T20__& s0_prob_arg__, const T21__& cutoff_share_arg__,
-               const T22__& sigma_share_market_arg__, const T23__&
-               sigma_margin_market_arg__, const T24__& rho, const int&
+               log_shareIn_arg__, const T7__& log_marginNormInv_arg__,
+               const T8__& price_arg__, const T9__& price_std_arg__,
+               const std::vector<int>& market, const std::vector<int>& group,
+               const std::vector<int>& year, const std::vector<int>&
+               market_year_idx, const std::vector<int>& margin_obs,
+               const T15__& a_market_arg__, const T16__&
+               alpha_structural_market_arg__, const T17__& b_market_arg__,
+               const T18__& b_quality_all_arg__, const T19__& sigma_b_strat,
+               const T20__& mu_b_fringe, const T21__& s0_prob_arg__,
+               const T22__& cutoff_share_arg__, const T23__&
+               sigma_share_market_arg__, const T24__&
+               sigma_margin_market_arg__, const T25__& rho, const int&
                supply_model, const int& market_sign, const int& use_cutoff,
                const int& is_single_market, std::ostream* pstream__);
 struct partial_sum_fn_rsfunctor__ {
   template <typename T3__, typename T4__, typename T5__, typename T6__,
-            typename T7__, typename T8__, typename T14__, typename T15__,
+            typename T7__, typename T8__, typename T9__, typename T15__,
             typename T16__, typename T17__, typename T18__, typename T19__,
             typename T20__, typename T21__, typename T22__, typename T23__,
-            typename T24__,
+            typename T24__, typename T25__,
             stan::require_all_t<stan::is_col_vector<T3__>,
                                 stan::is_vt_not_complex<T3__>,
                                 stan::is_col_vector<T4__>,
@@ -514,55 +520,59 @@ struct partial_sum_fn_rsfunctor__ {
                                 stan::is_vt_not_complex<T7__>,
                                 stan::is_col_vector<T8__>,
                                 stan::is_vt_not_complex<T8__>,
-                                stan::is_col_vector<T14__>,
-                                stan::is_vt_not_complex<T14__>,
+                                stan::is_col_vector<T9__>,
+                                stan::is_vt_not_complex<T9__>,
                                 stan::is_col_vector<T15__>,
                                 stan::is_vt_not_complex<T15__>,
                                 stan::is_col_vector<T16__>,
                                 stan::is_vt_not_complex<T16__>,
                                 stan::is_col_vector<T17__>,
                                 stan::is_vt_not_complex<T17__>,
-                                stan::is_stan_scalar<T18__>,
+                                stan::is_col_vector<T18__>,
+                                stan::is_vt_not_complex<T18__>,
                                 stan::is_stan_scalar<T19__>,
-                                stan::is_col_vector<T20__>,
-                                stan::is_vt_not_complex<T20__>,
+                                stan::is_stan_scalar<T20__>,
                                 stan::is_col_vector<T21__>,
                                 stan::is_vt_not_complex<T21__>,
                                 stan::is_col_vector<T22__>,
                                 stan::is_vt_not_complex<T22__>,
                                 stan::is_col_vector<T23__>,
                                 stan::is_vt_not_complex<T23__>,
-                                stan::is_stan_scalar<T24__>>* = nullptr>
+                                stan::is_col_vector<T24__>,
+                                stan::is_vt_not_complex<T24__>,
+                                stan::is_stan_scalar<T25__>>* = nullptr>
   stan::promote_args_t<stan::base_type_t<T3__>, stan::base_type_t<T4__>,
     stan::base_type_t<T5__>, stan::base_type_t<T6__>,
     stan::base_type_t<T7__>,
-    stan::promote_args_t<stan::base_type_t<T8__>, stan::base_type_t<T14__>,
+    stan::promote_args_t<stan::base_type_t<T8__>, stan::base_type_t<T9__>,
       stan::base_type_t<T15__>, stan::base_type_t<T16__>,
       stan::base_type_t<T17__>,
-      stan::promote_args_t<T18__, T19__, stan::base_type_t<T20__>,
+      stan::promote_args_t<stan::base_type_t<T18__>, T19__, T20__,
         stan::base_type_t<T21__>, stan::base_type_t<T22__>,
-        stan::promote_args_t<stan::base_type_t<T23__>, T24__>>>>
+        stan::promote_args_t<stan::base_type_t<T23__>,
+          stan::base_type_t<T24__>, T25__>>>>
   operator()(const std::vector<int>& slice_idx, const int& start, const int&
-             end, std::ostream* pstream__, const T3__& marginInv, const T4__&
-             shareIn, const T5__& firm_shareIn, const T6__& log_shareIn,
-             const T7__& log_marginInv, const T8__& price_std,
-             const std::vector<int>& market, const std::vector<int>& group,
-             const std::vector<int>& year, const std::vector<int>&
-             market_year_idx, const std::vector<int>& margin_obs,
-             const T14__& a_market, const T15__& alpha_structural_market,
-             const T16__& b_market, const T17__& b_quality_all, const T18__&
-             sigma_b_strat, const T19__& mu_b_fringe, const T20__& s0_prob,
-             const T21__& cutoff_share, const T22__& sigma_share_market,
-             const T23__& sigma_margin_market, const T24__& rho, const int&
-             supply_model, const int& market_sign, const int& use_cutoff,
-             const int& is_single_market) const {
-    return partial_sum_fn(slice_idx, (start + 1), (end + 1), marginInv,
-             shareIn, firm_shareIn, log_shareIn, log_marginInv, price_std,
-             market, group, year, market_year_idx, margin_obs, a_market,
-             alpha_structural_market, b_market, b_quality_all, sigma_b_strat,
-             mu_b_fringe, s0_prob, cutoff_share, sigma_share_market,
-             sigma_margin_market, rho, supply_model, market_sign, use_cutoff,
-             is_single_market, pstream__);
+             end, std::ostream* pstream__, const T3__& marginNormInv,
+             const T4__& shareIn, const T5__& firm_shareIn, const T6__&
+             log_shareIn, const T7__& log_marginNormInv, const T8__& price,
+             const T9__& price_std, const std::vector<int>& market,
+             const std::vector<int>& group, const std::vector<int>& year,
+             const std::vector<int>& market_year_idx, const std::vector<int>&
+             margin_obs, const T15__& a_market, const T16__&
+             alpha_structural_market, const T17__& b_market, const T18__&
+             b_quality_all, const T19__& sigma_b_strat, const T20__&
+             mu_b_fringe, const T21__& s0_prob, const T22__& cutoff_share,
+             const T23__& sigma_share_market, const T24__&
+             sigma_margin_market, const T25__& rho, const int& supply_model,
+             const int& market_sign, const int& use_cutoff, const int&
+             is_single_market) const {
+    return partial_sum_fn(slice_idx, (start + 1), (end + 1), marginNormInv,
+             shareIn, firm_shareIn, log_shareIn, log_marginNormInv, price,
+             price_std, market, group, year, market_year_idx, margin_obs,
+             a_market, alpha_structural_market, b_market, b_quality_all,
+             sigma_b_strat, mu_b_fringe, s0_prob, cutoff_share,
+             sigma_share_market, sigma_margin_market, rho, supply_model,
+             market_sign, use_cutoff, is_single_market, pstream__);
   }
 };
 template <typename T0__, stan::require_all_t<stan::is_stan_scalar<T0__>>*>
@@ -578,9 +588,9 @@ bounded_inv_logit(const T0__& eta, std::ostream* pstream__) {
   (void) DUMMY_VAR__;
   try {
     local_scalar_t__ eps = DUMMY_VAR__;
-    current_statement__ = 340;
+    current_statement__ = 342;
     eps = 1e-6;
-    current_statement__ = 341;
+    current_statement__ = 343;
     return (eps + ((1.0 - (2.0 * eps)) * stan::math::inv_logit(eta)));
   } catch (const std::exception& e) {
     stan::lang::rethrow_located(e, locations_array__[current_statement__]);
@@ -602,23 +612,23 @@ soft_hmt_penalty(const T0__& agg_elast, const T1__& max_elast, const T2__&
   // suppress unused var warning
   (void) DUMMY_VAR__;
   try {
-    current_statement__ = 345;
+    current_statement__ = 347;
     if (stan::math::logical_gt(agg_elast, max_elast)) {
-      current_statement__ = 343;
+      current_statement__ = 345;
       return (stan::math::normal_lpdf<false>(agg_elast, max_elast, scale) -
              stan::math::normal_lpdf<false>(max_elast, max_elast, scale));
     }
-    current_statement__ = 346;
+    current_statement__ = 348;
     return 0.0;
   } catch (const std::exception& e) {
     stan::lang::rethrow_located(e, locations_array__[current_statement__]);
   }
 }
 template <typename T3__, typename T4__, typename T5__, typename T6__,
-          typename T7__, typename T8__, typename T14__, typename T15__,
+          typename T7__, typename T8__, typename T9__, typename T15__,
           typename T16__, typename T17__, typename T18__, typename T19__,
           typename T20__, typename T21__, typename T22__, typename T23__,
-          typename T24__,
+          typename T24__, typename T25__,
           stan::require_all_t<stan::is_col_vector<T3__>,
                               stan::is_vt_not_complex<T3__>,
                               stan::is_col_vector<T4__>,
@@ -631,47 +641,51 @@ template <typename T3__, typename T4__, typename T5__, typename T6__,
                               stan::is_vt_not_complex<T7__>,
                               stan::is_col_vector<T8__>,
                               stan::is_vt_not_complex<T8__>,
-                              stan::is_col_vector<T14__>,
-                              stan::is_vt_not_complex<T14__>,
+                              stan::is_col_vector<T9__>,
+                              stan::is_vt_not_complex<T9__>,
                               stan::is_col_vector<T15__>,
                               stan::is_vt_not_complex<T15__>,
                               stan::is_col_vector<T16__>,
                               stan::is_vt_not_complex<T16__>,
                               stan::is_col_vector<T17__>,
                               stan::is_vt_not_complex<T17__>,
-                              stan::is_stan_scalar<T18__>,
+                              stan::is_col_vector<T18__>,
+                              stan::is_vt_not_complex<T18__>,
                               stan::is_stan_scalar<T19__>,
-                              stan::is_col_vector<T20__>,
-                              stan::is_vt_not_complex<T20__>,
+                              stan::is_stan_scalar<T20__>,
                               stan::is_col_vector<T21__>,
                               stan::is_vt_not_complex<T21__>,
                               stan::is_col_vector<T22__>,
                               stan::is_vt_not_complex<T22__>,
                               stan::is_col_vector<T23__>,
                               stan::is_vt_not_complex<T23__>,
-                              stan::is_stan_scalar<T24__>>*>
+                              stan::is_col_vector<T24__>,
+                              stan::is_vt_not_complex<T24__>,
+                              stan::is_stan_scalar<T25__>>*>
 stan::promote_args_t<stan::base_type_t<T3__>, stan::base_type_t<T4__>,
   stan::base_type_t<T5__>, stan::base_type_t<T6__>, stan::base_type_t<T7__>,
-  stan::promote_args_t<stan::base_type_t<T8__>, stan::base_type_t<T14__>,
+  stan::promote_args_t<stan::base_type_t<T8__>, stan::base_type_t<T9__>,
     stan::base_type_t<T15__>, stan::base_type_t<T16__>,
     stan::base_type_t<T17__>,
-    stan::promote_args_t<T18__, T19__, stan::base_type_t<T20__>,
+    stan::promote_args_t<stan::base_type_t<T18__>, T19__, T20__,
       stan::base_type_t<T21__>, stan::base_type_t<T22__>,
-      stan::promote_args_t<stan::base_type_t<T23__>, T24__>>>>
+      stan::promote_args_t<stan::base_type_t<T23__>,
+        stan::base_type_t<T24__>, T25__>>>>
 partial_sum_fn(const std::vector<int>& slice_idx, const int& start,
-               const int& end, const T3__& marginInv_arg__, const T4__&
+               const int& end, const T3__& marginNormInv_arg__, const T4__&
                shareIn_arg__, const T5__& firm_shareIn_arg__, const T6__&
-               log_shareIn_arg__, const T7__& log_marginInv_arg__,
-               const T8__& price_std_arg__, const std::vector<int>& market,
-               const std::vector<int>& group, const std::vector<int>& year,
-               const std::vector<int>& market_year_idx,
-               const std::vector<int>& margin_obs, const T14__&
-               a_market_arg__, const T15__& alpha_structural_market_arg__,
-               const T16__& b_market_arg__, const T17__& b_quality_all_arg__,
-               const T18__& sigma_b_strat, const T19__& mu_b_fringe,
-               const T20__& s0_prob_arg__, const T21__& cutoff_share_arg__,
-               const T22__& sigma_share_market_arg__, const T23__&
-               sigma_margin_market_arg__, const T24__& rho, const int&
+               log_shareIn_arg__, const T7__& log_marginNormInv_arg__,
+               const T8__& price_arg__, const T9__& price_std_arg__,
+               const std::vector<int>& market, const std::vector<int>& group,
+               const std::vector<int>& year, const std::vector<int>&
+               market_year_idx, const std::vector<int>& margin_obs,
+               const T15__& a_market_arg__, const T16__&
+               alpha_structural_market_arg__, const T17__& b_market_arg__,
+               const T18__& b_quality_all_arg__, const T19__& sigma_b_strat,
+               const T20__& mu_b_fringe, const T21__& s0_prob_arg__,
+               const T22__& cutoff_share_arg__, const T23__&
+               sigma_share_market_arg__, const T24__&
+               sigma_margin_market_arg__, const T25__& rho, const int&
                supply_model, const int& market_sign, const int& use_cutoff,
                const int& is_single_market, std::ostream* pstream__) {
   using local_scalar_t__ = stan::promote_args_t<stan::base_type_t<T3__>,
@@ -680,22 +694,22 @@ partial_sum_fn(const std::vector<int>& slice_idx, const int& start,
                              stan::base_type_t<T6__>,
                              stan::base_type_t<T7__>,
                              stan::promote_args_t<stan::base_type_t<T8__>,
-                               stan::base_type_t<T14__>,
+                               stan::base_type_t<T9__>,
                                stan::base_type_t<T15__>,
                                stan::base_type_t<T16__>,
                                stan::base_type_t<T17__>,
-                               stan::promote_args_t<T18__, T19__,
-                                 stan::base_type_t<T20__>,
-                                 stan::base_type_t<T21__>,
+                               stan::promote_args_t<stan::base_type_t<T18__>,
+                                 T19__, T20__, stan::base_type_t<T21__>,
                                  stan::base_type_t<T22__>,
                                  stan::promote_args_t<stan::base_type_t<T23__>,
-                                   T24__>>>>;
+                                   stan::base_type_t<T24__>, T25__>>>>;
   int current_statement__ = 0;
-  const auto& marginInv = stan::math::to_ref(marginInv_arg__);
+  const auto& marginNormInv = stan::math::to_ref(marginNormInv_arg__);
   const auto& shareIn = stan::math::to_ref(shareIn_arg__);
   const auto& firm_shareIn = stan::math::to_ref(firm_shareIn_arg__);
   const auto& log_shareIn = stan::math::to_ref(log_shareIn_arg__);
-  const auto& log_marginInv = stan::math::to_ref(log_marginInv_arg__);
+  const auto& log_marginNormInv = stan::math::to_ref(log_marginNormInv_arg__);
+  const auto& price = stan::math::to_ref(price_arg__);
   const auto& price_std = stan::math::to_ref(price_std_arg__);
   const auto& a_market = stan::math::to_ref(a_market_arg__);
   const auto& alpha_structural_market =
@@ -716,83 +730,83 @@ partial_sum_fn(const std::vector<int>& slice_idx, const int& start,
   (void) DUMMY_VAR__;
   try {
     local_scalar_t__ lp = DUMMY_VAR__;
-    current_statement__ = 348;
+    current_statement__ = 350;
     lp = 0;
     int N_slice = std::numeric_limits<int>::min();
-    current_statement__ = 349;
+    current_statement__ = 351;
     N_slice = ((end - start) + 1);
     local_scalar_t__ k = DUMMY_VAR__;
-    current_statement__ = 350;
+    current_statement__ = 352;
     k = 0.2;
-    current_statement__ = 394;
+    current_statement__ = 396;
     for (int n = 1; n <= N_slice; ++n) {
       int i = std::numeric_limits<int>::min();
-      current_statement__ = 351;
+      current_statement__ = 353;
       i = stan::model::rvalue(slice_idx, "slice_idx",
             stan::model::index_uni(n));
       int m = std::numeric_limits<int>::min();
-      current_statement__ = 352;
+      current_statement__ = 354;
       m = stan::model::rvalue(market, "market", stan::model::index_uni(i));
       int mky = std::numeric_limits<int>::min();
-      current_statement__ = 353;
+      current_statement__ = 355;
       mky = stan::model::rvalue(market_year_idx, "market_year_idx",
               stan::model::index_uni(i));
       local_scalar_t__ sigma_share = DUMMY_VAR__;
-      current_statement__ = 354;
+      current_statement__ = 356;
       sigma_share = stan::model::rvalue(sigma_share_market,
                       "sigma_share_market", stan::model::index_uni(m));
       local_scalar_t__ sigma_margin = DUMMY_VAR__;
-      current_statement__ = 355;
+      current_statement__ = 357;
       sigma_margin = stan::model::rvalue(sigma_margin_market,
                        "sigma_margin_market", stan::model::index_uni(m));
       local_scalar_t__ sigma_cond = DUMMY_VAR__;
-      current_statement__ = 356;
+      current_statement__ = 358;
       sigma_cond = (sigma_margin *
         stan::math::sqrt((1.0 - stan::math::square(rho))));
       local_scalar_t__ slope_cond = DUMMY_VAR__;
-      current_statement__ = 357;
+      current_statement__ = 359;
       slope_cond = (rho * (sigma_margin / sigma_share));
       local_scalar_t__ s_out = DUMMY_VAR__;
-      current_statement__ = 358;
+      current_statement__ = 360;
       s_out = stan::model::rvalue(s0_prob, "s0_prob",
                 stan::model::index_uni(mky));
       local_scalar_t__ w = DUMMY_VAR__;
-      current_statement__ = 359;
+      current_statement__ = 361;
       w = 0;
-      current_statement__ = 367;
+      current_statement__ = 369;
       if (stan::math::logical_eq(use_cutoff, 1)) {
         local_scalar_t__ x = DUMMY_VAR__;
-        current_statement__ = 360;
-        x = (-(stan::model::rvalue(shareIn, "shareIn",
+        current_statement__ = 362;
+        x = (-(stan::model::rvalue(firm_shareIn, "firm_shareIn",
                  stan::model::index_uni(i))
           -
           stan::model::rvalue(cutoff_share, "cutoff_share",
             stan::model::index_uni(m)))
           / k);
-        current_statement__ = 365;
+        current_statement__ = 367;
         if (stan::math::logical_gt(x, 10)) {
-          current_statement__ = 364;
+          current_statement__ = 366;
           w = 1.0;
         } else {
-          current_statement__ = 363;
+          current_statement__ = 365;
           if (stan::math::logical_lt(x, -10)) {
-            current_statement__ = 362;
+            current_statement__ = 364;
             w = 0.0;
           } else {
-            current_statement__ = 361;
+            current_statement__ = 363;
             w = stan::math::inv_logit(x);
           }
         }
       }
       local_scalar_t__ b_quality = DUMMY_VAR__;
-      current_statement__ = 368;
+      current_statement__ = 370;
       b_quality = (stan::model::rvalue(b_quality_all, "b_quality_all",
                      stan::model::index_uni(
                        stan::model::rvalue(group, "group",
                          stan::model::index_uni(i))))
         + (w * mu_b_fringe));
       local_scalar_t__ delta = DUMMY_VAR__;
-      current_statement__ = 369;
+      current_statement__ = 371;
       delta = ((stan::model::rvalue(b_market, "b_market",
                   stan::model::index_uni(m))
         + b_quality) + ((market_sign *
@@ -800,30 +814,30 @@ partial_sum_fn(const std::vector<int>& slice_idx, const int& start,
         *
         stan::model::rvalue(price_std, "price_std", stan::model::index_uni(i))));
       local_scalar_t__ pred_log_s = DUMMY_VAR__;
-      current_statement__ = 370;
+      current_statement__ = 372;
       pred_log_s = (stan::math::logit(s_out) + delta);
       local_scalar_t__ alpha_structural = DUMMY_VAR__;
-      current_statement__ = 371;
+      current_statement__ = 373;
       alpha_structural = stan::model::rvalue(alpha_structural_market,
                            "alpha_structural_market",
                            stan::model::index_uni(m));
       local_scalar_t__ inv_markup = DUMMY_VAR__;
-      current_statement__ = 384;
+      current_statement__ = 386;
       if (stan::math::logical_eq(supply_model, 1)) {
-        current_statement__ = 382;
+        current_statement__ = 384;
         inv_markup = (alpha_structural * (w + ((1 - w) * (1.0 -
           (stan::model::rvalue(firm_shareIn, "firm_shareIn",
              stan::model::index_uni(i))
           * (1.0 - s_out))))));
       } else {
-        current_statement__ = 381;
+        current_statement__ = 383;
         if (stan::math::logical_eq(supply_model, 2)) {
-          current_statement__ = 379;
+          current_statement__ = 381;
           inv_markup = alpha_structural;
         } else {
-          current_statement__ = 378;
+          current_statement__ = 380;
           if (stan::math::logical_eq(supply_model, 3)) {
-            current_statement__ = 376;
+            current_statement__ = 378;
             inv_markup = (alpha_structural * (w + ((1 - w) * (s_out / (s_out
               +
               (stan::model::rvalue(firm_shareIn, "firm_shareIn",
@@ -831,47 +845,49 @@ partial_sum_fn(const std::vector<int>& slice_idx, const int& start,
               * (1.0 - s_out)))))));
           } else {
             local_scalar_t__ denom = DUMMY_VAR__;
-            current_statement__ = 373;
+            current_statement__ = 375;
             denom = stan::math::fmin(0.99,
                       (stan::model::rvalue(firm_shareIn, "firm_shareIn",
                          stan::model::index_uni(i)) * (1.0 - s_out)));
-            current_statement__ = 374;
+            current_statement__ = 376;
             inv_markup = (alpha_structural * (w + ((1 - w) * (denom /
               -stan::math::log1m(denom)))));
           }
         }
       }
-      local_scalar_t__ mu2 = DUMMY_VAR__;
-      current_statement__ = 385;
-      mu2 = inv_markup;
-      local_scalar_t__ pred_log_marginInv = DUMMY_VAR__;
-      current_statement__ = 386;
-      pred_log_marginInv = stan::math::log((mu2 + 1e-9));
-      local_scalar_t__ err_share = DUMMY_VAR__;
+      local_scalar_t__ pred_marginNormInv = DUMMY_VAR__;
       current_statement__ = 387;
+      pred_marginNormInv = (stan::model::rvalue(price, "price",
+                              stan::model::index_uni(i))
+        * inv_markup);
+      local_scalar_t__ pred_log_marginNormInv = DUMMY_VAR__;
+      current_statement__ = 388;
+      pred_log_marginNormInv = stan::math::log((pred_marginNormInv + 1e-9));
+      local_scalar_t__ err_share = DUMMY_VAR__;
+      current_statement__ = 389;
       err_share = (stan::model::rvalue(log_shareIn, "log_shareIn",
                      stan::model::index_uni(i))
         - pred_log_s);
       local_scalar_t__ mu2_cond = DUMMY_VAR__;
-      current_statement__ = 388;
-      mu2_cond = (pred_log_marginInv + (slope_cond * err_share));
-      current_statement__ = 389;
+      current_statement__ = 390;
+      mu2_cond = (pred_log_marginNormInv + (slope_cond * err_share));
+      current_statement__ = 391;
       lp = (lp +
         stan::math::normal_lpdf<false>(
           stan::model::rvalue(log_shareIn, "log_shareIn",
             stan::model::index_uni(i)), pred_log_s, sigma_share));
-      current_statement__ = 392;
+      current_statement__ = 394;
       if (stan::math::logical_eq(
             stan::model::rvalue(margin_obs, "margin_obs",
               stan::model::index_uni(i)), 1)) {
-        current_statement__ = 390;
+        current_statement__ = 392;
         lp = (lp +
           stan::math::normal_lpdf<false>(
-            stan::model::rvalue(log_marginInv, "log_marginInv",
+            stan::model::rvalue(log_marginNormInv, "log_marginNormInv",
               stan::model::index_uni(i)), mu2_cond, sigma_cond));
       }
     }
-    current_statement__ = 395;
+    current_statement__ = 397;
     return lp;
   } catch (const std::exception& e) {
     stan::lang::rethrow_located(e, locations_array__[current_statement__]);
@@ -883,9 +899,10 @@ private:
   int N;
   Eigen::Matrix<double,-1,1> shareIn_data__;
   Eigen::Matrix<double,-1,1> firm_shareIn_data__;
-  Eigen::Matrix<double,-1,1> marginInv_data__;
+  Eigen::Matrix<double,-1,1> marginNormInv_data__;
   Eigen::Matrix<double,-1,1> log_shareIn_data__;
-  Eigen::Matrix<double,-1,1> log_marginInv_data__;
+  Eigen::Matrix<double,-1,1> log_marginNormInv_data__;
+  Eigen::Matrix<double,-1,1> price_data__;
   Eigen::Matrix<double,-1,1> price_std_data__;
   double price_sd;
   int market_sign;
@@ -958,9 +975,10 @@ private:
   int sigma_log_sigma_margin_market_1dim__;
   Eigen::Map<Eigen::Matrix<double,-1,1>> shareIn{nullptr, 0};
   Eigen::Map<Eigen::Matrix<double,-1,1>> firm_shareIn{nullptr, 0};
-  Eigen::Map<Eigen::Matrix<double,-1,1>> marginInv{nullptr, 0};
+  Eigen::Map<Eigen::Matrix<double,-1,1>> marginNormInv{nullptr, 0};
   Eigen::Map<Eigen::Matrix<double,-1,1>> log_shareIn{nullptr, 0};
-  Eigen::Map<Eigen::Matrix<double,-1,1>> log_marginInv{nullptr, 0};
+  Eigen::Map<Eigen::Matrix<double,-1,1>> log_marginNormInv{nullptr, 0};
+  Eigen::Map<Eigen::Matrix<double,-1,1>> price{nullptr, 0};
   Eigen::Map<Eigen::Matrix<double,-1,1>> price_std{nullptr, 0};
   Eigen::Map<Eigen::Matrix<double,-1,-1>> X_s0{nullptr, 0, 0};
 public:
@@ -1041,25 +1059,27 @@ public:
         }
       }
       current_statement__ = 231;
-      stan::math::validate_non_negative_index("marginInv", "N", N);
+      stan::math::validate_non_negative_index("marginNormInv", "N", N);
       current_statement__ = 232;
-      context__.validate_dims("data initialization", "marginInv", "double",
-        std::vector<size_t>{static_cast<size_t>(N)});
-      marginInv_data__ = Eigen::Matrix<double,-1,1>::Constant(N,
-                           std::numeric_limits<double>::quiet_NaN());
-      new (&marginInv)
-        Eigen::Map<Eigen::Matrix<double,-1,1>>(marginInv_data__.data(), N);
+      context__.validate_dims("data initialization", "marginNormInv",
+        "double", std::vector<size_t>{static_cast<size_t>(N)});
+      marginNormInv_data__ = Eigen::Matrix<double,-1,1>::Constant(N,
+                               std::numeric_limits<double>::quiet_NaN());
+      new (&marginNormInv)
+        Eigen::Map<Eigen::Matrix<double,-1,1>>(marginNormInv_data__.data(),
+        N);
       {
-        std::vector<local_scalar_t__> marginInv_flat__;
+        std::vector<local_scalar_t__> marginNormInv_flat__;
         current_statement__ = 232;
-        marginInv_flat__ = context__.vals_r("marginInv");
+        marginNormInv_flat__ = context__.vals_r("marginNormInv");
         current_statement__ = 232;
         pos__ = 1;
         current_statement__ = 232;
         for (int sym1__ = 1; sym1__ <= N; ++sym1__) {
           current_statement__ = 232;
-          stan::model::assign(marginInv, marginInv_flat__[(pos__ - 1)],
-            "assigning variable marginInv", stan::model::index_uni(sym1__));
+          stan::model::assign(marginNormInv, marginNormInv_flat__[(pos__ -
+            1)], "assigning variable marginNormInv",
+            stan::model::index_uni(sym1__));
           current_statement__ = 232;
           pos__ = (pos__ + 1);
         }
@@ -1089,34 +1109,59 @@ public:
         }
       }
       current_statement__ = 235;
-      stan::math::validate_non_negative_index("log_marginInv", "N", N);
+      stan::math::validate_non_negative_index("log_marginNormInv", "N", N);
       current_statement__ = 236;
-      context__.validate_dims("data initialization", "log_marginInv",
+      context__.validate_dims("data initialization", "log_marginNormInv",
         "double", std::vector<size_t>{static_cast<size_t>(N)});
-      log_marginInv_data__ = Eigen::Matrix<double,-1,1>::Constant(N,
-                               std::numeric_limits<double>::quiet_NaN());
-      new (&log_marginInv)
-        Eigen::Map<Eigen::Matrix<double,-1,1>>(log_marginInv_data__.data(),
+      log_marginNormInv_data__ = Eigen::Matrix<double,-1,1>::Constant(N,
+                                   std::numeric_limits<double>::quiet_NaN());
+      new (&log_marginNormInv)
+        Eigen::Map<Eigen::Matrix<double,-1,1>>(log_marginNormInv_data__.data(),
         N);
       {
-        std::vector<local_scalar_t__> log_marginInv_flat__;
+        std::vector<local_scalar_t__> log_marginNormInv_flat__;
         current_statement__ = 236;
-        log_marginInv_flat__ = context__.vals_r("log_marginInv");
+        log_marginNormInv_flat__ = context__.vals_r("log_marginNormInv");
         current_statement__ = 236;
         pos__ = 1;
         current_statement__ = 236;
         for (int sym1__ = 1; sym1__ <= N; ++sym1__) {
           current_statement__ = 236;
-          stan::model::assign(log_marginInv, log_marginInv_flat__[(pos__ -
-            1)], "assigning variable log_marginInv",
+          stan::model::assign(log_marginNormInv,
+            log_marginNormInv_flat__[(pos__ - 1)],
+            "assigning variable log_marginNormInv",
             stan::model::index_uni(sym1__));
           current_statement__ = 236;
           pos__ = (pos__ + 1);
         }
       }
       current_statement__ = 237;
-      stan::math::validate_non_negative_index("price_std", "N", N);
+      stan::math::validate_non_negative_index("price", "N", N);
       current_statement__ = 238;
+      context__.validate_dims("data initialization", "price", "double",
+        std::vector<size_t>{static_cast<size_t>(N)});
+      price_data__ = Eigen::Matrix<double,-1,1>::Constant(N,
+                       std::numeric_limits<double>::quiet_NaN());
+      new (&price)
+        Eigen::Map<Eigen::Matrix<double,-1,1>>(price_data__.data(), N);
+      {
+        std::vector<local_scalar_t__> price_flat__;
+        current_statement__ = 238;
+        price_flat__ = context__.vals_r("price");
+        current_statement__ = 238;
+        pos__ = 1;
+        current_statement__ = 238;
+        for (int sym1__ = 1; sym1__ <= N; ++sym1__) {
+          current_statement__ = 238;
+          stan::model::assign(price, price_flat__[(pos__ - 1)],
+            "assigning variable price", stan::model::index_uni(sym1__));
+          current_statement__ = 238;
+          pos__ = (pos__ + 1);
+        }
+      }
+      current_statement__ = 239;
+      stan::math::validate_non_negative_index("price_std", "N", N);
+      current_statement__ = 240;
       context__.validate_dims("data initialization", "price_std", "double",
         std::vector<size_t>{static_cast<size_t>(N)});
       price_std_data__ = Eigen::Matrix<double,-1,1>::Constant(N,
@@ -1125,172 +1170,172 @@ public:
         Eigen::Map<Eigen::Matrix<double,-1,1>>(price_std_data__.data(), N);
       {
         std::vector<local_scalar_t__> price_std_flat__;
-        current_statement__ = 238;
+        current_statement__ = 240;
         price_std_flat__ = context__.vals_r("price_std");
-        current_statement__ = 238;
+        current_statement__ = 240;
         pos__ = 1;
-        current_statement__ = 238;
+        current_statement__ = 240;
         for (int sym1__ = 1; sym1__ <= N; ++sym1__) {
-          current_statement__ = 238;
+          current_statement__ = 240;
           stan::model::assign(price_std, price_std_flat__[(pos__ - 1)],
             "assigning variable price_std", stan::model::index_uni(sym1__));
-          current_statement__ = 238;
+          current_statement__ = 240;
           pos__ = (pos__ + 1);
         }
       }
-      current_statement__ = 239;
+      current_statement__ = 241;
       context__.validate_dims("data initialization", "price_sd", "double",
         std::vector<size_t>{});
       price_sd = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 239;
+      current_statement__ = 241;
       price_sd = context__.vals_r("price_sd")[(1 - 1)];
-      current_statement__ = 239;
+      current_statement__ = 241;
       stan::math::check_greater_or_equal(function__, "price_sd", price_sd, 0);
-      current_statement__ = 240;
+      current_statement__ = 242;
       context__.validate_dims("data initialization", "market_sign", "int",
         std::vector<size_t>{});
       market_sign = std::numeric_limits<int>::min();
-      current_statement__ = 240;
+      current_statement__ = 242;
       market_sign = context__.vals_i("market_sign")[(1 - 1)];
-      current_statement__ = 240;
+      current_statement__ = 242;
       stan::math::check_greater_or_equal(function__, "market_sign",
         market_sign, -1);
-      current_statement__ = 240;
+      current_statement__ = 242;
       stan::math::check_less_or_equal(function__, "market_sign", market_sign,
         1);
-      current_statement__ = 241;
+      current_statement__ = 243;
       context__.validate_dims("data initialization", "N_market", "int",
         std::vector<size_t>{});
       N_market = std::numeric_limits<int>::min();
-      current_statement__ = 241;
-      N_market = context__.vals_i("N_market")[(1 - 1)];
-      current_statement__ = 241;
-      stan::math::check_greater_or_equal(function__, "N_market", N_market, 1);
-      current_statement__ = 242;
-      stan::math::validate_non_negative_index("market", "N", N);
       current_statement__ = 243;
+      N_market = context__.vals_i("N_market")[(1 - 1)];
+      current_statement__ = 243;
+      stan::math::check_greater_or_equal(function__, "N_market", N_market, 1);
+      current_statement__ = 244;
+      stan::math::validate_non_negative_index("market", "N", N);
+      current_statement__ = 245;
       context__.validate_dims("data initialization", "market", "int",
         std::vector<size_t>{static_cast<size_t>(N)});
       market = std::vector<int>(N, std::numeric_limits<int>::min());
-      current_statement__ = 243;
+      current_statement__ = 245;
       market = context__.vals_i("market");
-      current_statement__ = 243;
+      current_statement__ = 245;
       stan::math::check_greater_or_equal(function__, "market", market, 1);
-      current_statement__ = 244;
+      current_statement__ = 246;
       context__.validate_dims("data initialization", "N_group", "int",
         std::vector<size_t>{});
       N_group = std::numeric_limits<int>::min();
-      current_statement__ = 244;
-      N_group = context__.vals_i("N_group")[(1 - 1)];
-      current_statement__ = 244;
-      stan::math::check_greater_or_equal(function__, "N_group", N_group, 1);
-      current_statement__ = 245;
-      stan::math::validate_non_negative_index("group", "N", N);
       current_statement__ = 246;
+      N_group = context__.vals_i("N_group")[(1 - 1)];
+      current_statement__ = 246;
+      stan::math::check_greater_or_equal(function__, "N_group", N_group, 1);
+      current_statement__ = 247;
+      stan::math::validate_non_negative_index("group", "N", N);
+      current_statement__ = 248;
       context__.validate_dims("data initialization", "group", "int",
         std::vector<size_t>{static_cast<size_t>(N)});
       group = std::vector<int>(N, std::numeric_limits<int>::min());
-      current_statement__ = 246;
+      current_statement__ = 248;
       group = context__.vals_i("group");
-      current_statement__ = 246;
+      current_statement__ = 248;
       stan::math::check_greater_or_equal(function__, "group", group, 1);
-      current_statement__ = 247;
+      current_statement__ = 249;
       context__.validate_dims("data initialization", "N_year", "int",
         std::vector<size_t>{});
       N_year = std::numeric_limits<int>::min();
-      current_statement__ = 247;
-      N_year = context__.vals_i("N_year")[(1 - 1)];
-      current_statement__ = 247;
-      stan::math::check_greater_or_equal(function__, "N_year", N_year, 1);
-      current_statement__ = 248;
-      stan::math::validate_non_negative_index("year", "N", N);
       current_statement__ = 249;
+      N_year = context__.vals_i("N_year")[(1 - 1)];
+      current_statement__ = 249;
+      stan::math::check_greater_or_equal(function__, "N_year", N_year, 1);
+      current_statement__ = 250;
+      stan::math::validate_non_negative_index("year", "N", N);
+      current_statement__ = 251;
       context__.validate_dims("data initialization", "year", "int",
         std::vector<size_t>{static_cast<size_t>(N)});
       year = std::vector<int>(N, std::numeric_limits<int>::min());
-      current_statement__ = 249;
+      current_statement__ = 251;
       year = context__.vals_i("year");
-      current_statement__ = 249;
+      current_statement__ = 251;
       stan::math::check_greater_or_equal(function__, "year", year, 1);
-      current_statement__ = 250;
+      current_statement__ = 252;
       context__.validate_dims("data initialization", "supply_model", "int",
         std::vector<size_t>{});
       supply_model = std::numeric_limits<int>::min();
-      current_statement__ = 250;
+      current_statement__ = 252;
       supply_model = context__.vals_i("supply_model")[(1 - 1)];
-      current_statement__ = 250;
+      current_statement__ = 252;
       stan::math::check_greater_or_equal(function__, "supply_model",
         supply_model, 1);
-      current_statement__ = 250;
+      current_statement__ = 252;
       stan::math::check_less_or_equal(function__, "supply_model",
         supply_model, 4);
-      current_statement__ = 251;
+      current_statement__ = 253;
       context__.validate_dims("data initialization", "use_cutoff", "int",
         std::vector<size_t>{});
       use_cutoff = std::numeric_limits<int>::min();
-      current_statement__ = 251;
+      current_statement__ = 253;
       use_cutoff = context__.vals_i("use_cutoff")[(1 - 1)];
-      current_statement__ = 251;
+      current_statement__ = 253;
       stan::math::check_greater_or_equal(function__, "use_cutoff",
         use_cutoff, 0);
-      current_statement__ = 251;
+      current_statement__ = 253;
       stan::math::check_less_or_equal(function__, "use_cutoff", use_cutoff, 1);
-      current_statement__ = 252;
+      current_statement__ = 254;
       context__.validate_dims("data initialization", "grainsize", "int",
         std::vector<size_t>{});
       grainsize = std::numeric_limits<int>::min();
-      current_statement__ = 252;
+      current_statement__ = 254;
       grainsize = context__.vals_i("grainsize")[(1 - 1)];
-      current_statement__ = 252;
+      current_statement__ = 254;
       stan::math::check_greater_or_equal(function__, "grainsize", grainsize,
         1);
-      current_statement__ = 253;
+      current_statement__ = 255;
       context__.validate_dims("data initialization", "N_market_year", "int",
         std::vector<size_t>{});
       N_market_year = std::numeric_limits<int>::min();
-      current_statement__ = 253;
+      current_statement__ = 255;
       N_market_year = context__.vals_i("N_market_year")[(1 - 1)];
-      current_statement__ = 253;
+      current_statement__ = 255;
       stan::math::check_greater_or_equal(function__, "N_market_year",
         N_market_year, 1);
-      current_statement__ = 254;
+      current_statement__ = 256;
       stan::math::validate_non_negative_index("market_year_idx", "N", N);
-      current_statement__ = 255;
+      current_statement__ = 257;
       context__.validate_dims("data initialization", "market_year_idx",
         "int", std::vector<size_t>{static_cast<size_t>(N)});
       market_year_idx = std::vector<int>(N, std::numeric_limits<int>::min());
-      current_statement__ = 255;
+      current_statement__ = 257;
       market_year_idx = context__.vals_i("market_year_idx");
-      current_statement__ = 255;
+      current_statement__ = 257;
       stan::math::check_greater_or_equal(function__, "market_year_idx",
         market_year_idx, 1);
-      current_statement__ = 256;
+      current_statement__ = 258;
       stan::math::validate_non_negative_index("margin_obs", "N", N);
-      current_statement__ = 257;
+      current_statement__ = 259;
       context__.validate_dims("data initialization", "margin_obs", "int",
         std::vector<size_t>{static_cast<size_t>(N)});
       margin_obs = std::vector<int>(N, std::numeric_limits<int>::min());
-      current_statement__ = 257;
+      current_statement__ = 259;
       margin_obs = context__.vals_i("margin_obs");
-      current_statement__ = 257;
+      current_statement__ = 259;
       stan::math::check_greater_or_equal(function__, "margin_obs",
         margin_obs, 0);
-      current_statement__ = 257;
+      current_statement__ = 259;
       stan::math::check_less_or_equal(function__, "margin_obs", margin_obs, 1);
-      current_statement__ = 258;
+      current_statement__ = 260;
       context__.validate_dims("data initialization", "K_s0", "int",
         std::vector<size_t>{});
       K_s0 = std::numeric_limits<int>::min();
-      current_statement__ = 258;
+      current_statement__ = 260;
       K_s0 = context__.vals_i("K_s0")[(1 - 1)];
-      current_statement__ = 258;
+      current_statement__ = 260;
       stan::math::check_greater_or_equal(function__, "K_s0", K_s0, 0);
-      current_statement__ = 259;
+      current_statement__ = 261;
       stan::math::validate_non_negative_index("X_s0", "N_market_year",
         N_market_year);
-      current_statement__ = 260;
+      current_statement__ = 262;
       stan::math::validate_non_negative_index("X_s0", "K_s0", K_s0);
-      current_statement__ = 261;
+      current_statement__ = 263;
       context__.validate_dims("data initialization", "X_s0", "double",
         std::vector<size_t>{static_cast<size_t>(N_market_year),
           static_cast<size_t>(K_s0)});
@@ -1300,330 +1345,330 @@ public:
         N_market_year, K_s0);
       {
         std::vector<local_scalar_t__> X_s0_flat__;
-        current_statement__ = 261;
+        current_statement__ = 263;
         X_s0_flat__ = context__.vals_r("X_s0");
-        current_statement__ = 261;
+        current_statement__ = 263;
         pos__ = 1;
-        current_statement__ = 261;
+        current_statement__ = 263;
         for (int sym1__ = 1; sym1__ <= K_s0; ++sym1__) {
-          current_statement__ = 261;
+          current_statement__ = 263;
           for (int sym2__ = 1; sym2__ <= N_market_year; ++sym2__) {
-            current_statement__ = 261;
+            current_statement__ = 263;
             stan::model::assign(X_s0, X_s0_flat__[(pos__ - 1)],
               "assigning variable X_s0", stan::model::index_uni(sym2__),
               stan::model::index_uni(sym1__));
-            current_statement__ = 261;
+            current_statement__ = 263;
             pos__ = (pos__ + 1);
           }
         }
       }
-      current_statement__ = 262;
+      current_statement__ = 264;
       stan::math::validate_non_negative_index("mky_to_market",
         "N_market_year", N_market_year);
-      current_statement__ = 263;
+      current_statement__ = 265;
       context__.validate_dims("data initialization", "mky_to_market", "int",
         std::vector<size_t>{static_cast<size_t>(N_market_year)});
       mky_to_market = std::vector<int>(N_market_year,
                         std::numeric_limits<int>::min());
-      current_statement__ = 263;
+      current_statement__ = 265;
       mky_to_market = context__.vals_i("mky_to_market");
-      current_statement__ = 263;
+      current_statement__ = 265;
       stan::math::check_greater_or_equal(function__, "mky_to_market",
         mky_to_market, 1);
-      current_statement__ = 264;
+      current_statement__ = 266;
       stan::math::validate_non_negative_index("mky_to_year", "N_market_year",
         N_market_year);
-      current_statement__ = 265;
+      current_statement__ = 267;
       context__.validate_dims("data initialization", "mky_to_year", "int",
         std::vector<size_t>{static_cast<size_t>(N_market_year)});
       mky_to_year = std::vector<int>(N_market_year,
                       std::numeric_limits<int>::min());
-      current_statement__ = 265;
+      current_statement__ = 267;
       mky_to_year = context__.vals_i("mky_to_year");
-      current_statement__ = 265;
+      current_statement__ = 267;
       stan::math::check_greater_or_equal(function__, "mky_to_year",
         mky_to_year, 1);
-      current_statement__ = 266;
+      current_statement__ = 268;
       context__.validate_dims("data initialization", "is_single_market",
         "int", std::vector<size_t>{});
       is_single_market = std::numeric_limits<int>::min();
-      current_statement__ = 266;
+      current_statement__ = 268;
       is_single_market = context__.vals_i("is_single_market")[(1 - 1)];
-      current_statement__ = 266;
+      current_statement__ = 268;
       stan::math::check_greater_or_equal(function__, "is_single_market",
         is_single_market, 0);
-      current_statement__ = 266;
+      current_statement__ = 268;
       stan::math::check_less_or_equal(function__, "is_single_market",
         is_single_market, 1);
-      current_statement__ = 267;
+      current_statement__ = 269;
       context__.validate_dims("data initialization", "use_rho", "int",
         std::vector<size_t>{});
       use_rho = std::numeric_limits<int>::min();
-      current_statement__ = 267;
+      current_statement__ = 269;
       use_rho = context__.vals_i("use_rho")[(1 - 1)];
-      current_statement__ = 267;
+      current_statement__ = 269;
       stan::math::check_greater_or_equal(function__, "use_rho", use_rho, 0);
-      current_statement__ = 267;
+      current_statement__ = 269;
       stan::math::check_less_or_equal(function__, "use_rho", use_rho, 1);
-      current_statement__ = 268;
+      current_statement__ = 270;
       context__.validate_dims("data initialization",
         "use_market_resid_scale", "int", std::vector<size_t>{});
       use_market_resid_scale = std::numeric_limits<int>::min();
-      current_statement__ = 268;
+      current_statement__ = 270;
       use_market_resid_scale = context__.vals_i("use_market_resid_scale")[(1
         - 1)];
-      current_statement__ = 268;
+      current_statement__ = 270;
       stan::math::check_greater_or_equal(function__,
         "use_market_resid_scale", use_market_resid_scale, 0);
-      current_statement__ = 268;
+      current_statement__ = 270;
       stan::math::check_less_or_equal(function__, "use_market_resid_scale",
         use_market_resid_scale, 1);
-      current_statement__ = 269;
+      current_statement__ = 271;
       context__.validate_dims("data initialization", "use_alpha_market_pool",
         "int", std::vector<size_t>{});
       use_alpha_market_pool = std::numeric_limits<int>::min();
-      current_statement__ = 269;
+      current_statement__ = 271;
       use_alpha_market_pool = context__.vals_i("use_alpha_market_pool")[(1 -
         1)];
-      current_statement__ = 269;
+      current_statement__ = 271;
       stan::math::check_greater_or_equal(function__, "use_alpha_market_pool",
         use_alpha_market_pool, 0);
-      current_statement__ = 269;
+      current_statement__ = 271;
       stan::math::check_less_or_equal(function__, "use_alpha_market_pool",
         use_alpha_market_pool, 1);
-      current_statement__ = 270;
+      current_statement__ = 272;
       context__.validate_dims("data initialization",
         "use_s0_market_year_pool", "int", std::vector<size_t>{});
       use_s0_market_year_pool = std::numeric_limits<int>::min();
-      current_statement__ = 270;
+      current_statement__ = 272;
       use_s0_market_year_pool = context__.vals_i("use_s0_market_year_pool")[(1
         - 1)];
-      current_statement__ = 270;
+      current_statement__ = 272;
       stan::math::check_greater_or_equal(function__,
         "use_s0_market_year_pool", use_s0_market_year_pool, 0);
-      current_statement__ = 270;
+      current_statement__ = 272;
       stan::math::check_less_or_equal(function__, "use_s0_market_year_pool",
         use_s0_market_year_pool, 1);
-      current_statement__ = 271;
+      current_statement__ = 273;
       context__.validate_dims("data initialization", "use_centered_alpha",
         "int", std::vector<size_t>{});
       use_centered_alpha = std::numeric_limits<int>::min();
-      current_statement__ = 271;
+      current_statement__ = 273;
       use_centered_alpha = context__.vals_i("use_centered_alpha")[(1 - 1)];
-      current_statement__ = 271;
+      current_statement__ = 273;
       stan::math::check_greater_or_equal(function__, "use_centered_alpha",
         use_centered_alpha, 0);
-      current_statement__ = 271;
+      current_statement__ = 273;
       stan::math::check_less_or_equal(function__, "use_centered_alpha",
         use_centered_alpha, 1);
-      current_statement__ = 272;
+      current_statement__ = 274;
       context__.validate_dims("data initialization", "use_centered_s0_pool",
         "int", std::vector<size_t>{});
       use_centered_s0_pool = std::numeric_limits<int>::min();
-      current_statement__ = 272;
+      current_statement__ = 274;
       use_centered_s0_pool = context__.vals_i("use_centered_s0_pool")[(1 -
         1)];
-      current_statement__ = 272;
+      current_statement__ = 274;
       stan::math::check_greater_or_equal(function__, "use_centered_s0_pool",
         use_centered_s0_pool, 0);
-      current_statement__ = 272;
+      current_statement__ = 274;
       stan::math::check_less_or_equal(function__, "use_centered_s0_pool",
         use_centered_s0_pool, 1);
-      current_statement__ = 273;
+      current_statement__ = 275;
       context__.validate_dims("data initialization", "use_hmt", "int",
         std::vector<size_t>{});
       use_hmt = std::numeric_limits<int>::min();
-      current_statement__ = 273;
+      current_statement__ = 275;
       use_hmt = context__.vals_i("use_hmt")[(1 - 1)];
-      current_statement__ = 273;
+      current_statement__ = 275;
       stan::math::check_greater_or_equal(function__, "use_hmt", use_hmt, 0);
-      current_statement__ = 273;
+      current_statement__ = 275;
       stan::math::check_less_or_equal(function__, "use_hmt", use_hmt, 1);
-      current_statement__ = 274;
+      current_statement__ = 276;
       context__.validate_dims("data initialization", "avg_price_hmt",
         "double", std::vector<size_t>{});
       avg_price_hmt = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 274;
+      current_statement__ = 276;
       avg_price_hmt = context__.vals_r("avg_price_hmt")[(1 - 1)];
-      current_statement__ = 275;
+      current_statement__ = 277;
       context__.validate_dims("data initialization", "avg_margin_hmt",
         "double", std::vector<size_t>{});
       avg_margin_hmt = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 275;
+      current_statement__ = 277;
       avg_margin_hmt = context__.vals_r("avg_margin_hmt")[(1 - 1)];
-      current_statement__ = 276;
+      current_statement__ = 278;
       context__.validate_dims("data initialization", "ssnip_hmt", "double",
         std::vector<size_t>{});
       ssnip_hmt = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 276;
+      current_statement__ = 278;
       ssnip_hmt = context__.vals_r("ssnip_hmt")[(1 - 1)];
-      current_statement__ = 277;
+      current_statement__ = 279;
       context__.validate_dims("data initialization", "prior_sigma_share",
         "double", std::vector<size_t>{});
       prior_sigma_share = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 277;
+      current_statement__ = 279;
       prior_sigma_share = context__.vals_r("prior_sigma_share")[(1 - 1)];
-      current_statement__ = 277;
+      current_statement__ = 279;
       stan::math::check_greater_or_equal(function__, "prior_sigma_share",
         prior_sigma_share, 0);
-      current_statement__ = 278;
+      current_statement__ = 280;
       context__.validate_dims("data initialization", "prior_sigma_margin",
         "double", std::vector<size_t>{});
       prior_sigma_margin = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 278;
+      current_statement__ = 280;
       prior_sigma_margin = context__.vals_r("prior_sigma_margin")[(1 - 1)];
-      current_statement__ = 278;
+      current_statement__ = 280;
       stan::math::check_greater_or_equal(function__, "prior_sigma_margin",
         prior_sigma_margin, 0);
-      current_statement__ = 279;
+      current_statement__ = 281;
       context__.validate_dims("data initialization",
         "prior_sigma_meanval_strat", "double", std::vector<size_t>{});
       prior_sigma_meanval_strat = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 279;
+      current_statement__ = 281;
       prior_sigma_meanval_strat = context__.vals_r("prior_sigma_meanval_strat")[(1
         - 1)];
-      current_statement__ = 279;
+      current_statement__ = 281;
       stan::math::check_greater_or_equal(function__,
         "prior_sigma_meanval_strat", prior_sigma_meanval_strat, 0);
-      current_statement__ = 280;
+      current_statement__ = 282;
       context__.validate_dims("data initialization",
         "prior_sigma_meanval_fringe", "double", std::vector<size_t>{});
       prior_sigma_meanval_fringe = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 280;
+      current_statement__ = 282;
       prior_sigma_meanval_fringe = context__.vals_r("prior_sigma_meanval_fringe")[(1
         - 1)];
-      current_statement__ = 280;
+      current_statement__ = 282;
       stan::math::check_greater_or_equal(function__,
         "prior_sigma_meanval_fringe", prior_sigma_meanval_fringe, 0);
-      current_statement__ = 281;
+      current_statement__ = 283;
       context__.validate_dims("data initialization", "prior_alpha_mean",
         "double", std::vector<size_t>{});
       prior_alpha_mean = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 281;
+      current_statement__ = 283;
       prior_alpha_mean = context__.vals_r("prior_alpha_mean")[(1 - 1)];
-      current_statement__ = 282;
+      current_statement__ = 284;
       context__.validate_dims("data initialization", "prior_alpha_sd",
         "double", std::vector<size_t>{});
       prior_alpha_sd = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 282;
+      current_statement__ = 284;
       prior_alpha_sd = context__.vals_r("prior_alpha_sd")[(1 - 1)];
-      current_statement__ = 282;
+      current_statement__ = 284;
       stan::math::check_greater_or_equal(function__, "prior_alpha_sd",
         prior_alpha_sd, 0);
-      current_statement__ = 283;
+      current_statement__ = 285;
       context__.validate_dims("data initialization", "s0_prior_mean",
         "double", std::vector<size_t>{});
       s0_prior_mean = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 283;
+      current_statement__ = 285;
       s0_prior_mean = context__.vals_r("s0_prior_mean")[(1 - 1)];
-      current_statement__ = 284;
+      current_statement__ = 286;
       context__.validate_dims("data initialization", "s0_prior_sd", "double",
         std::vector<size_t>{});
       s0_prior_sd = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 284;
+      current_statement__ = 286;
       s0_prior_sd = context__.vals_r("s0_prior_sd")[(1 - 1)];
-      current_statement__ = 284;
+      current_statement__ = 286;
       stan::math::check_greater_or_equal(function__, "s0_prior_sd",
         s0_prior_sd, 0);
-      current_statement__ = 285;
+      current_statement__ = 287;
       context__.validate_dims("data initialization", "prior_sigma_alpha",
         "double", std::vector<size_t>{});
       prior_sigma_alpha = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 285;
+      current_statement__ = 287;
       prior_sigma_alpha = context__.vals_r("prior_sigma_alpha")[(1 - 1)];
-      current_statement__ = 285;
+      current_statement__ = 287;
       stan::math::check_greater_or_equal(function__, "prior_sigma_alpha",
         prior_sigma_alpha, 0);
-      current_statement__ = 286;
+      current_statement__ = 288;
       context__.validate_dims("data initialization", "prior_sigma_s0_pool",
         "double", std::vector<size_t>{});
       prior_sigma_s0_pool = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 286;
+      current_statement__ = 288;
       prior_sigma_s0_pool = context__.vals_r("prior_sigma_s0_pool")[(1 - 1)];
-      current_statement__ = 286;
+      current_statement__ = 288;
       stan::math::check_greater_or_equal(function__, "prior_sigma_s0_pool",
         prior_sigma_s0_pool, 0);
-      current_statement__ = 287;
+      current_statement__ = 289;
       context__.validate_dims("data initialization", "prior_sigma_beta_s0",
         "double", std::vector<size_t>{});
       prior_sigma_beta_s0 = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 287;
+      current_statement__ = 289;
       prior_sigma_beta_s0 = context__.vals_r("prior_sigma_beta_s0")[(1 - 1)];
-      current_statement__ = 287;
+      current_statement__ = 289;
       stan::math::check_greater_or_equal(function__, "prior_sigma_beta_s0",
         prior_sigma_beta_s0, 0);
-      current_statement__ = 288;
+      current_statement__ = 290;
       context__.validate_dims("data initialization",
         "prior_sigma_resid_market", "double", std::vector<size_t>{});
       prior_sigma_resid_market = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 288;
+      current_statement__ = 290;
       prior_sigma_resid_market = context__.vals_r("prior_sigma_resid_market")[(1
         - 1)];
-      current_statement__ = 288;
+      current_statement__ = 290;
       stan::math::check_greater_or_equal(function__,
         "prior_sigma_resid_market", prior_sigma_resid_market, 0);
-      current_statement__ = 289;
+      current_statement__ = 291;
       context__.validate_dims("data initialization", "prior_lkj", "double",
         std::vector<size_t>{});
       prior_lkj = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 289;
+      current_statement__ = 291;
       prior_lkj = context__.vals_r("prior_lkj")[(1 - 1)];
-      current_statement__ = 289;
+      current_statement__ = 291;
       stan::math::check_greater_or_equal(function__, "prior_lkj", prior_lkj,
         0);
-      current_statement__ = 290;
+      current_statement__ = 292;
       context__.validate_dims("data initialization", "prior_cutoff_alpha",
         "double", std::vector<size_t>{});
       prior_cutoff_alpha = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 290;
+      current_statement__ = 292;
       prior_cutoff_alpha = context__.vals_r("prior_cutoff_alpha")[(1 - 1)];
-      current_statement__ = 290;
+      current_statement__ = 292;
       stan::math::check_greater_or_equal(function__, "prior_cutoff_alpha",
         prior_cutoff_alpha, 0);
-      current_statement__ = 291;
+      current_statement__ = 293;
       context__.validate_dims("data initialization", "prior_cutoff_beta",
         "double", std::vector<size_t>{});
       prior_cutoff_beta = std::numeric_limits<double>::quiet_NaN();
-      current_statement__ = 291;
+      current_statement__ = 293;
       prior_cutoff_beta = context__.vals_r("prior_cutoff_beta")[(1 - 1)];
-      current_statement__ = 291;
+      current_statement__ = 293;
       stan::math::check_greater_or_equal(function__, "prior_cutoff_beta",
         prior_cutoff_beta, 0);
-      current_statement__ = 292;
+      current_statement__ = 294;
       stan::math::validate_non_negative_index("seq", "N", N);
-      current_statement__ = 293;
+      current_statement__ = 295;
       seq = std::vector<int>(N, std::numeric_limits<int>::min());
-      current_statement__ = 294;
+      current_statement__ = 296;
       is_cournot = std::numeric_limits<int>::min();
-      current_statement__ = 294;
+      current_statement__ = 296;
       is_cournot = (stan::math::logical_eq(supply_model, 3) ? 1 : 0);
-      current_statement__ = 295;
+      current_statement__ = 297;
       pool_alpha_by_market = std::numeric_limits<int>::min();
-      current_statement__ = 295;
+      current_statement__ = 297;
       pool_alpha_by_market = ((stan::math::primitive_value(
                                  stan::math::logical_eq(is_single_market, 0))
         &&
         stan::math::primitive_value(
           stan::math::logical_eq(use_alpha_market_pool, 1))) ? 1 : 0);
-      current_statement__ = 296;
+      current_statement__ = 298;
       stan::math::validate_non_negative_index("n_mky_per_market", "N_market",
         N_market);
-      current_statement__ = 297;
+      current_statement__ = 299;
       n_mky_per_market = std::vector<int>(N_market,
                            std::numeric_limits<int>::min());
-      current_statement__ = 297;
+      current_statement__ = 299;
       stan::model::assign(n_mky_per_market,
         stan::math::rep_array(0, N_market),
         "assigning variable n_mky_per_market");
-      current_statement__ = 299;
+      current_statement__ = 301;
       for (int i = 1; i <= N; ++i) {
-        current_statement__ = 298;
+        current_statement__ = 300;
         stan::model::assign(seq, i, "assigning variable seq",
           stan::model::index_uni(i));
       }
-      current_statement__ = 302;
+      current_statement__ = 304;
       for (int mky = 1; mky <= N_market_year; ++mky) {
-        current_statement__ = 300;
+        current_statement__ = 302;
         stan::model::assign(n_mky_per_market,
           (stan::model::rvalue(n_mky_per_market, "n_mky_per_market",
              stan::model::index_uni(
@@ -1634,60 +1679,60 @@ public:
             stan::model::rvalue(mky_to_market, "mky_to_market",
               stan::model::index_uni(mky))));
       }
-      current_statement__ = 303;
+      current_statement__ = 305;
       mu_b_market_vec_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 303;
+      current_statement__ = 305;
       mu_b_market_vec_1dim__ = (stan::math::logical_eq(is_single_market, 0) ? 1 : 0);
-      current_statement__ = 303;
+      current_statement__ = 305;
       stan::math::validate_non_negative_index("mu_b_market_vec",
         "is_single_market == 0 ? 1 : 0", mu_b_market_vec_1dim__);
-      current_statement__ = 304;
+      current_statement__ = 306;
       sigma_b_market_vec_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 304;
+      current_statement__ = 306;
       sigma_b_market_vec_1dim__ = (stan::math::logical_eq(is_single_market, 0) ? 1 : 0);
-      current_statement__ = 304;
+      current_statement__ = 306;
       stan::math::validate_non_negative_index("sigma_b_market_vec",
         "is_single_market == 0 ? 1 : 0", sigma_b_market_vec_1dim__);
-      current_statement__ = 305;
+      current_statement__ = 307;
       gamma_market_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 305;
+      current_statement__ = 307;
       gamma_market_1dim__ = (stan::math::logical_eq(is_single_market, 0) ? N_market : 0);
-      current_statement__ = 305;
+      current_statement__ = 307;
       stan::math::validate_non_negative_index("gamma_market",
         "is_single_market == 0 ? N_market : 0", gamma_market_1dim__);
-      current_statement__ = 306;
+      current_statement__ = 308;
       stan::math::validate_non_negative_index("b_group_raw", "N_group",
         N_group);
-      current_statement__ = 307;
+      current_statement__ = 309;
       mu_b_fringe_vec_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 307;
+      current_statement__ = 309;
       mu_b_fringe_vec_1dim__ = (stan::math::logical_eq(use_cutoff, 1) ? 1 : 0);
-      current_statement__ = 307;
+      current_statement__ = 309;
       stan::math::validate_non_negative_index("mu_b_fringe_vec",
         "use_cutoff == 1 ? 1 : 0", mu_b_fringe_vec_1dim__);
-      current_statement__ = 308;
+      current_statement__ = 310;
       mu_log_a_free_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 308;
+      current_statement__ = 310;
       mu_log_a_free_1dim__ = ((stan::math::primitive_value(
                                  stan::math::logical_eq(is_cournot, 1))
         &&
         stan::math::primitive_value(
           stan::math::logical_eq(pool_alpha_by_market, 0))) ? 0 : 1);
-      current_statement__ = 308;
+      current_statement__ = 310;
       stan::math::validate_non_negative_index("mu_log_a_free",
         "(is_cournot == 1 && pool_alpha_by_market == 0) ? 0 : 1",
         mu_log_a_free_1dim__);
-      current_statement__ = 309;
+      current_statement__ = 311;
       sigma_log_a_vec_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 309;
+      current_statement__ = 311;
       sigma_log_a_vec_1dim__ = (stan::math::logical_eq(pool_alpha_by_market,
                                   1) ? 1 : 0);
-      current_statement__ = 309;
+      current_statement__ = 311;
       stan::math::validate_non_negative_index("sigma_log_a_vec",
         "pool_alpha_by_market == 1 ? 1 : 0", sigma_log_a_vec_1dim__);
-      current_statement__ = 310;
+      current_statement__ = 312;
       r_market_a_raw_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 310;
+      current_statement__ = 312;
       r_market_a_raw_1dim__ = ((stan::math::primitive_value(
                                   (stan::math::primitive_value(
                                      stan::math::logical_eq(is_cournot, 0))
@@ -1698,13 +1743,13 @@ public:
         &&
         stan::math::primitive_value(
           stan::math::logical_eq(use_centered_alpha, 0))) ? N_market : 0);
-      current_statement__ = 310;
+      current_statement__ = 312;
       stan::math::validate_non_negative_index("r_market_a_raw",
         "(is_cournot == 0 && pool_alpha_by_market == 1 && use_centered_alpha == 0)\n? N_market : 0",
         r_market_a_raw_1dim__);
-      current_statement__ = 311;
+      current_statement__ = 313;
       log_a_market_pool_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 311;
+      current_statement__ = 313;
       log_a_market_pool_1dim__ = ((stan::math::primitive_value(
                                      (stan::math::primitive_value(
                                         stan::math::logical_eq(is_cournot, 0))
@@ -1715,174 +1760,174 @@ public:
         &&
         stan::math::primitive_value(
           stan::math::logical_eq(use_centered_alpha, 1))) ? N_market : 0);
-      current_statement__ = 311;
+      current_statement__ = 313;
       stan::math::validate_non_negative_index("log_a_market_pool",
         "(is_cournot == 0 && pool_alpha_by_market == 1 && use_centered_alpha == 1)\n? N_market : 0",
         log_a_market_pool_1dim__);
-      current_statement__ = 312;
+      current_statement__ = 314;
       log_kappa_vec_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 312;
+      current_statement__ = 314;
       log_kappa_vec_1dim__ = ((stan::math::primitive_value(
                                  stan::math::logical_eq(is_cournot, 1))
         &&
         stan::math::primitive_value(
           stan::math::logical_eq(pool_alpha_by_market, 0))) ? 1 : 0);
-      current_statement__ = 312;
+      current_statement__ = 314;
       stan::math::validate_non_negative_index("log_kappa_vec",
         "(is_cournot == 1 && pool_alpha_by_market == 0) ? 1 : 0",
         log_kappa_vec_1dim__);
-      current_statement__ = 313;
+      current_statement__ = 315;
       log_kappa_market_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 313;
+      current_statement__ = 315;
       log_kappa_market_1dim__ = ((stan::math::primitive_value(
                                     stan::math::logical_eq(is_cournot, 1))
         &&
         stan::math::primitive_value(
           stan::math::logical_eq(pool_alpha_by_market, 1))) ? N_market : 0);
-      current_statement__ = 313;
+      current_statement__ = 315;
       stan::math::validate_non_negative_index("log_kappa_market",
         "(is_cournot == 1 && pool_alpha_by_market == 1) ? N_market : 0",
         log_kappa_market_1dim__);
-      current_statement__ = 314;
+      current_statement__ = 316;
       s0_logit_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 314;
+      current_statement__ = 316;
       s0_logit_1dim__ = (stan::math::logical_eq(use_s0_market_year_pool, 1) ? 0 : N_market_year);
-      current_statement__ = 314;
+      current_statement__ = 316;
       stan::math::validate_non_negative_index("s0_logit",
         "use_s0_market_year_pool == 1 ? 0 : N_market_year", s0_logit_1dim__);
-      current_statement__ = 315;
+      current_statement__ = 317;
       mu_s0_pool_vec_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 315;
+      current_statement__ = 317;
       mu_s0_pool_vec_1dim__ = (stan::math::logical_eq(
                                  use_s0_market_year_pool, 1) ? 1 : 0);
-      current_statement__ = 315;
+      current_statement__ = 317;
       stan::math::validate_non_negative_index("mu_s0_pool_vec",
         "use_s0_market_year_pool == 1 ? 1 : 0", mu_s0_pool_vec_1dim__);
-      current_statement__ = 316;
+      current_statement__ = 318;
       sigma_s0_pool_vec_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 316;
+      current_statement__ = 318;
       sigma_s0_pool_vec_1dim__ = (stan::math::logical_eq(
                                     use_s0_market_year_pool, 1) ? 1 : 0);
-      current_statement__ = 316;
+      current_statement__ = 318;
       stan::math::validate_non_negative_index("sigma_s0_pool_vec",
         "use_s0_market_year_pool == 1 ? 1 : 0", sigma_s0_pool_vec_1dim__);
-      current_statement__ = 317;
+      current_statement__ = 319;
       s0_pool_raw_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 317;
+      current_statement__ = 319;
       s0_pool_raw_1dim__ = ((stan::math::primitive_value(
                                stan::math::logical_eq(
                                  use_s0_market_year_pool, 1))
         &&
         stan::math::primitive_value(
           stan::math::logical_eq(use_centered_s0_pool, 0))) ? N_market_year : 0);
-      current_statement__ = 317;
+      current_statement__ = 319;
       stan::math::validate_non_negative_index("s0_pool_raw",
         "(use_s0_market_year_pool == 1 && use_centered_s0_pool == 0) ? N_market_year\n: 0",
         s0_pool_raw_1dim__);
-      current_statement__ = 318;
+      current_statement__ = 320;
       eta_s0_pool_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 318;
+      current_statement__ = 320;
       eta_s0_pool_1dim__ = ((stan::math::primitive_value(
                                stan::math::logical_eq(
                                  use_s0_market_year_pool, 1))
         &&
         stan::math::primitive_value(
           stan::math::logical_eq(use_centered_s0_pool, 1))) ? N_market_year : 0);
-      current_statement__ = 318;
+      current_statement__ = 320;
       stan::math::validate_non_negative_index("eta_s0_pool",
         "(use_s0_market_year_pool == 1 && use_centered_s0_pool == 1) ? N_market_year\n: 0",
         eta_s0_pool_1dim__);
-      current_statement__ = 319;
+      current_statement__ = 321;
       cutoff_share_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 319;
+      current_statement__ = 321;
       cutoff_share_1dim__ = (stan::math::logical_eq(use_cutoff, 1) ? N_market : 0);
-      current_statement__ = 319;
+      current_statement__ = 321;
       stan::math::validate_non_negative_index("cutoff_share",
         "(use_cutoff == 1) ? N_market : 0", cutoff_share_1dim__);
-      current_statement__ = 320;
+      current_statement__ = 322;
       rho_raw_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 320;
+      current_statement__ = 322;
       rho_raw_1dim__ = (stan::math::logical_eq(use_rho, 1) ? 1 : 0);
-      current_statement__ = 320;
+      current_statement__ = 322;
       stan::math::validate_non_negative_index("rho_raw",
         "use_rho == 1 ? 1 : 0", rho_raw_1dim__);
-      current_statement__ = 321;
+      current_statement__ = 323;
       log_sigma_share_market_raw_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 321;
+      current_statement__ = 323;
       log_sigma_share_market_raw_1dim__ = (stan::math::logical_eq(
                                              use_market_resid_scale, 1) ? N_market : 0);
-      current_statement__ = 321;
+      current_statement__ = 323;
       stan::math::validate_non_negative_index("log_sigma_share_market_raw",
         "use_market_resid_scale == 1 ? N_market : 0",
         log_sigma_share_market_raw_1dim__);
-      current_statement__ = 322;
+      current_statement__ = 324;
       log_sigma_margin_market_raw_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 322;
+      current_statement__ = 324;
       log_sigma_margin_market_raw_1dim__ = (stan::math::logical_eq(
                                               use_market_resid_scale, 1) ? N_market : 0);
-      current_statement__ = 322;
+      current_statement__ = 324;
       stan::math::validate_non_negative_index("log_sigma_margin_market_raw",
         "use_market_resid_scale == 1 ? N_market : 0",
         log_sigma_margin_market_raw_1dim__);
-      current_statement__ = 323;
+      current_statement__ = 325;
       sigma_log_sigma_share_market_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 323;
+      current_statement__ = 325;
       sigma_log_sigma_share_market_1dim__ = (stan::math::logical_eq(
                                                use_market_resid_scale, 1) ? 1 : 0);
-      current_statement__ = 323;
+      current_statement__ = 325;
       stan::math::validate_non_negative_index("sigma_log_sigma_share_market",
         "use_market_resid_scale == 1 ? 1 : 0",
         sigma_log_sigma_share_market_1dim__);
-      current_statement__ = 324;
+      current_statement__ = 326;
       sigma_log_sigma_margin_market_1dim__ = std::numeric_limits<int>::min();
-      current_statement__ = 324;
+      current_statement__ = 326;
       sigma_log_sigma_margin_market_1dim__ = (stan::math::logical_eq(
                                                 use_market_resid_scale, 1) ? 1 : 0);
-      current_statement__ = 324;
+      current_statement__ = 326;
       stan::math::validate_non_negative_index(
         "sigma_log_sigma_margin_market",
         "use_market_resid_scale == 1 ? 1 : 0",
         sigma_log_sigma_margin_market_1dim__);
-      current_statement__ = 325;
+      current_statement__ = 327;
       stan::math::validate_non_negative_index("beta_s0", "K_s0", K_s0);
-      current_statement__ = 326;
+      current_statement__ = 328;
       stan::math::validate_non_negative_index("sigma_share_market",
         "N_market", N_market);
-      current_statement__ = 327;
+      current_statement__ = 329;
       stan::math::validate_non_negative_index("sigma_margin_market",
         "N_market", N_market);
-      current_statement__ = 328;
+      current_statement__ = 330;
       stan::math::validate_non_negative_index("a_market", "N_market",
         N_market);
-      current_statement__ = 329;
+      current_statement__ = 331;
       stan::math::validate_non_negative_index("log_a_market_derived",
         "N_market", N_market);
-      current_statement__ = 330;
+      current_statement__ = 332;
       stan::math::validate_non_negative_index("b_market", "N_market",
         N_market);
-      current_statement__ = 331;
+      current_statement__ = 333;
       stan::math::validate_non_negative_index("b_quality_all", "N_group",
         N_group);
-      current_statement__ = 332;
+      current_statement__ = 334;
       stan::math::validate_non_negative_index("s0", "N_market_year",
         N_market_year);
-      current_statement__ = 333;
+      current_statement__ = 335;
       stan::math::validate_non_negative_index("s0_prob", "N_market_year",
         N_market_year);
-      current_statement__ = 334;
+      current_statement__ = 336;
       stan::math::validate_non_negative_index("mean_log_s0_market",
         "N_market", N_market);
-      current_statement__ = 335;
+      current_statement__ = 337;
       stan::math::validate_non_negative_index("mean_logit_s0_market",
         "N_market", N_market);
-      current_statement__ = 336;
+      current_statement__ = 338;
       stan::math::validate_non_negative_index("alpha_structural_market",
         "N_market", N_market);
-      current_statement__ = 337;
-      stan::math::validate_non_negative_index("pred_shareIn", "N", N);
-      current_statement__ = 338;
-      stan::math::validate_non_negative_index("pred_marginInv", "N", N);
       current_statement__ = 339;
+      stan::math::validate_non_negative_index("pred_shareIn", "N", N);
+      current_statement__ = 340;
+      stan::math::validate_non_negative_index("pred_marginNormInv", "N", N);
+      current_statement__ = 341;
       stan::math::validate_non_negative_index("log_lik", "N", N);
     } catch (const std::exception& e) {
       stan::lang::rethrow_located(e, locations_array__[current_statement__]);
@@ -2534,12 +2579,12 @@ public:
         }
         current_statement__ = 225;
         lp_accum__.add(stan::math::reduce_sum<partial_sum_fn_rsfunctor__>(
-                         seq, grainsize, pstream__, marginInv, shareIn,
-                         firm_shareIn, log_shareIn, log_marginInv, price_std,
-                         market, group, year, market_year_idx, margin_obs,
-                         a_market, alpha_structural_market, b_market,
-                         b_quality_all, sigma_b_strat, mu_b_fringe, s0_prob,
-                         cutoff_share, sigma_share_market,
+                         seq, grainsize, pstream__, marginNormInv, shareIn,
+                         firm_shareIn, log_shareIn, log_marginNormInv, price,
+                         price_std, market, group, year, market_year_idx,
+                         margin_obs, a_market, alpha_structural_market,
+                         b_market, b_quality_all, sigma_b_strat, mu_b_fringe,
+                         s0_prob, cutoff_share, sigma_share_market,
                          sigma_margin_market, rho, supply_model, market_sign,
                          use_cutoff, is_single_market));
       }
@@ -3083,7 +3128,7 @@ public:
       Eigen::Matrix<double,-1,1> pred_shareIn =
         Eigen::Matrix<double,-1,1>::Constant(N,
           std::numeric_limits<double>::quiet_NaN());
-      Eigen::Matrix<double,-1,1> pred_marginInv =
+      Eigen::Matrix<double,-1,1> pred_marginNormInv =
         Eigen::Matrix<double,-1,1>::Constant(N,
           std::numeric_limits<double>::quiet_NaN());
       Eigen::Matrix<double,-1,1> log_lik =
@@ -3124,7 +3169,7 @@ public:
           if (stan::math::logical_eq(use_cutoff, 1)) {
             double x = std::numeric_limits<double>::quiet_NaN();
             current_statement__ = 124;
-            x = (-(stan::model::rvalue(shareIn, "shareIn",
+            x = (-(stan::model::rvalue(firm_shareIn, "firm_shareIn",
                      stan::model::index_uni(n))
               -
               stan::model::rvalue(cutoff_share, "cutoff_share",
@@ -3212,8 +3257,10 @@ public:
             }
           }
           current_statement__ = 151;
-          stan::model::assign(pred_marginInv, inv_markup,
-            "assigning variable pred_marginInv", stan::model::index_uni(n));
+          stan::model::assign(pred_marginNormInv,
+            (stan::model::rvalue(price, "price", stan::model::index_uni(n)) *
+            inv_markup), "assigning variable pred_marginNormInv",
+            stan::model::index_uni(n));
           double err_share = std::numeric_limits<double>::quiet_NaN();
           current_statement__ = 152;
           err_share = (stan::model::rvalue(log_shareIn, "log_shareIn",
@@ -3221,8 +3268,11 @@ public:
             - pred_log_s);
           double mu2_cond = std::numeric_limits<double>::quiet_NaN();
           current_statement__ = 153;
-          mu2_cond = (stan::math::log((inv_markup + 1e-9)) + (slope_cond *
-            err_share));
+          mu2_cond = (stan::math::log(
+                        (stan::model::rvalue(pred_marginNormInv,
+                           "pred_marginNormInv", stan::model::index_uni(n)) +
+                        1e-9))
+            + (slope_cond * err_share));
           current_statement__ = 154;
           stan::model::assign(log_lik,
             stan::math::normal_lpdf<false>(
@@ -3238,14 +3288,14 @@ public:
               (stan::model::rvalue(log_lik, "log_lik",
                  stan::model::index_uni(n)) +
               stan::math::normal_lpdf<false>(
-                stan::model::rvalue(log_marginInv, "log_marginInv",
+                stan::model::rvalue(log_marginNormInv, "log_marginNormInv",
                   stan::model::index_uni(n)), mu2_cond, sigma_cond)),
               "assigning variable log_lik", stan::model::index_uni(n));
           }
         }
       }
       out__.write(pred_shareIn);
-      out__.write(pred_marginInv);
+      out__.write(pred_marginNormInv);
       out__.write(log_lik);
     } catch (const std::exception& e) {
       stan::lang::rethrow_located(e, locations_array__[current_statement__]);
@@ -4097,7 +4147,7 @@ public:
     }
     if (emit_generated_quantities__) {
       std::vector<std::string>
-        temp{"pred_shareIn", "pred_marginInv", "log_lik"};
+        temp{"pred_shareIn", "pred_marginNormInv", "log_lik"};
       names__.reserve(names__.size() + temp.size());
       names__.insert(names__.end(), temp.begin(), temp.end());
     }
@@ -4333,8 +4383,8 @@ public:
           std::to_string(sym1__));
       }
       for (int sym1__ = 1; sym1__ <= N; ++sym1__) {
-        param_names__.emplace_back(std::string() + "pred_marginInv" + '.' +
-          std::to_string(sym1__));
+        param_names__.emplace_back(std::string() + "pred_marginNormInv" + '.'
+          + std::to_string(sym1__));
       }
       for (int sym1__ = 1; sym1__ <= N; ++sym1__) {
         param_names__.emplace_back(std::string() + "log_lik" + '.' +
@@ -4503,8 +4553,8 @@ public:
           std::to_string(sym1__));
       }
       for (int sym1__ = 1; sym1__ <= N; ++sym1__) {
-        param_names__.emplace_back(std::string() + "pred_marginInv" + '.' +
-          std::to_string(sym1__));
+        param_names__.emplace_back(std::string() + "pred_marginNormInv" + '.'
+          + std::to_string(sym1__));
       }
       for (int sym1__ = 1; sym1__ <= N; ++sym1__) {
         param_names__.emplace_back(std::string() + "log_lik" + '.' +
@@ -4513,10 +4563,10 @@ public:
     }
   }
   inline std::string get_constrained_sizedtypes() const {
-    return std::string("[{\"name\":\"mu_b_market_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_b_market_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_b_market_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_b_market_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"gamma_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(gamma_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"b_group_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_group) + "},\"block\":\"parameters\"},{\"name\":\"sigma_b_strat\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"mu_b_fringe_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_b_fringe_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"mu_log_a_free\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_log_a_free_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_a_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_a_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"r_market_a_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(r_market_a_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_a_market_pool\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_a_market_pool_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_kappa_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_kappa_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_kappa_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_kappa_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"s0_logit\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(s0_logit_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"mu_s0_pool_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_s0_pool_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_s0_pool_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_s0_pool_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"s0_pool_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(s0_pool_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"eta_s0_pool\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(eta_s0_pool_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"cutoff_share\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(cutoff_share_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"rho_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(rho_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_sigma_share\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"log_sigma_margin\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"log_sigma_share_market_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_sigma_share_market_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_sigma_margin_market_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_sigma_margin_market_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_sigma_share_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_sigma_share_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_sigma_margin_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_sigma_margin_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"beta_s0\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(K_s0) + "},\"block\":\"parameters\"},{\"name\":\"sigma_share\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_margin\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_share_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_margin_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"rho\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_log_a\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"mu_log_a\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"a_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"log_a_market_derived\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"b_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"b_quality_all\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_group) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mu_b_fringe\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"s0\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market_year) + "},\"block\":\"transformed_parameters\"},{\"name\":\"s0_prob\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market_year) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mean_log_s0_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mean_logit_s0_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"alpha_structural_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"pred_shareIn\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"},{\"name\":\"pred_marginInv\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"},{\"name\":\"log_lik\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"}]");
+    return std::string("[{\"name\":\"mu_b_market_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_b_market_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_b_market_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_b_market_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"gamma_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(gamma_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"b_group_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_group) + "},\"block\":\"parameters\"},{\"name\":\"sigma_b_strat\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"mu_b_fringe_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_b_fringe_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"mu_log_a_free\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_log_a_free_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_a_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_a_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"r_market_a_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(r_market_a_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_a_market_pool\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_a_market_pool_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_kappa_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_kappa_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_kappa_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_kappa_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"s0_logit\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(s0_logit_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"mu_s0_pool_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_s0_pool_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_s0_pool_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_s0_pool_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"s0_pool_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(s0_pool_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"eta_s0_pool\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(eta_s0_pool_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"cutoff_share\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(cutoff_share_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"rho_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(rho_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_sigma_share\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"log_sigma_margin\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"log_sigma_share_market_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_sigma_share_market_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_sigma_margin_market_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_sigma_margin_market_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_sigma_share_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_sigma_share_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_sigma_margin_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_sigma_margin_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"beta_s0\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(K_s0) + "},\"block\":\"parameters\"},{\"name\":\"sigma_share\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_margin\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_share_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_margin_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"rho\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_log_a\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"mu_log_a\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"a_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"log_a_market_derived\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"b_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"b_quality_all\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_group) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mu_b_fringe\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"s0\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market_year) + "},\"block\":\"transformed_parameters\"},{\"name\":\"s0_prob\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market_year) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mean_log_s0_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mean_logit_s0_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"alpha_structural_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"pred_shareIn\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"},{\"name\":\"pred_marginNormInv\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"},{\"name\":\"log_lik\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"}]");
   }
   inline std::string get_unconstrained_sizedtypes() const {
-    return std::string("[{\"name\":\"mu_b_market_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_b_market_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_b_market_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_b_market_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"gamma_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(gamma_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"b_group_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_group) + "},\"block\":\"parameters\"},{\"name\":\"sigma_b_strat\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"mu_b_fringe_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_b_fringe_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"mu_log_a_free\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_log_a_free_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_a_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_a_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"r_market_a_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(r_market_a_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_a_market_pool\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_a_market_pool_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_kappa_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_kappa_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_kappa_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_kappa_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"s0_logit\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(s0_logit_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"mu_s0_pool_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_s0_pool_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_s0_pool_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_s0_pool_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"s0_pool_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(s0_pool_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"eta_s0_pool\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(eta_s0_pool_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"cutoff_share\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(cutoff_share_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"rho_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(rho_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_sigma_share\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"log_sigma_margin\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"log_sigma_share_market_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_sigma_share_market_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_sigma_margin_market_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_sigma_margin_market_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_sigma_share_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_sigma_share_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_sigma_margin_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_sigma_margin_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"beta_s0\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(K_s0) + "},\"block\":\"parameters\"},{\"name\":\"sigma_share\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_margin\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_share_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_margin_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"rho\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_log_a\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"mu_log_a\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"a_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"log_a_market_derived\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"b_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"b_quality_all\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_group) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mu_b_fringe\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"s0\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market_year) + "},\"block\":\"transformed_parameters\"},{\"name\":\"s0_prob\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market_year) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mean_log_s0_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mean_logit_s0_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"alpha_structural_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"pred_shareIn\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"},{\"name\":\"pred_marginInv\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"},{\"name\":\"log_lik\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"}]");
+    return std::string("[{\"name\":\"mu_b_market_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_b_market_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_b_market_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_b_market_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"gamma_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(gamma_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"b_group_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_group) + "},\"block\":\"parameters\"},{\"name\":\"sigma_b_strat\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"mu_b_fringe_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_b_fringe_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"mu_log_a_free\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_log_a_free_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_a_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_a_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"r_market_a_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(r_market_a_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_a_market_pool\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_a_market_pool_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_kappa_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_kappa_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_kappa_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_kappa_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"s0_logit\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(s0_logit_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"mu_s0_pool_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(mu_s0_pool_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_s0_pool_vec\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_s0_pool_vec_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"s0_pool_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(s0_pool_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"eta_s0_pool\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(eta_s0_pool_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"cutoff_share\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(cutoff_share_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"rho_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(rho_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_sigma_share\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"log_sigma_margin\",\"type\":{\"name\":\"real\"},\"block\":\"parameters\"},{\"name\":\"log_sigma_share_market_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_sigma_share_market_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"log_sigma_margin_market_raw\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(log_sigma_margin_market_raw_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_sigma_share_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_sigma_share_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"sigma_log_sigma_margin_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(sigma_log_sigma_margin_market_1dim__) + "},\"block\":\"parameters\"},{\"name\":\"beta_s0\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(K_s0) + "},\"block\":\"parameters\"},{\"name\":\"sigma_share\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_margin\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_share_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_margin_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"rho\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"sigma_log_a\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"mu_log_a\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"a_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"log_a_market_derived\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"b_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"b_quality_all\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_group) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mu_b_fringe\",\"type\":{\"name\":\"real\"},\"block\":\"transformed_parameters\"},{\"name\":\"s0\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market_year) + "},\"block\":\"transformed_parameters\"},{\"name\":\"s0_prob\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market_year) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mean_log_s0_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"mean_logit_s0_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"alpha_structural_market\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N_market) + "},\"block\":\"transformed_parameters\"},{\"name\":\"pred_shareIn\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"},{\"name\":\"pred_marginNormInv\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"},{\"name\":\"log_lik\",\"type\":{\"name\":\"vector\",\"length\":" + std::to_string(N) + "},\"block\":\"generated_quantities\"}]");
   }
   // Begin method overload boilerplate
   template <typename RNG> inline void

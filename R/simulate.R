@@ -20,8 +20,10 @@
 #'   Default \code{NULL} (no cost changes).
 #' @param subset Logical vector indicating which products to include in
 #'   post-merger simulation. Default \code{NULL} (all products).
-#' @param insideSize Total inside market size. Default 1.
-#' @param priceOutside Price of the outside good. Default 0.
+#' @param insideSize Total inside quantity. For CES, this is converted to
+#'   inside expenditure using the observed quantity-weighted price. Default 1.
+#' @param priceOutside Optional positive price of the outside good. By default,
+#'   uses the market-year outside price stored in the fitted model.
 #' @param labels Character vector of product labels. If \code{NULL},
 #'   uses group identifiers from the estimation data.
 #' @param market Which market(s) to simulate. Default \code{NULL} (all).
@@ -34,16 +36,16 @@
 #' @details
 #' For each posterior draw \eqn{i} and each market \eqn{m}, the function:
 #' \enumerate{
-#'   \item Extracts the price coefficient \eqn{\alpha_m^{(i)}} and outside
-#'     share \eqn{s_{0,m}^{(i)}} from the posterior.
+#'   \item Extracts the Logit price coefficient or CES elasticity and the
+#'     outside quantity share from the posterior.
 #'   \item Computes unconditional shares:
 #'     \eqn{s_j = s_j^{cond} \times (1 - s_0)}.
-#'   \item Inverts for mean valuations:
-#'     \eqn{\delta_j = \log(s_j) - \log(s_0) - \alpha \times p_j}.
-#'   \item Constructs the appropriate \pkg{antitrust} class object
-#'     (\code{Logit}, \code{LogitCournot}, or \code{Auction2ndLogit})
-#'     matching the estimated supply model, with the draw's demand
-#'     parameters set as \code{slopes}.
+#'   \item Inverts either the Logit or CES demand equation for mean values,
+#'     converting CES quantity shares to revenue shares where required by
+#'     \pkg{antitrust}.
+#'   \item Constructs an internal conduct-aware subclass of \pkg{antitrust}'s
+#'     \code{Logit} or \code{CES} class with the draw's demand and cutoff
+#'     parameters.
 #'   \item Calibrates pre- and post-merger marginal costs using
 #'     \code{\link[antitrust]{calcMC}}.
 #'   \item Sets observed prices as the pre-merger equilibrium and solves
@@ -51,14 +53,10 @@
 #'     \code{\link[antitrust]{calcPrices}}.
 #' }
 #'
-#' The supply model determines which \pkg{antitrust} class is used:
-#' \describe{
-#'   \item{\code{"bertrand"}}{Creates a \code{Logit} object (Nash-Bertrand).}
-#'   \item{\code{"monopolistic"}}{Creates a \code{Logit} object
-#'     (monopolistic competition).}
-#'   \item{\code{"cournot"}}{Creates a \code{LogitCournot} object.}
-#'   \item{\code{"auction"}}{Creates an \code{Auction2ndLogit} object.}
-#' }
+#' Internal subclasses of \pkg{antitrust}'s \code{Logit} and \code{CES}
+#' classes override only the margin equation. This lets all four estimated
+#' conduct models (including the posterior fringe cutoff) use the upstream
+#' equilibrium, elasticity, diversion, welfare, and HMT machinery.
 #'
 #' @return A \code{\linkS4class{BayesSim}} object.
 #'
@@ -88,7 +86,7 @@ bayes_sim <- function(fit, ownerPost,
                       mcDelta = NULL,
                       subset = NULL,
                       insideSize = 1,
-                      priceOutside = 0,
+                      priceOutside = NULL,
                       labels = NULL,
                       market = NULL,
                       year = NULL,
@@ -100,25 +98,12 @@ bayes_sim <- function(fit, ownerPost,
     stop("'fit' must be a BayesLogit object from bayes_est().")
   }
   validate_fit_spec(fit)
-  if (fit@demand_model == "ces") {
-    stop("bayes_sim() does not yet support CES fits; refusing to simulate a ",
-         "CES posterior with Logit demand equations.", call. = FALSE)
-  }
 
   draws <- rstan::extract(fit@stanfit)
   df    <- fit@data
   price_sd <- fit@price_sd
-  market_side <- fit@market_side
-  is_output <- identical(market_side, "output")
-
-  # Map supply_model integer to antitrust class name
-  supply_class <- switch(as.character(fit@supply_model),
-    "1" = "Logit",
-    "2" = "Logit",
-    "3" = "LogitCournot",
-    "4" = "Auction2ndLogit"
-  )
-  is_auction <- fit@supply_model == 4L
+  is_output <- identical(fit@market_side, "output")
+  is_ces <- identical(fit@demand_model, "ces")
 
   # Determine markets/cells to simulate
   market_f <- as.factor(df$market)
@@ -149,9 +134,17 @@ bayes_sim <- function(fit, ownerPost,
     }
   }
 
-  n_total <- nrow(draws$a_market)
+  n_total <- dim(draws$a_market)[1]
+  if (is.null(n_total)) n_total <- length(draws$a_market)
+  if (length(n_total) != 1L || !is.finite(n_total) || n_total < 1L) {
+    stop("The fitted object contains no posterior draws.", call. = FALSE)
+  }
   if (is.null(n_draws)) {
     n_draws <- min(200L, n_total)
+  }
+  if (length(n_draws) != 1L || !is.finite(n_draws) || n_draws < 1 ||
+      n_draws != as.integer(n_draws)) {
+    stop("'n_draws' must be a positive integer.")
   }
   n_draws <- min(as.integer(n_draws), n_total)
   draw_idx <- sample(seq_len(n_total), n_draws)
@@ -195,16 +188,19 @@ bayes_sim <- function(fit, ownerPost,
   shares_pre   <- list()
   shares_post  <- list()
   prod_labels  <- list()
+  failures     <- list()
   n_valid_vec  <- integer(nrow(sim_units))
   names(n_valid_vec) <- sim_units$unit_id
 
-  select_cell_arg <- function(x, idx, unit_id, mk) {
+  select_cell_arg <- function(x, idx, unit_id, mk, scalar = FALSE) {
     if (is.list(x)) {
       if (!is.null(x[[unit_id]])) return(x[[unit_id]])
       return(x[[mk]])
     }
     if (is.matrix(x)) return(x)
-    x[idx]
+    if (scalar && length(x) == 1L) return(x)
+    if (length(x) == nrow(df)) return(x[idx])
+    x
   }
 
   for (u in seq_len(nrow(sim_units))) {
@@ -230,6 +226,10 @@ bayes_sim <- function(fit, ownerPost,
     # Ownership: pass vectors or matrices; ownerToMatrix handles conversion
     ownerPre_m <- as.character(mdata$group)
     ownerPost_m <- select_cell_arg(ownerPost, mkt_idx, unit_id, mk)
+    if (is.null(ownerPost_m)) {
+      stop("No post-merger ownership supplied for simulation unit '",
+           unit_id, "'.")
+    }
     if (!is.matrix(ownerPost_m)) {
       ownerPost_m <- as.character(ownerPost_m)
     }
@@ -237,6 +237,7 @@ bayes_sim <- function(fit, ownerPost,
     prices_m <- as.numeric(mdata$prices)
     quantities_m <- as.numeric(mdata$quantities)
     margins_m <- as.numeric(mdata$margins)
+    margins_m[!is.finite(margins_m)] <- 0.5
 
     # Compute quantity shares within this market
     shares_cond <- quantities_m / sum(quantities_m)
@@ -246,6 +247,9 @@ bayes_sim <- function(fit, ownerPost,
     } else {
       labels_m <- select_cell_arg(labels, mkt_idx, unit_id, mk)
     }
+    if (length(labels_m) != n_prod) {
+      stop("'labels' must have one value per product in '", unit_id, "'.")
+    }
 
     # mcDelta
     if (is.null(mcDelta)) {
@@ -253,12 +257,48 @@ bayes_sim <- function(fit, ownerPost,
     } else {
       mcDelta_m <- select_cell_arg(mcDelta, mkt_idx, unit_id, mk)
     }
+    if (length(mcDelta_m) != n_prod || any(!is.finite(mcDelta_m)) ||
+        any(mcDelta_m <= -1)) {
+      stop("'mcDelta' must contain finite proportional changes greater than -1 ",
+           "for every product in '", unit_id, "'.")
+    }
 
     # subset
     if (is.null(subset)) {
       subset_m <- rep(TRUE, n_prod)
     } else {
       subset_m <- select_cell_arg(subset, mkt_idx, unit_id, mk)
+    }
+    subset_m <- as.logical(subset_m)
+    if (length(subset_m) != n_prod || anyNA(subset_m) || !any(subset_m)) {
+      stop("'subset' must select at least one product in '", unit_id, "'.")
+    }
+
+    outside_price_m <- if (is.null(priceOutside)) {
+      unique(mdata$outside_price)
+    } else {
+      select_cell_arg(priceOutside, mkt_idx, unit_id, mk, scalar = TRUE)
+    }
+    if (length(outside_price_m) != 1L || !is.finite(outside_price_m) ||
+        outside_price_m <= 0) {
+      stop("'priceOutside' must resolve to one positive finite value for '",
+           unit_id, "'.")
+    }
+    inside_size_m <- select_cell_arg(insideSize, mkt_idx, unit_id, mk,
+                                     scalar = TRUE)
+    if (length(inside_size_m) != 1L || !is.finite(inside_size_m) ||
+        inside_size_m <= 0) {
+      stop("'insideSize' must resolve to one positive finite value for '",
+           unit_id, "'.")
+    }
+
+    if (is.matrix(ownerPost_m)) {
+      if (!identical(dim(ownerPost_m), c(n_prod, n_prod))) {
+        stop("An ownership matrix for '", unit_id, "' must be ", n_prod,
+             " by ", n_prod, ".")
+      }
+    } else if (length(ownerPost_m) != n_prod) {
+      stop("'ownerPost' must have one owner per product in '", unit_id, "'.")
     }
 
     # Pre-allocate result matrices
@@ -269,15 +309,18 @@ bayes_sim <- function(fit, ownerPost,
     colnames(ppre) <- colnames(ppost) <- labels_m
     colnames(spre) <- colnames(spost) <- labels_m
     mkt_sims <- vector("list", n_draws_actual)
+    mkt_failures <- rep(NA_character_, n_draws_actual)
     n_ok <- 0L
 
     for (d in seq_along(draw_idx)) {
       i <- draw_idx[d]
 
       # Extract posterior draw parameters
-      alpha_raw <- draws$a_market[i, market_int_val]
-      alpha <- alpha_raw / price_sd
-      if (is_output) alpha <- -alpha
+      a_raw <- if (is.null(dim(draws$a_market))) {
+        draws$a_market[i]
+      } else {
+        draws$a_market[i, market_int_val]
+      }
 
       s0 <- if ("s0_prob" %in% names(draws)) {
         draws$s0_prob[i, mky_int_val]
@@ -287,34 +330,74 @@ bayes_sim <- function(fit, ownerPost,
         plogis(draws$s0_logit[i, mky_int_val])
       }
 
-      # Compute unconditional shares and mean valuations
+      # Compute unconditional quantity shares and invert demand at observed
+      # prices. These parameterizations reproduce the fitted shares exactly
+      # under antitrust::calcShares().
       shares_uncond <- shares_cond * (1 - s0)
-      meanval <- log(shares_uncond) - log(s0) - alpha * prices_m
 
       res <- tryCatch({
+        if (is_ces) {
+          gamma <- 1 + a_raw / price_sd
+          meanval <- (shares_uncond / s0) *
+            (prices_m / outside_price_m)^gamma
+          total_expenditure_index <- s0 * outside_price_m +
+            sum(prices_m * shares_uncond)
+          R0 <- s0 * outside_price_m / total_expenditure_index
+          shares_for_object <- prices_m * shares_uncond /
+            total_expenditure_index
+          share_inside_for_object <- 1 - R0
+          inside_size_for_object <- inside_size_m *
+            sum(prices_m * shares_cond)
+          class_name <- "BayesConductCES"
+          slopes <- list(gamma = gamma, meanval = meanval,
+                         alpha = R0 / (1 - R0))
+        } else {
+          alpha <- a_raw / price_sd
+          if (is_output) alpha <- -alpha
+          meanval <- log(shares_uncond / s0) -
+            alpha * (prices_m - outside_price_m)
+          shares_for_object <- shares_uncond
+          share_inside_for_object <- 1 - s0
+          inside_size_for_object <- inside_size_m
+          class_name <- "BayesConductLogit"
+          slopes <- list(alpha = alpha, meanval = meanval)
+        }
 
-        # Construct the appropriate antitrust class object
-        # (following the structure of antitrust::sim)
-        obj <- new(supply_class,
+        cutoff_draw <- if (isTRUE(fit@stan_data$use_cutoff == 1L)) {
+          if (is.null(dim(draws$cutoff_share))) {
+            draws$cutoff_share[i]
+          } else {
+            draws$cutoff_share[i, market_int_val]
+          }
+        } else {
+          0
+        }
+
+        obj <- new(class_name,
           prices       = prices_m,
-          shares       = shares_uncond,
+          shares       = shares_for_object,
           margins      = margins_m,
           weights      = rep(1, n_prod),
           ownerPre     = ownerPre_m,
           ownerPost    = ownerPost_m,
           mcDelta      = mcDelta_m,
           subset       = subset_m,
-          insideSize   = insideSize,
-          priceOutside = priceOutside,
+          insideSize   = inside_size_for_object,
+          priceOutside = outside_price_m,
           priceStart   = prices_m,
-          shareInside  = 1 - s0,
+          pricePre     = prices_m,
+          pricePost    = prices_m,
+          shareInside  = share_inside_for_object,
           normIndex    = NA,
           output       = is_output,
-          labels       = labels_m
+          labels       = labels_m,
+          supply_model = fit@supply_model,
+          use_cutoff   = isTRUE(fit@stan_data$use_cutoff == 1L),
+          cutoff_share = as.numeric(cutoff_draw),
+          cutoff_scale = 0.2
         )
 
-        # Set demand slopes from posterior draw
-        obj@slopes <- list(alpha = alpha, meanval = meanval)
+        obj@slopes <- slopes
 
         # Convert ownership vectors to matrices
         obj@ownerPre  <- ownerToMatrix(obj, TRUE)
@@ -327,21 +410,25 @@ bayes_sim <- function(fit, ownerPost,
         # Use observed prices as pre-merger equilibrium
         obj@pricePre <- prices_m
 
-        # Solve for post-merger equilibrium prices
-        # (auction models don't pass subset to calcPrices)
-        if (is_auction) {
-          obj@pricePost <- calcPrices(obj, preMerger = FALSE, ...)
+        # Under monopolistic competition, ownership alone cannot change the
+        # equilibrium. Preserve this implication exactly rather than asking a
+        # nonlinear solver to rediscover the observed-price root.
+        ownership_only_moncom <- fit@supply_model == 2L &&
+          all(mcDelta_m == 0) && all(subset_m)
+        if (ownership_only_moncom) {
+          obj@pricePost <- prices_m
         } else {
-          obj@pricePost <- calcPrices(obj, preMerger = FALSE,
-                                      subset = subset_m, ...)
+          obj@pricePost <- calcPrices(obj, preMerger = FALSE, ...)
         }
 
-        # Set market size
-        obj@mktSize <- insideSize / sum(calcShares(obj))
+        obj@mktSize <- inside_size_for_object / share_inside_for_object
 
         obj
       },
-        error = function(e) NULL
+        error = function(e) {
+          mkt_failures[d] <<- conditionMessage(e)
+          NULL
+        }
       )
 
       if (!is.null(res)) {
@@ -361,7 +448,15 @@ bayes_sim <- function(fit, ownerPost,
     shares_pre[[unit_id]]   <- spre
     shares_post[[unit_id]]  <- spost
     prod_labels[[unit_id]]  <- labels_m
+    failures[[unit_id]]     <- mkt_failures
     n_valid_vec[unit_id]    <- n_ok
+  }
+
+  n_failed <- sum(vapply(failures, function(x) sum(!is.na(x)), integer(1)))
+  if (n_failed > 0L) {
+    warning(n_failed, " of ", n_draws_actual * nrow(sim_units),
+            " market-draw simulations failed. Inspect result@failures for details.",
+            call. = FALSE)
   }
 
   new("BayesSim",
@@ -375,6 +470,7 @@ bayes_sim <- function(fit, ownerPost,
     product_labels = prod_labels,
     n_draws        = as.integer(n_draws_actual),
     n_valid        = n_valid_vec,
+    failures       = failures,
     call           = cl
   )
 }

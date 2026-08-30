@@ -11,7 +11,7 @@ bayes_sim(
   mcDelta = NULL,
   subset = NULL,
   insideSize = 1,
-  priceOutside = 0,
+  priceOutside = NULL,
   labels = NULL,
   market = NULL,
   year = NULL,
@@ -35,9 +35,11 @@ Default \code{NULL} (no cost changes).}
 \item{subset}{Logical vector indicating which products to include in
 post-merger simulation. Default \code{NULL} (all products).}
 
-\item{insideSize}{Total inside market size. Default 1.}
+\item{insideSize}{Total inside quantity. For CES, this is converted to
+inside expenditure using the observed quantity-weighted price. Default 1.}
 
-\item{priceOutside}{Price of the outside good. Default 0.}
+\item{priceOutside}{Optional positive price of the outside good. By default,
+uses the market-year outside price stored in the fitted model.}
 
 \item{labels}{Character vector of product labels. If \code{NULL},
 uses group identifiers from the estimation data.}
@@ -67,16 +69,16 @@ metrics.
 \details{
 For each posterior draw \eqn{i} and each market \eqn{m}, the function:
 \enumerate{
-\item Extracts the price coefficient \eqn{\alpha_m^{(i)}} and outside
-share \eqn{s_{0,m}^{(i)}} from the posterior.
+\item Extracts the Logit price coefficient or CES elasticity and the
+outside quantity share from the posterior.
 \item Computes unconditional shares:
 \eqn{s_j = s_j^{cond} \times (1 - s_0)}.
-\item Inverts for mean valuations:
-\eqn{\delta_j = \log(s_j) - \log(s_0) - \alpha \times p_j}.
-\item Constructs the appropriate \pkg{antitrust} class object
-(\code{Logit}, \code{LogitCournot}, or \code{Auction2ndLogit})
-matching the estimated supply model, with the draw's demand
-parameters set as \code{slopes}.
+\item Inverts either the Logit or CES demand equation for mean values,
+converting CES quantity shares to revenue shares where required by
+\pkg{antitrust}.
+\item Constructs an internal conduct-aware subclass of \pkg{antitrust}'s
+\code{Logit} or \code{CES} class with the draw's demand and cutoff
+parameters.
 \item Calibrates pre- and post-merger marginal costs using
 \code{\link[antitrust]{calcMC}}.
 \item Sets observed prices as the pre-merger equilibrium and solves
@@ -84,14 +86,10 @@ for post-merger equilibrium prices using
 \code{\link[antitrust]{calcPrices}}.
 }
 
-The supply model determines which \pkg{antitrust} class is used:
-\describe{
-\item{\code{"bertrand"}}{Creates a \code{Logit} object (Nash-Bertrand).}
-\item{\code{"monopolistic"}}{Creates a \code{Logit} object
-(monopolistic competition).}
-\item{\code{"cournot"}}{Creates a \code{LogitCournot} object.}
-\item{\code{"auction"}}{Creates an \code{Auction2ndLogit} object.}
-}
+Internal subclasses of \pkg{antitrust}'s \code{Logit} and \code{CES}
+classes override only the margin equation. This lets all four estimated
+conduct models (including the posterior fringe cutoff) use the upstream
+equilibrium, elasticity, diversion, welfare, and HMT machinery.
 }
 \examples{
 \donttest{

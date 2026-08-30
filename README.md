@@ -8,11 +8,11 @@ Bayesian estimation of differentiated products demand and supply models using St
 
 - **`bayes_est()`** — Estimate a hierarchical Bayesian Logit or CES demand + supply model using Stan MCMC. Supports four supply models (Bertrand, Monopolistic, Cournot, Second-Score Auction).
 
-- **`bayes_sim()`** — Simulate merger effects over posterior draws. Each draw produces a full merger simulation via `antitrust::sim()`, yielding posterior distributions of price changes, share changes, and all other `antitrust` package metrics.
+- **`bayes_sim()`** — Simulate Logit or CES merger effects over posterior draws with conduct-aware subclasses of the `antitrust` package, yielding posterior distributions of prices, shares, elasticities, diversion, welfare, and HMT results.
 
 Additional utilities:
 
-- **`bayes_compare()`** — Compare models using WAIC/LOO-IC with stacking weights.
+- **`bayes_compare()`** — Compare models using WAIC/LOO-IC with stacking weights and optional bridge sampling. Logit/CES comparison is allowed when both fits use the same quantity-space outcomes and market side.
 - **`bayes_avg()`** — Bayesian model averaging across supply model specifications.
 
 ## Installation

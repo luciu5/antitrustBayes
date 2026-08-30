@@ -30,6 +30,31 @@ setClass(
   )
 )
 
+# Internal antitrust-compatible classes.  They inherit antitrust's demand,
+# elasticity, diversion, welfare, and equilibrium methods, while replacing
+# only the supply-margin equation with the conduct model estimated in Stan.
+setClass(
+  "BayesConductLogit",
+  contains = "Logit",
+  slots = c(
+    supply_model = "integer",
+    use_cutoff = "logical",
+    cutoff_share = "numeric",
+    cutoff_scale = "numeric"
+  )
+)
+
+setClass(
+  "BayesConductCES",
+  contains = "CES",
+  slots = c(
+    supply_model = "integer",
+    use_cutoff = "logical",
+    cutoff_share = "numeric",
+    cutoff_scale = "numeric"
+  )
+)
+
 #' @title S4 Class for Bayesian Merger Simulation Results
 #' @name BayesSim-class
 #' @aliases BayesSim
@@ -55,6 +80,8 @@ setClass(
 #' @slot n_draws Integer: number of posterior draws used.
 #' @slot n_valid A named integer vector: number of successful simulations per
 #'   market.
+#' @slot failures A named list containing simulation failure messages by
+#'   market and draw.
 #' @slot call The matched call to \code{\link{bayes_sim}}.
 #'
 #' @export
@@ -71,6 +98,7 @@ setClass(
     product_labels = "list",
     n_draws        = "integer",
     n_valid        = "integer",
+    failures       = "list",
     call           = "call"
   )
 )
