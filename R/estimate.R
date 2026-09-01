@@ -34,8 +34,25 @@
 #'   \code{"auction"}, or \code{"bargaining"}.
 #' @param use_cutoff Logical. If \code{TRUE}, estimate a fringe-firm share
 #'   cutoff. Default \code{FALSE}.
-#' @param use_rho Deprecated. Share and margin likelihoods are factored in the
-#'   current specification, so this must be \code{FALSE}.
+#' @param use_rho Logical. If \code{TRUE} (default), couple the share and
+#'   margin likelihoods per observation through a free cross-equation
+#'   correlation \code{rho}, using a bivariate Student-t factored as
+#'   \code{p(share) * p(margin | share)}. \code{rho} is only ever
+#'   instantiated when \code{likelihood = "joint"} and at least one
+#'   observation has an observed margin; otherwise it is structurally fixed
+#'   at zero (never sampled). Note that \code{likelihood = "share"} omits the
+#'   margin equation and therefore the equilibrium-margin information that
+#'   principally identifies the outside share's level -- under share-only
+#'   fits, the outside share may be weakly identified or prior-dominated,
+#'   depending on the market/time/intercept structure of the data. This is an
+#'   expected property of the model, not a defect to be tuned away.
+#' @param df Degrees of freedom for the joint bivariate (or, when \code{rho}
+#'   is inactive, marginal) Student-t likelihood. Either a single finite
+#'   numeric greater than 2 (fixed, default \code{5}, preferred for sparse
+#'   information sets) or the character sentinel \code{"estimate"}, which
+#'   places a \code{gamma(prior_nu_shape, prior_nu_rate)} prior on
+#'   \code{nu - 2} and estimates \code{nu} jointly with the rest of the
+#'   model.
 #' @param use_market_resid_scale Logical. If \code{TRUE}, allow market-level
 #'   share and inverse-margin residual scales with hierarchical shrinkage.
 #'   Default \code{FALSE}.
@@ -128,8 +145,15 @@
 #'     scale (default 0.5).}
 #'   \item{\code{prior_log_sigma_margin_sd}}{Prior SD for the log
 #'     inverse-margin-error scale (default 1).}
-#'   \item{\code{margin_df}}{Degrees of freedom for the Student-t
-#'     inverse-margin likelihood (default 5).}
+#'   \item{\code{resid_df_fixed}}{Fixed degrees of freedom for the joint
+#'     bivariate (or marginal) Student-t likelihood when \code{df} is
+#'     numeric (default 5).}
+#'   \item{\code{prior_nu_shape}, \code{prior_nu_rate}}{Gamma shape/rate for
+#'     the prior on \code{nu - 2} when \code{df = "estimate"} (defaults 2 and
+#'     0.25, i.e. mean 8, mode 4; provisional, pending prior-predictive
+#'     checks).}
+#'   \item{\code{prior_lkj}}{LKJ-style concentration parameter for the
+#'     share-margin correlation \code{rho} (default 2).}
 #'   \item{\code{bargaining_prior_lower}, \code{bargaining_prior_upper}}{Bounds
 #'     for the bargaining-power prior (default 0 and 0.9999). The baseline is
 #'     uniform on this interval; beta shape parameters provide a high-power
@@ -178,7 +202,8 @@ bayes_est <- function(prices, quantities, margins,
                         "cournot", "auction", "bargaining"
                       ),
                       use_cutoff = FALSE,
-                      use_rho = FALSE,
+                      use_rho = TRUE,
+                      df = 5,
                       use_market_resid_scale = FALSE,
                       use_alpha_market_pool = TRUE,
                       use_s0_market_year_pool = FALSE,
@@ -251,9 +276,14 @@ bayes_est <- function(prices, quantities, margins,
     stop("Output-market Lerner indices must be strictly less than 1. ",
          "Use market_side = \"input\" for positive markdown ratios.")
   }
-  if (isTRUE(use_rho)) {
-    stop("'use_rho' is no longer supported: the compositional-share and ",
-         "robust-margin likelihoods are factored.")
+  estimate_df <- identical(df, "estimate")
+  resid_df_fixed <- NULL
+  if (!estimate_df) {
+    if (!is.numeric(df) || length(df) != 1L || !is.finite(df) || df <= 2) {
+      stop("'df' must be a single finite numeric greater than 2, or the ",
+           "character sentinel \"estimate\".")
+    }
+    resid_df_fixed <- df
   }
   flags <- list(
     use_cutoff = use_cutoff,
@@ -355,7 +385,9 @@ bayes_est <- function(prices, quantities, margins,
       X_s0         = X_s0,
       outside_price = outside_price,
       grainsize    = grainsize,
-      margin_observed = margin_observed
+      margin_observed = margin_observed,
+      estimate_df  = estimate_df,
+      resid_df_fixed = resid_df_fixed
     )
     stan_mod <- stanmodels[["logit_supply"]]
     price_sd_val <- stan_data$price_sd
@@ -383,7 +415,9 @@ bayes_est <- function(prices, quantities, margins,
       use_s0_market_year_pool = use_s0_market_year_pool,
       use_centered_alpha = use_centered_alpha,
       use_centered_s0_pool = use_centered_s0_pool,
-      margin_observed = margin_observed
+      margin_observed = margin_observed,
+      estimate_df  = estimate_df,
+      resid_df_fixed = resid_df_fixed
     )
     stan_mod <- stanmodels[["ces_supply"]]
     price_sd_val <- stan_data$log_price_sd
@@ -406,6 +440,12 @@ bayes_est <- function(prices, quantities, margins,
   metadata$supply_model <- supply_model
   metadata$demand_model <- demand_model
   metadata$resolved_priors <- priors
+  metadata$df_mode <- if (estimate_df) "estimated" else "fixed"
+  metadata$resid_df_fixed <- if (estimate_df) NA_real_ else resid_df_fixed
+  metadata$nu_prior <- list(
+    shape = priors$prior_nu_shape,
+    rate = priors$prior_nu_rate
+  )
 
   new("BayesLogit",
     stanfit      = stanfit,

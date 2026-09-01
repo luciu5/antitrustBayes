@@ -164,8 +164,8 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
     "Bertrand", "Monopolistic", "Cournot", "Auction", "Bargaining"
   )
 
-  loo_list  <- list()
-  waic_list <- list()
+  loo_list  <- vector("list", length(fits))
+  waic_list <- vector("list", length(fits))
   bridge_list <- list()
   parameter_name <- switch(loo_unit,
     observation = "log_lik",
@@ -184,8 +184,6 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
     if (is.null(n_units)) n_units <- 1L
     if (n_units < 2L) {
       loo_available <- FALSE
-      loo_list[[i]] <- NULL
-      waic_list[[i]] <- NULL
     } else {
       r_eff <- loo::relative_eff(exp(log_lik))
       loo_list[[i]]  <- loo::loo(log_lik, r_eff = r_eff)

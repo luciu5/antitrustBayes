@@ -36,7 +36,15 @@ bayes_prior_manifest <- function(name = c("baseline", "tight", "diffuse")) {
     prior_sigma_resid_market = 0.35,
     prior_cutoff_alpha = 3,
     prior_cutoff_beta = 100,
-    margin_df = 5,
+    # Fixed default df for the joint bivariate Student-t; 5 is a practical
+    # default for sparse information sets (e.g. single-market PNB fits).
+    resid_df_fixed = 5,
+    # Estimated-df prior (gamma on nu - 2): mean 8, mode 4. Provisional --
+    # deferred pending prior-predictive checks, not a settled default.
+    prior_nu_shape = 2,
+    prior_nu_rate = 0.25,
+    # LKJ-style concentration for the share-margin correlation rho.
+    prior_lkj = 2.0,
     bargaining_prior_lower = 0,
     bargaining_prior_upper = 0.9999,
     bargaining_prior_alpha = 1,

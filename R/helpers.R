@@ -49,8 +49,8 @@ validate_priors <- function(priors) {
       stop("Bargaining prior bounds must define an increasing interval in [0, 1).")
     }
   }
-  if ("margin_df" %in% names(priors) && priors$margin_df <= 2) {
-    stop("'margin_df' must exceed 2.")
+  if ("resid_df_fixed" %in% names(priors) && priors$resid_df_fixed <= 2) {
+    stop("'resid_df_fixed' must exceed 2.")
   }
   invisible(TRUE)
 }
@@ -198,7 +198,9 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               margin_observed = NULL,
                               outside_price = 1,
                               likelihood_mode = 1L,
-                              loo_cluster = market) {
+                              loo_cluster = market,
+                              estimate_df = FALSE,
+                              resid_df_fixed = NULL) {
   N <- length(prices)
   market_side <- match.arg(market_side, c("input", "output"))
   market_sign <- if (market_side == "input") 1L else -1L
@@ -316,6 +318,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     default_priors$s0_prior_mean,
     default_priors$s0_prior_sd
   )
+  if (!is.null(resid_df_fixed)) default_priors$resid_df_fixed <- resid_df_fixed
   validate_priors(default_priors)
   if (!likelihood_mode %in% 1:3) {
     stop("'likelihood_mode' must be 1 (joint), 2 (share), or 3 (margin).")
@@ -376,7 +379,8 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       use_hmt = as.integer(use_hmt),
       avg_price_hmt = avg_price_hmt,
       avg_margin_hmt = avg_margin_hmt,
-      ssnip_hmt = ssnip_hmt
+      ssnip_hmt = ssnip_hmt,
+      estimate_df = as.integer(estimate_df)
     ),
     default_priors
   )
@@ -417,7 +421,9 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   margin_observed = NULL,
                                   outside_price = 1,
                                   likelihood_mode = 1L,
-                                  loo_cluster = market) {
+                                  loo_cluster = market,
+                                  estimate_df = FALSE,
+                                  resid_df_fixed = NULL) {
   N <- length(prices)
   market_side <- match.arg(market_side, c("input", "output"))
   if (market_side != "output") {
@@ -555,6 +561,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     stats::qlogis(s0_prior_reference) + log(outside_price) -
       log(inside_price_index)
   )
+  if (!is.null(resid_df_fixed)) default_priors$resid_df_fixed <- resid_df_fixed
   validate_priors(default_priors)
   if (!likelihood_mode %in% 1:3) {
     stop("'likelihood_mode' must be 1 (joint), 2 (share), or 3 (margin).")
@@ -617,7 +624,8 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       use_hmt = as.integer(use_hmt),
       avg_price_hmt = avg_price_hmt,
       avg_margin_hmt = avg_margin_hmt,
-      ssnip_hmt = ssnip_hmt
+      ssnip_hmt = ssnip_hmt,
+      estimate_df = as.integer(estimate_df)
     ),
     default_priors
   )
@@ -791,7 +799,7 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
 # Current fitted-object/model contract. Increment whenever the Stan likelihood
 # changes in a way that makes serialized fits unsuitable for comparison or
 # simulation under the current package.
-.antitrust_bayes_model_spec_version <- 5L
+.antitrust_bayes_model_spec_version <- 6L
 
 # Arithmetic mean of a logistic-normal random variable. The outside-share
 # prior is parameterized on the logit scale in Stan, while FOC prior
