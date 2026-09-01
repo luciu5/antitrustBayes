@@ -425,9 +425,9 @@ bayes_est <- function(prices, quantities, margins,
 
   # Store the resolved market-year outside price on every observation so that
   # simulation and cross-demand comparison use the fitted normalization.
-  df$outside_price <- stan_data$outside_price[
+  df$outside_price <- as.numeric(stan_data$outside_price[
     stan_data$market_year_idx
-  ]
+  ])
 
   # Run sampling
   stanfit <- do.call(rstan::sampling, c(
