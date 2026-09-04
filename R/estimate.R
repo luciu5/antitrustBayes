@@ -59,7 +59,21 @@
 #' @param use_alpha_market_pool Logical. If \code{TRUE}, allow market-level
 #'   logit price coefficients with hierarchical shrinkage. Default \code{TRUE}.
 #' @param use_s0_market_year_pool Logical. If \code{TRUE}, allow market-year
-#'   outside shares with hierarchical shrinkage. Default \code{FALSE}.
+#'   outside shares with hierarchical shrinkage (one outside share per
+#'   market-year). Default \code{FALSE}. Mutually exclusive with
+#'   \code{use_s0_market_pool}. Note that market-year pooling introduces one
+#'   weakly-identified outside share per market-year cell; when a market spans
+#'   several periods with sparse per-cell information, its hyper-scale can be
+#'   poorly identified (low BFMI). Prefer \code{use_s0_market_pool} in that
+#'   regime.
+#' @param use_s0_market_pool Logical. If \code{TRUE}, pool the outside share at
+#'   the \emph{market} level: one outside share per market, shared across all of
+#'   that market's periods, with hierarchical shrinkage across markets
+#'   (structurally parallel to \code{use_alpha_market_pool}). Better identified
+#'   than \code{use_s0_market_year_pool} when markets are observed over multiple
+#'   periods, because each market-level effect is disciplined by all of the
+#'   market's observations. Default \code{FALSE}. Mutually exclusive with
+#'   \code{use_s0_market_year_pool}.
 #' @param use_centered_alpha Logical. If \code{TRUE}, use the centered
 #'   parameterization for market-level price coefficients. Default \code{FALSE}.
 #' @param use_centered_s0_pool Logical. If \code{TRUE}, use the centered
@@ -207,6 +221,7 @@ bayes_est <- function(prices, quantities, margins,
                       use_market_resid_scale = FALSE,
                       use_alpha_market_pool = TRUE,
                       use_s0_market_year_pool = FALSE,
+                      use_s0_market_pool = FALSE,
                       use_centered_alpha = FALSE,
                       use_centered_s0_pool = FALSE,
                       use_hmt = FALSE,
@@ -291,6 +306,7 @@ bayes_est <- function(prices, quantities, margins,
     use_market_resid_scale = use_market_resid_scale,
     use_alpha_market_pool = use_alpha_market_pool,
     use_s0_market_year_pool = use_s0_market_year_pool,
+    use_s0_market_pool = use_s0_market_pool,
     use_centered_alpha = use_centered_alpha,
     use_centered_s0_pool = use_centered_s0_pool,
     use_hmt = use_hmt
@@ -303,6 +319,10 @@ bayes_est <- function(prices, quantities, margins,
   if (length(bad_flags)) {
     stop("The following arguments must be non-missing logical scalars: ",
          paste(bad_flags, collapse = ", "), ".")
+  }
+  if (use_s0_market_pool && use_s0_market_year_pool) {
+    stop("Use at most one of 'use_s0_market_pool' (one outside share per ",
+         "market) and 'use_s0_market_year_pool' (one per market-year).")
   }
   priors <- resolve_prior_manifest(prior_manifest, priors)
   if (use_hmt && length(observed_margins) == 0L) {
@@ -376,6 +396,7 @@ bayes_est <- function(prices, quantities, margins,
       use_market_resid_scale = use_market_resid_scale,
       use_alpha_market_pool = use_alpha_market_pool,
       use_s0_market_year_pool = use_s0_market_year_pool,
+      use_s0_market_pool = use_s0_market_pool,
       use_centered_alpha = use_centered_alpha,
       use_centered_s0_pool = use_centered_s0_pool,
       use_hmt      = use_hmt,
