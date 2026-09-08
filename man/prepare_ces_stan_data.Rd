@@ -27,7 +27,9 @@ prepare_ces_stan_data(
   margin_observed = NULL,
   outside_price = 1,
   likelihood_mode = 1L,
-  loo_cluster = market
+  loo_cluster = market,
+  estimate_df = FALSE,
+  resid_df_fixed = NULL
 )
 }
 \arguments{

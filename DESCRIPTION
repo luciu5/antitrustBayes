@@ -23,7 +23,7 @@ Depends:
     R (>= 4.0.0),
     methods
 Imports:
-    antitrust (>= 0.99.27),
+    antitrust (>= 0.99.35),
     bridgesampling (>= 1.1.0),
     digest,
     loo (>= 2.5.0),
@@ -45,6 +45,8 @@ Collate:
     'antitrustBayes-package.R'
     'bma.R'
     'conduct.R'
+    'params.R'
+    'counterfactual.R'
     'data.R'
     'decisions.R'
     'estimate.R'
@@ -66,3 +68,4 @@ LinkingTo:
     StanHeaders (>= 2.18.0)
 SystemRequirements: GNU make
 Config/roxygen2/version: 8.0.0
+RoxygenNote: 7.3.2

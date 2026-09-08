@@ -31,8 +31,8 @@ cluster. Cluster uses the identifiers supplied to \code{bayes_est}.}
 
 \item{prior_weights}{Optional numeric vector of prior model probabilities.
 Must be the same length as the number of models and sum to 1. If
-\code{NULL} (default), recorded \code{model_prior} values are used when all
-are available; otherwise equal probabilities are used.}
+\code{NULL} (default), recorded \code{model_prior} values are used when
+all are available; otherwise equal probabilities are used.}
 }
 \value{
 A data frame with columns for model name, supply model, LOOIC,

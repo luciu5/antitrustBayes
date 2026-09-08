@@ -19,6 +19,7 @@ prepare_stan_data(
   use_hmt = FALSE,
   use_alpha_market_pool = TRUE,
   use_s0_market_year_pool = FALSE,
+  use_s0_market_pool = FALSE,
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
   priors = list(),
@@ -27,7 +28,9 @@ prepare_stan_data(
   margin_observed = NULL,
   outside_price = 1,
   likelihood_mode = 1L,
-  loo_cluster = market
+  loo_cluster = market,
+  estimate_df = FALSE,
+  resid_df_fixed = NULL
 )
 }
 \arguments{

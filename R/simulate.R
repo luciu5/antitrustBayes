@@ -102,7 +102,6 @@ bayes_sim <- function(fit, ownerPost,
   draws <- rstan::extract(fit@stanfit)
   df    <- fit@data
   price_sd <- fit@price_sd
-  is_output <- identical(fit@market_side, "output")
   is_ces <- identical(fit@demand_model, "ces")
 
   # Determine markets/cells to simulate
@@ -239,9 +238,6 @@ bayes_sim <- function(fit, ownerPost,
     margins_m <- as.numeric(mdata$margins)
     margins_m[!is.finite(margins_m)] <- 0.5
 
-    # Compute quantity shares within this market
-    shares_cond <- quantities_m / sum(quantities_m)
-
     if (is.null(labels)) {
       labels_m <- as.character(mdata$group)
     } else {
@@ -301,6 +297,13 @@ bayes_sim <- function(fit, ownerPost,
       stop("'ownerPost' must have one owner per product in '", unit_id, "'.")
     }
 
+    market_m <- bayes_market(
+      prices = prices_m, quantities = quantities_m, margins = margins_m,
+      group = ownerPre_m, outside_price = outside_price_m,
+      market_side = fit@market_side, insideSize = inside_size_m,
+      labels = labels_m
+    )
+
     # Pre-allocate result matrices
     ppre  <- matrix(NA_real_, nrow = n_draws_actual, ncol = n_prod)
     ppost <- matrix(NA_real_, nrow = n_draws_actual, ncol = n_prod)
@@ -336,101 +339,36 @@ bayes_sim <- function(fit, ownerPost,
         0
       }
 
-      # Compute unconditional quantity shares and invert demand at observed
-      # prices. These parameterizations reproduce the fitted shares exactly
-      # under antitrust::calcShares().
-      shares_uncond <- shares_cond * (1 - s0)
+      use_cutoff_fit <- isTRUE(fit@stan_data$use_cutoff == 1L)
+      cutoff_draw <- if (use_cutoff_fit) {
+        if (is.null(dim(draws$cutoff_share))) {
+          draws$cutoff_share[i]
+        } else {
+          draws$cutoff_share[i, market_int_val]
+        }
+      } else {
+        0
+      }
+
+      draw_slope <- if (is_ces) 1 + a_raw / price_sd else a_raw / price_sd
+      params_draw <- .bayes_params_raw(
+        alpha = if (is_ces) NULL else draw_slope,
+        gamma = if (is_ces) draw_slope else NULL,
+        s0 = s0,
+        bargaining_power = bargaining_draw,
+        cutoff_share = as.numeric(cutoff_draw),
+        cutoff_scale = 0.2,
+        use_cutoff = use_cutoff_fit,
+        supply_model = fit@supply_model
+      )
 
       res <- tryCatch({
-        if (is_ces) {
-          gamma <- 1 + a_raw / price_sd
-          meanval <- (shares_uncond / s0) *
-            (prices_m / outside_price_m)^gamma
-          total_expenditure_index <- s0 * outside_price_m +
-            sum(prices_m * shares_uncond)
-          R0 <- s0 * outside_price_m / total_expenditure_index
-          shares_for_object <- prices_m * shares_uncond /
-            total_expenditure_index
-          share_inside_for_object <- 1 - R0
-          inside_size_for_object <- inside_size_m *
-            sum(prices_m * shares_cond)
-          class_name <- "BayesConductCES"
-          slopes <- list(gamma = gamma, meanval = meanval,
-                         alpha = R0 / (1 - R0))
-        } else {
-          alpha <- a_raw / price_sd
-          if (is_output) alpha <- -alpha
-          meanval <- log(shares_uncond / s0) -
-            alpha * (prices_m - outside_price_m)
-          shares_for_object <- shares_uncond
-          share_inside_for_object <- 1 - s0
-          inside_size_for_object <- inside_size_m
-          class_name <- "BayesConductLogit"
-          slopes <- list(alpha = alpha, meanval = meanval)
-        }
-
-        cutoff_draw <- if (isTRUE(fit@stan_data$use_cutoff == 1L)) {
-          if (is.null(dim(draws$cutoff_share))) {
-            draws$cutoff_share[i]
-          } else {
-            draws$cutoff_share[i, market_int_val]
-          }
-        } else {
-          0
-        }
-
-        obj <- new(class_name,
-          prices       = prices_m,
-          shares       = shares_for_object,
-          margins      = margins_m,
-          weights      = rep(1, n_prod),
-          ownerPre     = ownerPre_m,
-          ownerPost    = ownerPost_m,
-          mcDelta      = mcDelta_m,
-          subset       = subset_m,
-          insideSize   = inside_size_for_object,
-          priceOutside = outside_price_m,
-          priceStart   = prices_m,
-          pricePre     = prices_m,
-          pricePost    = prices_m,
-          shareInside  = share_inside_for_object,
-          normIndex    = NA,
-          output       = is_output,
-          labels       = labels_m,
-          supply_model = fit@supply_model,
-          use_cutoff   = isTRUE(fit@stan_data$use_cutoff == 1L),
-          cutoff_share = as.numeric(cutoff_draw),
-          cutoff_scale = 0.2,
-          bargaining_power = bargaining_draw
+        obj <- build_conduct_object(
+          params_draw, draw_idx = 1L, market = market_m,
+          ownerPre = ownerPre_m, ownerPost = ownerPost_m,
+          mcDelta = mcDelta_m, subset = subset_m
         )
-
-        obj@slopes <- slopes
-
-        # Convert ownership vectors to matrices
-        obj@ownerPre  <- ownerToMatrix(obj, TRUE)
-        obj@ownerPost <- ownerToMatrix(obj, FALSE)
-
-        # Calibrate marginal costs from FOC + observed prices
-        obj@mcPre  <- calcMC(obj, preMerger = TRUE)
-        obj@mcPost <- calcMC(obj, preMerger = FALSE)
-
-        # Use observed prices as pre-merger equilibrium
-        obj@pricePre <- prices_m
-
-        # Under monopolistic competition, ownership alone cannot change the
-        # equilibrium. Preserve this implication exactly rather than asking a
-        # nonlinear solver to rediscover the observed-price root.
-        ownership_only_moncom <- fit@supply_model == 2L &&
-          all(mcDelta_m == 0) && all(subset_m)
-        if (ownership_only_moncom) {
-          obj@pricePost <- prices_m
-        } else {
-          obj@pricePost <- calcPrices(obj, preMerger = FALSE, ...)
-        }
-
-        obj@mktSize <- inside_size_for_object / share_inside_for_object
-
-        obj
+        as_antitrust_fit(obj, ...)@model
       },
         error = function(e) {
           mkt_failures[d] <<- conditionMessage(e)

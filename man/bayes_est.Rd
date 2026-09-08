@@ -15,10 +15,12 @@ bayes_est(
   market_side = NULL,
   supply_model = c("bertrand", "monopolistic", "cournot", "auction", "bargaining"),
   use_cutoff = FALSE,
-  use_rho = FALSE,
+  use_rho = TRUE,
+  df = 5,
   use_market_resid_scale = FALSE,
   use_alpha_market_pool = TRUE,
   use_s0_market_year_pool = FALSE,
+  use_s0_market_pool = FALSE,
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
   use_hmt = FALSE,
@@ -74,8 +76,26 @@ currently supports output markets only; if omitted, its default is
 \item{use_cutoff}{Logical. If \code{TRUE}, estimate a fringe-firm share
 cutoff. Default \code{FALSE}.}
 
-\item{use_rho}{Deprecated. Share and margin likelihoods are factored in the
-current specification, so this must be \code{FALSE}.}
+\item{use_rho}{Logical. If \code{TRUE} (default), couple the share and
+margin likelihoods per observation through a free cross-equation
+correlation \code{rho}, using a bivariate Student-t factored as
+\code{p(share) * p(margin | share)}. \code{rho} is only ever
+instantiated when \code{likelihood = "joint"} and at least one
+observation has an observed margin; otherwise it is structurally fixed
+at zero (never sampled). Note that \code{likelihood = "share"} omits the
+margin equation and therefore the equilibrium-margin information that
+principally identifies the outside share's level -- under share-only
+fits, the outside share may be weakly identified or prior-dominated,
+depending on the market/time/intercept structure of the data. This is an
+expected property of the model, not a defect to be tuned away.}
+
+\item{df}{Degrees of freedom for the joint bivariate (or, when \code{rho}
+is inactive, marginal) Student-t likelihood. Either a single finite
+numeric greater than 2 (fixed, default \code{5}, preferred for sparse
+information sets) or the character sentinel \code{"estimate"}, which
+places a \code{gamma(prior_nu_shape, prior_nu_rate)} prior on
+\code{nu - 2} and estimates \code{nu} jointly with the rest of the
+model.}
 
 \item{use_market_resid_scale}{Logical. If \code{TRUE}, allow market-level
 share and inverse-margin residual scales with hierarchical shrinkage.
@@ -85,7 +105,22 @@ Default \code{FALSE}.}
 logit price coefficients with hierarchical shrinkage. Default \code{TRUE}.}
 
 \item{use_s0_market_year_pool}{Logical. If \code{TRUE}, allow market-year
-outside shares with hierarchical shrinkage. Default \code{FALSE}.}
+outside shares with hierarchical shrinkage (one outside share per
+market-year). Default \code{FALSE}. Mutually exclusive with
+\code{use_s0_market_pool}. Note that market-year pooling introduces one
+weakly-identified outside share per market-year cell; when a market spans
+several periods with sparse per-cell information, its hyper-scale can be
+poorly identified (low BFMI). Prefer \code{use_s0_market_pool} in that
+regime.}
+
+\item{use_s0_market_pool}{Logical. If \code{TRUE}, pool the outside share at
+the \emph{market} level: one outside share per market, shared across all of
+that market's periods, with hierarchical shrinkage across markets
+(structurally parallel to \code{use_alpha_market_pool}). Better identified
+than \code{use_s0_market_year_pool} when markets are observed over multiple
+periods, because each market-level effect is disciplined by all of the
+market's observations. Default \code{FALSE}. Mutually exclusive with
+\code{use_s0_market_year_pool}.}
 
 \item{use_centered_alpha}{Logical. If \code{TRUE}, use the centered
 parameterization for market-level price coefficients. Default \code{FALSE}.}
@@ -193,8 +228,15 @@ scale (default 0.4562340). The default prior's 5th percentile is
 scale (default 0.5).}
 \item{\code{prior_log_sigma_margin_sd}}{Prior SD for the log
 inverse-margin-error scale (default 1).}
-\item{\code{margin_df}}{Degrees of freedom for the Student-t
-inverse-margin likelihood (default 5).}
+\item{\code{resid_df_fixed}}{Fixed degrees of freedom for the joint
+bivariate (or marginal) Student-t likelihood when \code{df} is
+numeric (default 5).}
+\item{\code{prior_nu_shape}, \code{prior_nu_rate}}{Gamma shape/rate for
+the prior on \code{nu - 2} when \code{df = "estimate"} (defaults 2 and
+0.25, i.e. mean 8, mode 4; provisional, pending prior-predictive
+checks).}
+\item{\code{prior_lkj}}{LKJ-style concentration parameter for the
+share-margin correlation \code{rho} (default 2).}
 \item{\code{bargaining_prior_lower}, \code{bargaining_prior_upper}}{Bounds
 for the bargaining-power prior (default 0 and 0.9999). The baseline is
 uniform on this interval; beta shape parameters provide a high-power

@@ -1,0 +1,395 @@
+# Parameter-driven path to a simulate()-ready antitrust fit.
+#
+# This file extracts the market/parameter assembly that used to live only
+# inside bayes_sim()'s Stan-draw loop (simulate.R) into Stan-free building
+# blocks. bayes_params()/bayes_market() let a caller hand-specify demand and
+# conduct parameters -- a single point estimate or a matrix of draws -- and
+# build_conduct_object()/as_antitrust_fit() turn those into the same
+# BayesConductLogit/BayesConductCES objects bayes_sim() has always built,
+# wrapped as an antitrust::AntitrustFit so antitrust's counterfactual()/
+# simulate() machinery can run without ever touching Stan.
+
+#' Bayesian demand and conduct parameters for one simulation unit
+#'
+#' A validated container for the demand and conduct parameters that
+#' \code{\link{bayes_sim}} otherwise reads out of posterior draws. Supply
+#' either a single point estimate (one simulation) or a matrix of draws
+#' (one row per draw, preserving the posterior-distribution workflow).
+#'
+#' @param alpha Logit price coefficient. A single numeric, or a numeric
+#'   vector with one value per draw. Exactly one of \code{alpha}/\code{gamma}
+#'   must be supplied.
+#' @param gamma CES elasticity parameter (> 1). A single numeric, or a
+#'   numeric vector with one value per draw.
+#' @param s0 Outside-good probability/share in \code{(0, 1)}. A single
+#'   numeric, or a numeric vector with one value per draw.
+#' @param bargaining_power Numeric in \code{[0, 1)}; only used when
+#'   \code{supply_model = 5}. Default \code{0}.
+#' @param cutoff_share Posterior fringe-cutoff share. Default \code{0}.
+#' @param cutoff_scale Fringe-cutoff logistic scale. Default \code{0.2}.
+#' @param use_cutoff Whether the posterior fringe cutoff applies. Default
+#'   \code{FALSE}; set \code{TRUE} together with a nonzero \code{cutoff_share}
+#'   to activate it.
+#' @param supply_model Integer 1-5 identifying the conduct model (see
+#'   \code{\link{bayes_sim}}).
+#'
+#' @return A list of class \code{bayes_params} with one element per draw
+#'   (length 1 for a point estimate).
+#' @export
+bayes_params <- function(alpha = NULL, gamma = NULL, s0,
+                          bargaining_power = 0, cutoff_share = 0,
+                          cutoff_scale = 0.2, use_cutoff = FALSE,
+                          supply_model) {
+  if (is.null(alpha) == is.null(gamma)) {
+    stop("Supply exactly one of 'alpha' (logit) or 'gamma' (ces).")
+  }
+  is_ces <- !is.null(gamma)
+  slope <- if (is_ces) gamma else alpha
+  if (!is.numeric(slope) || length(slope) < 1L || anyNA(slope)) {
+    stop("'", if (is_ces) "gamma" else "alpha", "' must be a non-missing numeric vector.")
+  }
+  if (is_ces && any(slope <= 1)) {
+    stop("'gamma' must exceed one for every draw.")
+  }
+  if (!is_ces && any(slope == 0)) {
+    stop("'alpha' must be nonzero for every draw.")
+  }
+  if (missing(supply_model) || length(supply_model) != 1L ||
+      !supply_model %in% 1:5) {
+    stop("'supply_model' must be a single integer in 1:5.")
+  }
+
+  n <- length(slope)
+  recycle <- function(x, name) {
+    if (length(x) == 1L) return(rep(x, n))
+    if (length(x) != n) {
+      stop("'", name, "' must have length 1 or the same length as '",
+           if (is_ces) "gamma" else "alpha", "'.")
+    }
+    x
+  }
+  s0 <- recycle(s0, "s0")
+  if (any(!is.finite(s0)) || any(s0 <= 0) || any(s0 >= 1)) {
+    stop("'s0' must lie strictly between 0 and 1 for every draw.")
+  }
+  bargaining_power <- recycle(bargaining_power, "bargaining_power")
+  if (supply_model == 5L &&
+      (any(!is.finite(bargaining_power)) || any(bargaining_power < 0) ||
+       any(bargaining_power >= 1))) {
+    stop("'bargaining_power' must lie in [0, 1) for every draw.")
+  }
+  cutoff_share <- recycle(cutoff_share, "cutoff_share")
+  cutoff_scale <- recycle(cutoff_scale, "cutoff_scale")
+
+  .bayes_params_raw(
+    alpha = if (is_ces) NULL else slope,
+    gamma = if (is_ces) slope else NULL,
+    s0 = s0,
+    bargaining_power = bargaining_power,
+    cutoff_share = cutoff_share,
+    cutoff_scale = cutoff_scale,
+    use_cutoff = isTRUE(use_cutoff),
+    supply_model = as.integer(supply_model)
+  )
+}
+
+## Build a bayes_params container without validation, for internal reuse in
+## hot per-draw loops (bayes_sim()'s market x draw loop) that already know
+## their inputs are well-formed and rely on tryCatch, not upfront stop(), to
+## isolate a single bad draw.
+.bayes_params_raw <- function(alpha = NULL, gamma = NULL, s0,
+                               bargaining_power, cutoff_share,
+                               cutoff_scale, use_cutoff, supply_model) {
+  is_ces <- !is.null(gamma)
+  structure(
+    list(
+      alpha = alpha,
+      gamma = gamma,
+      s0 = s0,
+      bargaining_power = bargaining_power,
+      cutoff_share = cutoff_share,
+      cutoff_scale = cutoff_scale,
+      use_cutoff = use_cutoff,
+      supply_model = as.integer(supply_model),
+      demand_model = if (is_ces) "ces" else "logit",
+      n_draws = length(if (is_ces) gamma else alpha)
+    ),
+    class = "bayes_params"
+  )
+}
+
+#' Market geometry for a parameter-driven Bayesian simulation
+#'
+#' The observed market data that \code{\link{bayes_sim}} otherwise reads out
+#' of \code{fit@data}/\code{fit@stan_data}/\code{fit@price_sd}.
+#'
+#' @param prices,quantities,margins Numeric vectors, one value per product.
+#' @param group Character or factor firm identifier, one per product.
+#' @param outside_price Positive scalar price of the outside good.
+#' @param market_side \code{"input"} or \code{"output"}.
+#' @param insideSize Total inside quantity (logit) or a CES scale factor.
+#'   Default \code{1}.
+#' @param labels Character vector of product labels. Defaults to
+#'   \code{as.character(group)}.
+#'
+#' @return A list of class \code{bayes_market}.
+#' @export
+bayes_market <- function(prices, quantities, margins, group,
+                          outside_price, market_side = c("output", "input"),
+                          insideSize = 1, labels = NULL) {
+  market_side <- match.arg(market_side)
+  n_prod <- length(prices)
+  if (length(quantities) != n_prod || length(group) != n_prod) {
+    stop("'prices', 'quantities', and 'group' must have the same length.")
+  }
+  if (missing(margins) || is.null(margins)) {
+    margins <- rep(NA_real_, n_prod)
+  }
+  margins <- as.numeric(margins)
+  margins[!is.finite(margins)] <- 0.5
+  if (length(margins) != n_prod) {
+    stop("'margins' must have one value per product.")
+  }
+  if (!is.numeric(outside_price) || length(outside_price) != 1L ||
+      !is.finite(outside_price) || outside_price <= 0) {
+    stop("'outside_price' must be a single positive finite number.")
+  }
+  if (!is.numeric(insideSize) || length(insideSize) != 1L ||
+      !is.finite(insideSize) || insideSize <= 0) {
+    stop("'insideSize' must be a single positive finite number.")
+  }
+  if (is.null(labels)) labels <- as.character(group)
+  if (length(labels) != n_prod) {
+    stop("'labels' must have one value per product.")
+  }
+
+  structure(
+    list(
+      prices = as.numeric(prices),
+      quantities = as.numeric(quantities),
+      margins = margins,
+      group = as.character(group),
+      outside_price = outside_price,
+      market_side = market_side,
+      insideSize = insideSize,
+      labels = labels,
+      n_prod = n_prod
+    ),
+    class = "bayes_market"
+  )
+}
+
+## Invert demand for one draw and build the antitrust-compatible conduct
+## object. This is the same math bayes_sim() has always run
+## (simulate.R:344-407); moving it here lets both the calibration-based and
+## the manual-parameter paths share one implementation.
+build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
+                                  mcDelta = NULL, subset = NULL) {
+  n_prod <- market$n_prod
+  if (is.null(mcDelta)) mcDelta <- rep(0, n_prod)
+  if (is.null(subset)) subset <- rep(TRUE, n_prod)
+
+  is_ces <- identical(params$demand_model, "ces")
+  is_output <- identical(market$market_side, "output")
+
+  prices_m <- market$prices
+  quantities_m <- market$quantities
+  outside_price_m <- market$outside_price
+  shares_cond <- quantities_m / sum(quantities_m)
+
+  s0 <- params$s0[draw_idx]
+  shares_uncond <- shares_cond * (1 - s0)
+
+  if (is_ces) {
+    gamma <- params$gamma[draw_idx]
+    meanval <- (shares_uncond / s0) * (prices_m / outside_price_m)^gamma
+    total_expenditure_index <- s0 * outside_price_m +
+      sum(prices_m * shares_uncond)
+    R0 <- s0 * outside_price_m / total_expenditure_index
+    shares_for_object <- prices_m * shares_uncond / total_expenditure_index
+    share_inside_for_object <- 1 - R0
+    inside_size_for_object <- market$insideSize * sum(prices_m * shares_cond)
+    class_name <- "BayesConductCES"
+    slopes <- list(gamma = gamma, meanval = meanval, alpha = R0 / (1 - R0))
+  } else {
+    alpha <- params$alpha[draw_idx]
+    if (is_output) alpha <- -alpha
+    meanval <- log(shares_uncond / s0) - alpha * (prices_m - outside_price_m)
+    shares_for_object <- shares_uncond
+    share_inside_for_object <- 1 - s0
+    inside_size_for_object <- market$insideSize
+    class_name <- "BayesConductLogit"
+    slopes <- list(alpha = alpha, meanval = meanval)
+  }
+
+  bargaining_draw <- if (params$supply_model == 5L) {
+    params$bargaining_power[draw_idx]
+  } else {
+    0
+  }
+  use_cutoff <- isTRUE(params$use_cutoff)
+  cutoff_draw <- params$cutoff_share[draw_idx]
+
+  obj <- methods::new(
+    class_name,
+    prices = prices_m,
+    shares = shares_for_object,
+    margins = market$margins,
+    weights = rep(1, n_prod),
+    ownerPre = ownerPre,
+    ownerPost = ownerPost,
+    mcDelta = mcDelta,
+    subset = subset,
+    insideSize = inside_size_for_object,
+    priceOutside = outside_price_m,
+    priceStart = prices_m,
+    pricePre = prices_m,
+    pricePost = prices_m,
+    shareInside = share_inside_for_object,
+    normIndex = NA,
+    output = is_output,
+    labels = market$labels,
+    supply_model = params$supply_model,
+    use_cutoff = use_cutoff,
+    cutoff_share = as.numeric(cutoff_draw),
+    cutoff_scale = params$cutoff_scale[draw_idx],
+    bargaining_power = bargaining_draw
+  )
+  obj@slopes <- slopes
+  obj@ownerPre <- antitrust::ownerToMatrix(obj, TRUE)
+  obj@ownerPost <- antitrust::ownerToMatrix(obj, FALSE)
+  obj
+}
+
+## Map a Bayesian supply model to the antitrust registry entry whose
+## capability flags/simulate() dispatch should govern this fit. The
+## registry keys capability checks off spec$demand/conduct (ModelRegistry.R),
+## not off the live object's class, so a BayesConductLogit/BayesConductCES
+## registered under "bertrand"/"bargaining" passes simulate()'s guards while
+## calcMargins() still dispatches to the estimated conduct via @supply_model.
+.bayes_model_spec <- function(params) {
+  demand <- params$demand_model
+  conduct <- if (params$supply_model == 5L) "bargaining" else "bertrand"
+  antitrust::model_spec(demand, conduct)
+}
+
+#' Wrap a Bayesian conduct object as an antitrust fit
+#'
+#' Calibrates marginal costs from the conduct object's own-FOC (the same
+#' \code{calcMC()} fallback \code{\link{bayes_sim}} relies on) and wraps the
+#' result as an \code{antitrust::AntitrustFit}, so it can be passed to
+#' \code{antitrust::counterfactual()} and \code{antitrust::simulate()}
+#' without recalibration.
+#'
+#' @param object A \code{BayesConductLogit} or \code{BayesConductCES} built
+#'   by \code{\link{build_conduct_object}}.
+#' @param spec An \code{antitrust_model_spec}. Defaults to a mapping from
+#'   \code{object@supply_model} (see \code{\link{model_spec}} in
+#'   \pkg{antitrust}).
+#' @param ... Additional arguments passed to \code{antitrust::calcPrices()}.
+#'
+#' @return An \code{antitrust::AntitrustFit}.
+#' @export
+as_antitrust_fit <- function(object, spec = NULL, ...) {
+  if (!methods::is(object, "BayesConductLogit") &&
+      !methods::is(object, "BayesConductCES")) {
+    stop("'object' must be a BayesConductLogit or BayesConductCES.")
+  }
+  if (is.null(spec)) {
+    demand <- if (methods::is(object, "BayesConductCES")) "ces" else "logit"
+    conduct <- if (object@supply_model == 5L) "bargaining" else "bertrand"
+    spec <- antitrust::model_spec(demand, conduct)
+  }
+
+  object@mcPre <- antitrust::calcMC(object, preMerger = TRUE)
+  object@mcPost <- antitrust::calcMC(object, preMerger = FALSE)
+  object@pricePre <- object@prices
+
+  ownership_only_moncom <- object@supply_model == 2L &&
+    all(object@mcDelta == 0) && all(object@subset)
+  object@pricePost <- if (ownership_only_moncom) {
+    object@prices
+  } else {
+    antitrust::calcPrices(object, preMerger = FALSE, ...)
+  }
+  object@mktSize <- object@insideSize / object@shareInside
+
+  methods::new(
+    "AntitrustFit",
+    spec = spec,
+    model = object,
+    parameters = object@slopes,
+    observed = list(
+      prices = object@prices,
+      margins = object@margins,
+      ownerPre = object@ownerPre,
+      labels = object@labels,
+      priceOutside = object@priceOutside
+    ),
+    diagnostics = list(
+      status = "completed",
+      source = "bayes_params",
+      route = "as_antitrust_fit",
+      model_class = class(object)[[1]]
+    )
+  )
+}
+
+## Extract the terminal legacy S4 result from whatever antitrust::simulate()
+## returned -- a direct model result, or a CounterfactualPath for multi-step
+## counterfactuals (entry/exit/quality/sequential mergers).
+.terminal_model <- function(result) {
+  if (methods::is(result, "CounterfactualPath")) {
+    antitrust::final_result(result)
+  } else {
+    result
+  }
+}
+
+## Assemble a single-market list of per-draw antitrust::simulate() results
+## into a BayesSim, mirroring bayes_sim()'s matrix layout (simulate.R). Used
+## by bayes_counterfactual() for the manual-parameter, single-unit case.
+.assemble_bayes_sim <- function(results, failures, market, params, cl) {
+  n_draws <- length(results)
+  n_prod <- market$n_prod
+  ppre <- matrix(NA_real_, n_draws, n_prod, dimnames = list(NULL, market$labels))
+  ppost <- ppre
+  spre <- ppre
+  spost <- ppre
+
+  for (d in seq_len(n_draws)) {
+    res <- results[[d]]
+    if (is.null(res)) next
+    model <- .terminal_model(res)
+    ppre[d, ] <- model@pricePre
+    ppost[d, ] <- model@pricePost
+    spre[d, ] <- antitrust::calcShares(model, preMerger = TRUE)
+    spost[d, ] <- antitrust::calcShares(model, preMerger = FALSE)
+  }
+
+  n_failed <- sum(!is.na(failures))
+  if (n_failed > 0L) {
+    warning(n_failed, " of ", n_draws,
+            " draw simulations failed. Inspect result@failures for details.",
+            call. = FALSE)
+  }
+
+  unit_id <- "unit_1"
+  methods::new(
+    "BayesSim",
+    sims = stats::setNames(list(results), unit_id),
+    price_pre = stats::setNames(list(ppre), unit_id),
+    price_post = stats::setNames(list(ppost), unit_id),
+    price_change = stats::setNames(list(ppost / ppre - 1), unit_id),
+    shares_pre = stats::setNames(list(spre), unit_id),
+    shares_post = stats::setNames(list(spost), unit_id),
+    market_ids = unit_id,
+    product_labels = stats::setNames(list(market$labels), unit_id),
+    n_draws = as.integer(n_draws),
+    n_valid = stats::setNames(as.integer(n_draws - n_failed), unit_id),
+    failures = stats::setNames(list(failures), unit_id),
+    call = cl,
+    metadata = list(source = "bayes_counterfactual",
+                    supply_model = params$supply_model)
+  )
+}
