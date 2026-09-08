@@ -17,6 +17,7 @@ bayes_counterfactual(
   mcDelta = NULL,
   subset = NULL,
   n_draws = NULL,
+  mc.cores = .default_mc_cores(),
   ...
 )
 
@@ -62,6 +63,12 @@ quality changes, or multi-step paths.}
 \item{n_draws}{Integer number of draws to use when \code{params} holds
 more than one draw. Default \code{NULL} uses all draws (or, for large
 posteriors, \code{min(200, n_draws_available)}).}
+
+\item{mc.cores}{Integer number of parallel workers used to solve draws via
+\code{parallel::mclapply()}. Default is all available cores capped at
+4, or \code{1} on Windows (where \code{mclapply()} cannot fork and would
+otherwise run single-threaded regardless of this argument). Ignored
+when there is only one draw to solve.}
 
 \item{...}{Additional arguments passed to \code{antitrust::simulate()}.}
 }

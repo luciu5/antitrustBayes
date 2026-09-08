@@ -27,6 +27,7 @@ Imports:
     bridgesampling (>= 1.1.0),
     digest,
     loo (>= 2.5.0),
+    parallel,
     Rcpp (>= 0.12.0),
     RcppParallel (>= 5.0.1),
     rstan (>= 2.26.0),

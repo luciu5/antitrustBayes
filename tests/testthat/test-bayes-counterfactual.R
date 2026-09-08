@@ -41,6 +41,75 @@ test_that("bayes_counterfactual accepts a draws matrix and returns a BayesSim", 
   expect_equal(nrow(result@price_pre[[1]]), 3L)
 })
 
+test_that(".default_mc_cores caps at 4 and returns 1 on Windows", {
+  cores <- antitrustBayes:::.default_mc_cores()
+  expect_true(cores >= 1L)
+  expect_true(cores <= 4L)
+  if (identical(.Platform$OS.type, "windows")) {
+    expect_equal(cores, 1L)
+  }
+})
+
+test_that("bayes_counterfactual validates mc.cores", {
+  fx <- pnb_fixture()
+  params <- bayes_params(alpha = 0.65, s0 = 0.015, supply_model = 1L)
+  expect_error(
+    bayes_counterfactual(params, fx$market, ownerPost = fx$ownerPost, mc.cores = 0),
+    "mc.cores"
+  )
+  expect_error(
+    bayes_counterfactual(params, fx$market, ownerPost = fx$ownerPost, mc.cores = 1.5),
+    "mc.cores"
+  )
+})
+
+test_that("bayes_counterfactual gives identical results with mc.cores = 1 and > 1", {
+  fx <- pnb_fixture()
+  params <- bayes_params(alpha = seq(0.9, 1.1, length.out = 6), s0 = 0.015,
+                          supply_model = 1L)
+
+  set.seed(42)
+  serial <- suppressWarnings(bayes_counterfactual(
+    params, fx$market, ownerPost = fx$ownerPost, n_draws = 6L, mc.cores = 1L
+  ))
+  set.seed(42)
+  parallel_cores <- if (identical(.Platform$OS.type, "windows")) 1L else 2L
+  parallel_result <- suppressWarnings(bayes_counterfactual(
+    params, fx$market, ownerPost = fx$ownerPost, n_draws = 6L,
+    mc.cores = parallel_cores
+  ))
+
+  expect_equal(serial@price_pre, parallel_result@price_pre)
+  expect_equal(serial@price_post, parallel_result@price_post)
+})
+
+test_that("bayes_counterfactual isolates a single bad draw under mc.cores > 1", {
+  fx <- pnb_fixture()
+  ## Force one out-of-range s0 via the internal unvalidated constructor,
+  ## bypassing bayes_params()'s upfront validation, to simulate a draw that
+  ## fails deep inside the solver rather than at input validation.
+  params <- antitrustBayes:::.bayes_params_raw(
+    alpha = rep(1, 6), s0 = c(0.015, 0.015, 1.5, 0.015, 0.015, 0.015),
+    bargaining_power = rep(0, 6), cutoff_share = rep(0, 6),
+    cutoff_scale = rep(0.2, 6), use_cutoff = FALSE, supply_model = 1L
+  )
+  parallel_cores <- if (identical(.Platform$OS.type, "windows")) 1L else 2L
+
+  warnings_seen <- character(0)
+  result <- withCallingHandlers(
+    bayes_counterfactual(params, fx$market, ownerPost = fx$ownerPost,
+                        n_draws = 6L, mc.cores = parallel_cores),
+    warning = function(w) {
+      warnings_seen <<- c(warnings_seen, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+
+  expect_true(any(grepl("1 of 6", warnings_seen)))
+  expect_equal(as.integer(result@n_valid), 5L)
+  expect_equal(sum(!is.na(result@failures[[1]])), 1L)
+})
+
 test_that("bayes_counterfactual accepts an antitrust Counterfactual for cost shocks", {
   fx <- pnb_fixture()
   params <- bayes_params(alpha = 0.65, s0 = 0.015, supply_model = 1L)
