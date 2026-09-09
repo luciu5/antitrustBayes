@@ -104,7 +104,8 @@ test_that("CES conduct margins match all five Stan FOCs", {
   margin_inv <- list(
     gamma - (gamma - 1) * firm_share,
     rep(gamma, 3),
-    gamma / (1 + (gamma - 1) * firm_share),
+    1 / (1 / gamma + (gamma - 1) * firm_share /
+      (gamma * (1 + (gamma - 1) * (1 - sum(revenue_share))))),
     1 / (1 - (1 - firm_share)^(1 / (gamma - 1))),
     (gamma - (gamma - 1) * firm_share) / (1 - 0.5)
   )

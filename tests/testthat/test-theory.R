@@ -32,6 +32,20 @@ test_that("CES bargaining is exactly a Bertrand rescaling", {
   )
 })
 
+test_that("CES Cournot schedule includes the outside revenue share", {
+  q <- c(0.08, 0.16, 0.24)
+  s0 <- 0.2
+  gamma <- 4
+  expected <- 1 / gamma + (gamma - 1) * q /
+    (gamma * (1 + (gamma - 1) * s0))
+  expect_equal(
+    1 / conduct_schedule(q, "cournot", s0 = s0, demand_model = "ces",
+                         gamma = gamma),
+    expected,
+    tolerance = 1e-12
+  )
+})
+
 test_that("pairwise information matrix is well formed", {
   info <- conduct_information_matrix(
     c(0.03, 0.08, 0.15), models = c("bertrand", "auction", "mc"),

@@ -522,7 +522,8 @@ test_that("CES FOC priors use unconditional revenue shares", {
   margins_by_model <- list(
     1 / (gamma - (gamma - 1) * r_unc),
     rep(1 / gamma, length(r_unc)),
-    (1 + (gamma - 1) * r_unc) / gamma,
+    1 / gamma + (gamma - 1) * r_unc /
+      (gamma * (1 + (gamma - 1) * s0)),
     1 - (1 - r_unc)^(1 / (gamma - 1))
   )
 

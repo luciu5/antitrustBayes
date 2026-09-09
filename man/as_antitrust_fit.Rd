@@ -20,9 +20,10 @@ by \code{\link{build_conduct_object}}.}
 An \code{antitrust::AntitrustFit}.
 }
 \description{
-Calibrates marginal costs from the conduct object's own-FOC (the same
-\code{calcMC()} fallback \code{\link{bayes_sim}} relies on) and wraps the
-result as an \code{antitrust::AntitrustFit}, so it can be passed to
+Specifies one posterior realization, recovers marginal costs from the
+conduct model FOC (the same \code{calcMC()} fallback
+\code{\link{bayes_sim}} relies on), and wraps the result as an
+\code{antitrust::AntitrustFit}, so it can be passed to
 \code{antitrust::counterfactual()} and \code{antitrust::simulate()}
-without recalibration.
+without demand recalibration.
 }

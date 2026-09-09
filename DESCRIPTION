@@ -23,7 +23,7 @@ Depends:
     R (>= 4.0.0),
     methods
 Imports:
-    antitrust (>= 0.99.35),
+    antitrust (>= 0.99.37),
     bridgesampling (>= 1.1.0),
     digest,
     loo (>= 2.5.0),

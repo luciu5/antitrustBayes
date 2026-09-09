@@ -726,8 +726,17 @@ compute_gamma_prior <- function(revShare, margins, s0_reference, mky_int,
   } else if (supply_model == 3L) {
     denom <- margins - rev_share_uncond
     out <- rep(NA_real_, length(margins))
-    ok <- is.finite(denom) & denom > 1e-8
-    out[ok] <- (1 - rev_share_uncond[ok]) / denom[ok]
+    ## Solve the full CES Marshallian Cournot FOC for gamma.  With q the
+    ## unconditional firm revenue share and s0 the outside revenue share,
+    ## L = [1 + (gamma - 1)(s0 + q)] /
+    ##     [gamma {1 + (gamma - 1)s0}].
+    A <- margins * s0
+    B <- margins * (1 - s0) - (s0 + rev_share_uncond)
+    C <- -(1 - s0 - rev_share_uncond)
+    disc <- B^2 - 4 * A * C
+    ok <- is.finite(A) & is.finite(B) & is.finite(C) &
+      is.finite(disc) & disc >= 0 & A > 0
+    out[ok] <- (-B[ok] + sqrt(disc[ok])) / (2 * A[ok])
     out
   } else {
     1.0 + log1p(-rev_share_uncond) / log1p(-margins)

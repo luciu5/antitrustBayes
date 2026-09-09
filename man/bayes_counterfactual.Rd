@@ -78,12 +78,15 @@ when \code{params} holds one draw; a \code{\linkS4class{BayesSim}} when
 it holds more than one.
 }
 \description{
-Builds the same \code{BayesConductLogit}/\code{BayesConductCES} object
-\code{\link{bayes_sim}} builds from posterior draws, but from
-hand-specified parameters (a point estimate or a matrix of draws), wraps
-each as an \code{antitrust::AntitrustFit}, and delegates the actual
-counterfactual/merger solve to \code{antitrust::simulate()}. No Bayesian
-estimation (\code{\link{bayes_est}}) is required.
+Builds the same internal \code{BayesConductLogit}/\code{BayesConductCES}
+realization \code{\link{bayes_sim}} builds from posterior draws, but from
+hand-specified parameters (a point estimate or a matrix of draws). Exact
+no-cutoff conduct variants are routed to antitrust's registered model
+classes; cutoff blends and the legacy multiproduct Logit bargaining equation
+retain their Bayesian conduct class. Each realization is wrapped as an
+\code{antitrust::AntitrustFit}, and the counterfactual/merger solve is
+delegated to \code{antitrust::simulate()}. No Bayesian estimation
+(\code{\link{bayes_est}}) is required.
 }
 \examples{
 # PNB (single market, single year): simulate the merger from a

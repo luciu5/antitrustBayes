@@ -44,7 +44,10 @@ functions {
     } else if (supply_model == 2) {
       conduct = gamma;
     } else if (supply_model == 3) {
-      conduct = gamma / (1.0 + (gamma - 1.0) * r);
+      real lerner = 1.0 / gamma
+        + (gamma - 1.0) * r
+          / (gamma * (1.0 + (gamma - 1.0) * R0));
+      conduct = 1.0 / lerner;
     } else if (supply_model == 4) {
       conduct = 1.0 / (1.0 - pow(1.0 - r, 1.0 / (gamma - 1.0)));
     } else {

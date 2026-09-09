@@ -52,7 +52,8 @@ conduct_schedule <- function(q, model, s0 = 0.2,
   switch(model,
     bertrand = gamma - (gamma - 1) * q,
     monopolistic = rep(gamma, length(q)),
-    cournot = gamma / (1 + (gamma - 1) * q),
+    cournot = 1 / (1 / gamma +
+      (gamma - 1) * q / (gamma * (1 + (gamma - 1) * s0))),
     auction = 1 / (1 - (1 - q)^(1 / (gamma - 1))),
     bargaining = (gamma - (gamma - 1) * q) / (1 - bargaining_power)
   )

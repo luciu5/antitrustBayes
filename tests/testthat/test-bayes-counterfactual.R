@@ -23,7 +23,7 @@ test_that("bayes_counterfactual runs a merger from a point estimate with no Stan
     bayes_counterfactual(params, fx$market, ownerPost = fx$ownerPost)
   )
 
-  expect_s4_class(result, "BayesConductLogit")
+  expect_s4_class(result, "Logit")
   merging <- fx$pnb$group %in% c(attr(fx$pnb, "acquirer"), attr(fx$pnb, "target"))
   expect_true(all(result@pricePost[merging] > result@pricePre[merging] - 1e-8))
 })

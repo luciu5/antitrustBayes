@@ -28,7 +28,7 @@
 #' @importFrom digest digest
 #' @importFrom loo loo waic loo_compare loo_model_weights extract_log_lik relative_eff
 #' @importFrom antitrust calcMC calcMargins calcPrices calcShares ownerToMatrix elast diversion CV HypoMonTest
-#' @importClassesFrom antitrust Logit CES
+#' @importClassesFrom antitrust AntitrustFit StructuralFit Logit CES
 #' @importFrom stats plogis quantile sd weighted.mean
 #' @importFrom utils capture.output
 #' @useDynLib antitrustBayes, .registration = TRUE

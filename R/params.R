@@ -4,10 +4,11 @@
 # inside bayes_sim()'s Stan-draw loop (simulate.R) into Stan-free building
 # blocks. bayes_params()/bayes_market() let a caller hand-specify demand and
 # conduct parameters -- a single point estimate or a matrix of draws -- and
-# build_conduct_object()/as_antitrust_fit() turn those into the same
-# BayesConductLogit/BayesConductCES objects bayes_sim() has always built,
-# wrapped as an antitrust::AntitrustFit so antitrust's counterfactual()/
-# simulate() machinery can run without ever touching Stan.
+# build_conduct_object()/as_antitrust_fit() turn those into the same internal
+# BayesConductLogit/BayesConductCES realization bayes_sim() has always built,
+# then route exact no-cutoff variants to antitrust's registered concrete model
+# classes. The result is an antitrust::AntitrustFit, so antitrust's
+# counterfactual()/simulate() machinery can run without ever touching Stan.
 
 #' Bayesian demand and conduct parameters for one simulation unit
 #'
@@ -261,25 +262,132 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
   obj
 }
 
-## Map a Bayesian supply model to the antitrust registry entry whose
-## capability flags/simulate() dispatch should govern this fit. The
-## registry keys capability checks off spec$demand/conduct (ModelRegistry.R),
-## not off the live object's class, so a BayesConductLogit/BayesConductCES
-## registered under "bertrand"/"bargaining" passes simulate()'s guards while
-## calcMargins() still dispatches to the estimated conduct via @supply_model.
+## Map each no-cutoff Bayesian supply model to the complete antitrust
+## registry entry with the same conduct equation: 1 Bertrand, 2 MonCom,
+## 3 Cournot, 4 second-price auction, and 5 bargaining. Cutoff draws and
+## the legacy multiproduct Logit bargaining equation remain on the custom
+## BayesConduct class, while their specification still records the intended
+## registered conduct.
 .bayes_model_spec <- function(params) {
+  if (!is.list(params) || is.null(params$demand_model) ||
+      is.null(params$supply_model)) {
+    stop("'params' must provide demand_model and supply_model.")
+  }
   demand <- params$demand_model
-  conduct <- if (params$supply_model == 5L) "bargaining" else "bertrand"
+  supply_model <- as.integer(params$supply_model)
+  if (length(demand) != 1L || !demand %in% c("logit", "ces") ||
+      length(supply_model) != 1L || is.na(supply_model) ||
+      !supply_model %in% 1:5) {
+    stop("'params' has an unsupported Bayesian demand or supply model.")
+  }
+  conduct <- switch(as.character(supply_model),
+    "1" = "bertrand",
+    "2" = "moncom",
+    "3" = "cournot",
+    "4" = "auction2nd",
+    "5" = "bargaining",
+    stop("'params' has an unsupported Bayesian supply model.")
+  )
   antitrust::model_spec(demand, conduct)
+}
+
+.bayes_core_conduct <- function(object) {
+  if (isTRUE(object@use_cutoff)) return(FALSE)
+  ## Bayes Logit bargaining uses a firm-share scalar, while the registered
+  ## antitrust BargainingLogit uses a product-level ownership system. Keep
+  ## the Bayes class until those equations are made identical.
+  if (methods::is(object, "BayesConductLogit") &&
+      object@supply_model == 5L) return(FALSE)
+  TRUE
+}
+
+## Build a registered antitrust model from the already specified posterior
+## demand parameters. antitrust::specify() is the parameterized constructor;
+## it does not recalibrate demand. The temporary construction supplies the
+## concrete class and its mature methods, after which the posterior slots and
+## ownership state are restored explicitly.
+.bayes_core_model <- function(object, spec, ...) {
+  core_parameters <- object@slopes
+  margins <- antitrust::calcMargins(object, preMerger = TRUE, level = FALSE)
+
+  ## Auction2ndLogit's legacy demand state treats meanval as log shares and
+  ## keeps those shares fixed while solving the auction. Translate the
+  ## posterior mean values to that registered representation while retaining
+  ## the posterior alpha and observed shares exactly.
+  if (spec$conduct == "auction2nd" &&
+      methods::is(object, "BayesConductLogit")) {
+    outside_share <- 1 - object@shareInside
+    if (!is.finite(outside_share) || outside_share <= 0) {
+      stop("Auction posterior realization requires a positive outside share.")
+    }
+    core_parameters$meanval <- log(object@shares / outside_share)
+  }
+
+  args <- list(
+    demand = spec$demand,
+    conduct = spec$conduct,
+    prices = object@prices,
+    parameters = core_parameters,
+    ownerPre = object@ownerPre,
+    shares = object@shares,
+    margins = margins,
+    insideSize = object@insideSize,
+    priceOutside = if (spec$conduct == "auction2nd" &&
+                       methods::is(object, "BayesConductLogit")) {
+      0
+    } else {
+      object@priceOutside
+    },
+    priceStart = object@priceStart,
+    labels = object@labels,
+    output = object@output
+  )
+  if (spec$conduct == "bargaining") {
+    beta <- as.numeric(object@bargaining_power)
+    args$bargpowerPre <- rep(beta, length(object@prices))
+    args$bargpowerPost <- rep(beta, length(object@prices))
+  }
+
+  concrete <- do.call(antitrust::specify, args)
+  model <- concrete@model
+
+  ## Drop the constructor's persistent cost cache. It was computed before
+  ## the posterior slots below were restored and must not override the FOC
+  ## recovery from this realization.
+  attr(model, "antitrust_cost_state") <- NULL
+  model@prices <- object@prices
+  model@shares <- object@shares
+  model@margins <- object@margins
+  model@ownerPre <- object@ownerPre
+  model@ownerPost <- object@ownerPost
+  model@mcDelta <- object@mcDelta
+  model@subset <- object@subset
+  model@insideSize <- object@insideSize
+  model@priceStart <- object@priceStart
+  model@pricePre <- object@prices
+  model@pricePost <- object@prices
+  model@shareInside <- object@shareInside
+  model@output <- object@output
+  model@labels <- object@labels
+  model@slopes <- core_parameters
+  model@mcPre <- antitrust::calcMC(model, preMerger = TRUE)
+  model@mcPost <- antitrust::calcMC(model, preMerger = FALSE)
+  model@pricePost <- if (spec$conduct == "auction2nd") {
+    antitrust::calcPrices(model, preMerger = FALSE)
+  } else {
+    antitrust::calcPrices(model, preMerger = FALSE, ...)
+  }
+  model
 }
 
 #' Wrap a Bayesian conduct object as an antitrust fit
 #'
-#' Calibrates marginal costs from the conduct object's own-FOC (the same
-#' \code{calcMC()} fallback \code{\link{bayes_sim}} relies on) and wraps the
-#' result as an \code{antitrust::AntitrustFit}, so it can be passed to
+#' Specifies one posterior realization, recovers marginal costs from the
+#' conduct model FOC (the same \code{calcMC()} fallback
+#' \code{\link{bayes_sim}} relies on), and wraps the result as an
+#' \code{antitrust::AntitrustFit}, so it can be passed to
 #' \code{antitrust::counterfactual()} and \code{antitrust::simulate()}
-#' without recalibration.
+#' without demand recalibration.
 #'
 #' @param object A \code{BayesConductLogit} or \code{BayesConductCES} built
 #'   by \code{\link{build_conduct_object}}.
@@ -295,29 +403,48 @@ as_antitrust_fit <- function(object, spec = NULL, ...) {
       !methods::is(object, "BayesConductCES")) {
     stop("'object' must be a BayesConductLogit or BayesConductCES.")
   }
+  expected_spec <- .bayes_model_spec(list(
+    demand_model = if (methods::is(object, "BayesConductCES")) "ces" else "logit",
+    supply_model = object@supply_model
+  ))
   if (is.null(spec)) {
-    demand <- if (methods::is(object, "BayesConductCES")) "ces" else "logit"
-    conduct <- if (object@supply_model == 5L) "bargaining" else "bertrand"
-    spec <- antitrust::model_spec(demand, conduct)
+    spec <- expected_spec
+  } else if (!inherits(spec, "antitrust_model_spec") ||
+             !identical(spec, expected_spec)) {
+    stop("'spec' must match the Bayesian demand and supply model.")
   }
 
-  object@mcPre <- antitrust::calcMC(object, preMerger = TRUE)
-  object@mcPost <- antitrust::calcMC(object, preMerger = FALSE)
-  object@pricePre <- object@prices
-
-  ownership_only_moncom <- object@supply_model == 2L &&
-    all(object@mcDelta == 0) && all(object@subset)
-  object@pricePost <- if (ownership_only_moncom) {
-    object@prices
+  use_core <- .bayes_core_conduct(object)
+  model <- if (use_core) {
+    .bayes_core_model(object, spec, ...)
   } else {
-    antitrust::calcPrices(object, preMerger = FALSE, ...)
+    object@mcPre <- antitrust::calcMC(object, preMerger = TRUE)
+    object@mcPost <- antitrust::calcMC(object, preMerger = FALSE)
+    object@pricePre <- object@prices
+    ownership_only_moncom <- object@supply_model == 2L &&
+      all(object@mcDelta == 0) && all(object@subset)
+    object@pricePost <- if (ownership_only_moncom) {
+      object@prices
+    } else {
+      antitrust::calcPrices(object, preMerger = FALSE, ...)
+    }
+    object
   }
-  object@mktSize <- object@insideSize / object@shareInside
+  model@mktSize <- model@insideSize / model@shareInside
+
+  custom_reason <- if (isTRUE(object@use_cutoff)) {
+    "cutoff_conduct_blend"
+  } else if (methods::is(object, "BayesConductLogit") &&
+             object@supply_model == 5L) {
+    "multiproduct_logit_bargaining_equation"
+  } else {
+    NULL
+  }
 
   methods::new(
     "AntitrustFit",
     spec = spec,
-    model = object,
+    model = model,
     parameters = object@slopes,
     observed = list(
       prices = object@prices,
@@ -328,9 +455,14 @@ as_antitrust_fit <- function(object, spec = NULL, ...) {
     ),
     diagnostics = list(
       status = "completed",
-      source = "bayes_params",
+      source = "posterior_realization",
       route = "as_antitrust_fit",
-      model_class = class(object)[[1]]
+      model_class = class(model)[[1]],
+      specification = "one posterior realization",
+      demand_recalibrated = FALSE,
+      cost_recovery = "model_foc",
+      core_model = use_core,
+      custom_economics = custom_reason
     )
   )
 }

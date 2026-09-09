@@ -117,8 +117,17 @@ setMethod(
       "1" = w * gamma + (1 - w) *
         (gamma - (gamma - 1) * firm_share),
       "2" = rep(gamma, length(firm_share)),
-      "3" = w * gamma + (1 - w) * gamma /
-        (1 + (gamma - 1) * firm_share),
+      "3" = {
+        ## Full CES Marshallian demand has an outside-revenue term.  The
+        ## Cournot inverse Lerner index is
+        ## 1/gamma + (gamma - 1) R_f /
+        ## [gamma {1 + (gamma - 1) R_0}], where R_f is the unconditional
+        ## firm revenue share and R_0 is the outside revenue share.
+        lerner <- 1 / gamma +
+          (gamma - 1) * firm_share /
+          (gamma * (1 + (gamma - 1) * state$outside_share))
+        w * gamma + (1 - w) / pmax(lerner, 1e-12)
+      },
       "4" = {
         auction_inv <- 1 /
           (1 - (1 - firm_share)^(1 / (gamma - 1)))

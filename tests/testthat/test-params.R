@@ -101,11 +101,160 @@ test_that("as_antitrust_fit wraps a conduct object with a solved model", {
                               ownerPost = pnb_owner_post())
   fit <- suppressWarnings(as_antitrust_fit(obj))
   expect_s4_class(fit, "AntitrustFit")
-  expect_s4_class(fit@model, "BayesConductLogit")
+  expect_s4_class(fit, "StructuralFit")
+  expect_s4_class(fit@model, "Logit")
   expect_true(all(is.finite(fit@model@pricePre)))
   expect_true(all(is.finite(fit@model@pricePost)))
+  expect_identical(fit@diagnostics$specification, "one posterior realization")
+  expect_false(fit@diagnostics$demand_recalibrated)
+  expect_identical(fit@diagnostics$cost_recovery, "model_foc")
 })
 
 test_that("as_antitrust_fit rejects non-conduct objects", {
   expect_error(as_antitrust_fit(list()), "BayesConductLogit or BayesConductCES")
+})
+
+test_that("no-cutoff posterior realizations use truthful registered conduct classes", {
+  market <- pnb_market()
+  owner_post <- pnb_owner_post()
+  expected <- list(
+    logit = c("Logit", "MonComLogit", "LogitCournot", "Auction2ndLogit",
+              "BayesConductLogit"),
+    ces = c("CES", "MonComCES", "CESCournot", "Auction2ndCES",
+            "BargainingCES")
+  )
+  conducts <- c("bertrand", "moncom", "cournot", "auction2nd", "bargaining")
+
+  for (supply_model in 1:5) {
+    logit_params <- bayes_params(alpha = 0.65, s0 = 0.015,
+                                 bargaining_power = 0.5,
+                                 supply_model = supply_model)
+    logit_obj <- build_conduct_object(logit_params, 1L, market,
+                                      ownerPre = market$group,
+                                      ownerPost = owner_post)
+    logit_fit <- suppressWarnings(as_antitrust_fit(logit_obj))
+    expect_s4_class(logit_fit, "AntitrustFit")
+    expect_s4_class(logit_fit, "StructuralFit")
+    expect_identical(logit_fit@spec$conduct, conducts[[supply_model]])
+    expect_s4_class(logit_fit@model, expected$logit[[supply_model]])
+    logit_margins <- unname(antitrust::calcMargins(logit_obj, TRUE,
+                                                   level = TRUE))
+    routed_logit_margins <- unname(antitrust::calcMargins(logit_fit@model,
+                                                          TRUE, level = TRUE))
+    if (supply_model < 5L) {
+      expect_equal(routed_logit_margins, logit_margins, tolerance = 1e-8)
+    }
+
+    ces_params <- bayes_params(gamma = 3, s0 = 0.015,
+                               bargaining_power = 0.5,
+                               supply_model = supply_model)
+    ces_obj <- build_conduct_object(ces_params, 1L, market,
+                                    ownerPre = market$group,
+                                    ownerPost = owner_post)
+    ces_fit <- suppressWarnings(as_antitrust_fit(ces_obj))
+    expect_s4_class(ces_fit, "AntitrustFit")
+    expect_s4_class(ces_fit, "StructuralFit")
+    expect_identical(ces_fit@spec$conduct, conducts[[supply_model]])
+    expect_s4_class(ces_fit@model, expected$ces[[supply_model]])
+    expect_equal(
+      unname(antitrust::calcMargins(ces_fit@model, TRUE, level = TRUE)),
+      unname(antitrust::calcMargins(ces_obj, TRUE, level = TRUE)),
+      tolerance = 1e-8
+    )
+  }
+})
+
+test_that("multiproduct Logit bargaining keeps its explicit custom equation", {
+  market <- simple_market()
+  params <- bayes_params(alpha = 0.65, s0 = 0.015,
+                         bargaining_power = 0.5, supply_model = 5L)
+  object <- build_conduct_object(params, 1L, market,
+                                 ownerPre = market$group,
+                                 ownerPost = market$group)
+  fit <- suppressWarnings(as_antitrust_fit(object))
+  registered <- suppressWarnings(.bayes_core_model(
+    object, .bayes_model_spec(params)
+  ))
+
+  expect_s4_class(fit@model, "BayesConductLogit")
+  expect_identical(fit@diagnostics$custom_economics,
+                   "multiproduct_logit_bargaining_equation")
+  expect_gt(max(abs(
+    unname(antitrust::calcMargins(fit@model, TRUE, level = TRUE)) -
+      unname(antitrust::calcMargins(registered, TRUE, level = TRUE))
+  )), 1e-6)
+})
+
+test_that("MonCom registration preserves ownership-invariant margins and prices", {
+  market <- pnb_market()
+  params <- bayes_params(alpha = 0.65, s0 = 0.015, supply_model = 2L)
+  owner_post <- pnb_owner_post()
+  obj <- build_conduct_object(params, 1L, market,
+                              ownerPre = market$group,
+                              ownerPost = owner_post)
+  fit <- suppressWarnings(as_antitrust_fit(obj))
+
+  expect_identical(fit@spec, antitrust::model_spec("logit", "moncom"))
+  expect_equal(
+    unname(antitrust::calcMargins(fit@model, TRUE, level = TRUE)),
+    unname(antitrust::calcMargins(fit@model, FALSE, level = TRUE)),
+    tolerance = 1e-8
+  )
+  expect_equal(unname(fit@model@pricePost), unname(fit@model@pricePre),
+               tolerance = 1e-8)
+})
+
+test_that("FOCs recover model costs and positive cost shocks raise prices", {
+  market <- pnb_market()
+  owner <- market$group
+  params <- bayes_params(alpha = 0.65, s0 = 0.015, supply_model = 1L)
+  base <- build_conduct_object(params, 1L, market,
+                               ownerPre = owner, ownerPost = owner)
+  shocked <- build_conduct_object(params, 1L, market,
+                                  ownerPre = owner, ownerPost = owner,
+                                  mcDelta = rep(0.02, market$n_prod))
+  base_fit <- suppressWarnings(as_antitrust_fit(base))
+  shocked_fit <- suppressWarnings(as_antitrust_fit(shocked))
+  model <- base_fit@model
+  foc <- model@pricePre - model@mcPre -
+    antitrust::calcMargins(model, TRUE, level = TRUE)
+
+  expect_lt(max(abs(foc)), 1e-8)
+  expect_gt(sum(market$quantities *
+                (shocked_fit@model@pricePost - base_fit@model@pricePost)), 0)
+})
+
+test_that("as_antitrust_fit does not mutate the conduct object", {
+  market <- pnb_market()
+  params <- bayes_params(alpha = 0.65, s0 = 0.015, supply_model = 1L)
+  object <- build_conduct_object(params, 1L, market,
+                                 ownerPre = market$group,
+                                 ownerPost = pnb_owner_post())
+  before <- object
+  fit <- suppressWarnings(as_antitrust_fit(object))
+
+  expect_equal(object@slopes, before@slopes)
+  expect_equal(object@pricePre, before@pricePre)
+  expect_equal(object@pricePost, before@pricePost)
+  expect_equal(object@mcPre, before@mcPre)
+  expect_s4_class(fit, "StructuralFit")
+})
+
+test_that("AntitrustFit slots survive an RDS round trip", {
+  market <- pnb_market()
+  params <- bayes_params(alpha = 0.65, s0 = 0.015, supply_model = 1L)
+  object <- build_conduct_object(params, 1L, market,
+                                 ownerPre = market$group,
+                                 ownerPost = pnb_owner_post())
+  fit <- suppressWarnings(as_antitrust_fit(object))
+  path <- tempfile(fileext = ".rds")
+  on.exit(unlink(path), add = TRUE)
+  saveRDS(fit, path)
+  restored <- readRDS(path)
+
+  expect_s4_class(restored, "AntitrustFit")
+  expect_s4_class(restored, "StructuralFit")
+  expect_equal(restored@spec, fit@spec)
+  expect_equal(restored@model@pricePost, fit@model@pricePost,
+               tolerance = 1e-10)
 })
