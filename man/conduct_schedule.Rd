@@ -18,7 +18,8 @@ conduct_schedule(
 
 \item{model}{Conduct model name.}
 
-\item{s0}{Outside share.}
+\item{s0}{Outside quantity share for Logit schedules and outside revenue
+share for CES schedules.}
 
 \item{demand_model}{\code{"logit"} or \code{"ces"}.}
 

@@ -8,7 +8,8 @@
 #'
 #' @param q Numeric vector of unconditional firm shares.
 #' @param model Conduct model name.
-#' @param s0 Outside share.
+#' @param s0 Outside quantity share for Logit schedules and outside revenue
+#'   share for CES schedules.
 #' @param demand_model \code{"logit"} or \code{"ces"}.
 #' @param gamma CES elasticity, required for CES schedules.
 #' @param bargaining_power Buyer-side Nash bargaining weight.

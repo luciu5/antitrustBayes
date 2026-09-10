@@ -287,9 +287,10 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
 
 #' Decompose Joint and Conditional-Margin Model Evidence
 #'
-#' Since the compositional share likelihood and shared-parameter priors are
-#' common across conduct models, subtracting a separately fitted share-only
-#' log marginal likelihood isolates \eqn{\log p(M\mid S,M_k)}.
+#' Since the conditional log quantity-share likelihood and shared-parameter
+#' priors are common across conduct models, subtracting a separately fitted
+#' share-only log marginal likelihood isolates
+#' \eqn{\log p(M\mid S,M_k)}.
 #'
 #' @param comparison A bridge-sampling table returned by \code{bayes_compare}.
 #' @param share_logml Scalar or model-aligned vector of log marginal

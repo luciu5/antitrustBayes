@@ -18,7 +18,8 @@ The comparison table with common-share and conditional-margin
 evidence columns.
 }
 \description{
-Since the compositional share likelihood and shared-parameter priors are
-common across conduct models, subtracting a separately fitted share-only
-log marginal likelihood isolates \eqn{\log p(M\mid S,M_k)}.
+Since the conditional log quantity-share likelihood and shared-parameter
+priors are common across conduct models, subtracting a separately fitted
+share-only log marginal likelihood isolates
+\eqn{\log p(M\mid S,M_k)}.
 }

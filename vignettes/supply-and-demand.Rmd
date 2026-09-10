@@ -41,6 +41,10 @@ quantity and enter only the CES supply first-order conditions. If $q_0$ is the
 outside quantity share, $p_0$ the outside price, and $\bar p_I$ the observed
 inside quantity-weighted price, the corresponding outside revenue share is
 $r_0 = q_0p_0/(q_0p_0 + (1-q_0)\bar p_I)$.
+When `use_s0_market_pool = TRUE` and there are no outside-share covariates, the
+latent outside quantity share $q_0$ is shared across all periods of a market.
+The transformed outside revenue share $r_0$ can still vary by period when
+$p_0$ or $\bar p_I$ varies.
 
 ### Logit Demand and the Gumbel Distribution
 
@@ -90,7 +94,13 @@ Under Cournot competition, firms choose quantities rather than prices. This mode
 * **Logit:** 
 \[ m_j = \frac{1}{\alpha p_j} \left( \frac{s_0 + \sum_{l \in \mathcal{J}_k} s_l}{s_0} \right) \]
 * **CES:** 
-\[ m_j = \frac{1 + (\gamma - 1) \sum_{l \in \mathcal{J}_k} r_l}{\gamma} \]
+\[
+m_j = \frac{1}{\gamma}
+  + \frac{(\gamma-1)\sum_{l \in \mathcal{J}_k}r_l}
+  {\gamma\{1+(\gamma-1)r_0\}}
+= \frac{1+(\gamma-1)\left(r_0+\sum_{l \in \mathcal{J}_k}r_l\right)}
+  {\gamma\{1+(\gamma-1)r_0\}}.
+\]
 
 ### Second-Score Auction
 The Second-Score Auction model (or second-price auction) can be used to characterize markets where competition takes the form of bidding for consumer contracts or deposits, representing a "competition for the market". Margins scale according to the firm's total market presence.
@@ -103,12 +113,29 @@ The Second-Score Auction model (or second-price auction) can be used to characte
 ### Nash Bargaining (Optional)
 
 The bargaining extension is deliberately separated from the primary banking
-candidate set. Under CES demand its inverse-Lerner schedule is a Bertrand
-schedule divided by $(1-\beta)$, where $\beta$ is the buyer-side bargaining
-weight. Thus bargaining power and a free demand scale are confounded in CES
-data. The implementation uses a neutral baseline prior on
-$\beta \in [0,0.9999)$; a high-power prior is a sensitivity analysis, not the
-default.
+candidate set. Let $q_k=\sum_{l\in\mathcal J_k}s_l$,
+$r_k=\sum_{l\in\mathcal J_k}r_l$, and
+$\kappa=\beta/(1-\beta)$, where $\beta$ is the buyer-side bargaining weight.
+The implemented schedules are
+
+* **Logit:**
+\[
+m_j = \frac{1}{\alpha p_j}
+\frac{-\log(1-q_k)}{\kappa q_k-(1-q_k)\log(1-q_k)}.
+\]
+* **CES:**
+\[
+m_j = \frac{1-\beta}{\gamma-(\gamma-1)r_k}.
+\]
+
+The CES equation is the registered `antitrust` CES-Bertrand schedule scaled by
+$1-\beta$. The Bayesian multiproduct Logit equation is intentionally different
+from `antitrust`'s registered product-level Logit bargaining system, so that
+one case retains the explicit Bayesian conduct class while counterfactuals
+still run through `antitrust::simulate()`. Bargaining power and a free demand
+scale are confounded in CES data. The implementation uses a neutral baseline
+prior on $\beta \in [0,0.9999)$; a high-power prior is a sensitivity analysis,
+not the default.
 
 ## 3. Shape-Based Conduct Information
 

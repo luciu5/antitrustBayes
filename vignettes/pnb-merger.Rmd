@@ -11,7 +11,8 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = FALSE
+  eval = FALSE,
+  purl = FALSE
 )
 ```
 
@@ -47,8 +48,10 @@ identifier (`group`).
 
 ## Step 1: Estimate Under Multiple Supply Models
 
-We estimate the Bayesian logit demand model under four supply assumptions:
-Nash-Bertrand, Monopolistic Competition, Cournot, and Second-Score Auction.
+We estimate the Bayesian logit demand model under four supply assumptions
+using the default joint share/margin Student-t likelihood, including its
+estimated cross-equation correlation: Nash-Bertrand, Monopolistic Competition,
+Cournot, and Second-Score Auction.
 Nash bargaining is available in the general API, but is not included in this
 retail-deposit candidate set because its institutional interpretation is less
 direct.
@@ -65,7 +68,6 @@ fits <- lapply(supply_models, function(sm) {
     market  = rep("PHL", nrow(pnb)),
     group   = pnb$group,
     supply_model = sm,
-    use_rho = FALSE,
     model_prior = model_priors[[sm]],
     stan_options = list(
       chains = 4, iter = 2000, warmup = 1000,

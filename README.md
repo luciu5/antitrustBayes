@@ -22,10 +22,21 @@ Additional utilities:
 
 ## Installation
 
+The `refactor` branch currently depends on the matching development stack.
+Install the known-compatible `antitrust` revision before installing
+`antitrustBayes`; do not rely on either repository's default branch:
+
 ```r
-# Install from GitHub (requires devtools)
-devtools::install_github("luciu5/antitrustBayes")
+# Install from GitHub (requires remotes)
+remotes::install_github(
+  "luciu5/antitrust@24caac92a6c8ad4dc1d3d754c4c26ad0afd4248f"
+)
+remotes::install_github("luciu5/antitrustBayes@refactor")
 ```
+
+The dependency-stack CI uses the same pinned `antitrust` SHA by default and
+records both resolved repository SHAs. Its manual dispatch accepts another
+`antitrust` branch or SHA for compatibility testing.
 
 ## Quick Start
 
@@ -68,12 +79,15 @@ comp <- bayes_compare(
 )
 ```
 
-The primary share likelihood is compositional (centered log-ratio) and the
-inverse-margin likelihood is Student-t. `use_rho` is retained only as a
-backward-compatibility argument and must be `FALSE`; shared proper priors are
-required for bridge-sampling model probabilities. Use `likelihood = "share"`
-and `likelihood = "margin"` fits with `bayes_evidence_decomposition()` when
-you want to report how much evidence comes from each block.
+The primary share outcome is the log conditional inside quantity share,
+`log_shareIn`. By default, `use_rho = TRUE` couples it to the log inverse-margin
+outcome with a bivariate Student-t likelihood factored as
+`p(share) * p(margin | share)`. The correlation is estimated only for a joint
+fit with at least one observed margin; otherwise it is structurally fixed at
+zero and is not sampled. Shared proper priors are required for bridge-sampling
+model probabilities. Use `likelihood = "share"` and `likelihood = "margin"`
+fits with `bayes_evidence_decomposition()` when you want to report how much
+evidence comes from each block.
 
 ## Dependencies
 
