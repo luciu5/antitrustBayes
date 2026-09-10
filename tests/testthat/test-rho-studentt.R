@@ -107,6 +107,27 @@ test_that("fixed and estimated df fits compile and produce finite draws", {
   expect_true(all(is.finite(s0_draws)))
   expect_true(all(is.finite(alpha_draws)))
 
+  # Reconstruct one generated joint log-likelihood term independently from
+  # the same Logit fit used by this smoke test.
+  draws_fixed <- rstan::extract(fit_fixed@stanfit)
+  i <- 1L
+  draw_idx <- 1L
+  expected_joint <- rho_test_factorized_log(
+    fit_fixed@stan_data$log_shareIn[i],
+    fit_fixed@stan_data$log_marginNormInv[i],
+    log(as.numeric(draws_fixed$pred_shareIn[draw_idx, i])),
+    log(as.numeric(draws_fixed$pred_marginNormInv[draw_idx, i]) + 1e-9),
+    as.numeric(draws_fixed$sigma_share[draw_idx]),
+    as.numeric(draws_fixed$sigma_margin[draw_idx]),
+    as.numeric(draws_fixed$rho[draw_idx]),
+    as.numeric(draws_fixed$nu[draw_idx])
+  )
+  expect_equal(
+    as.numeric(draws_fixed$log_lik[draw_idx, i]),
+    expected_joint,
+    tolerance = 1e-5
+  )
+
   fit_est <- suppressWarnings(bayes_est(
     prices = d$prices, quantities = d$quantities, margins = d$margins,
     market = d$market, group = d$group,
