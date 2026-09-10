@@ -202,7 +202,8 @@
 #' owner_post <- pnb$group
 #' owner_post[owner_post == "889018"] <- "298816"
 #'
-#' result <- bayes_sim(fit, ownerPost = owner_post, n_draws = 200)
+#' merger <- antitrust::counterfactual(ownership = owner_post)
+#' result <- simulate(fit, merger, n_draws = 200)
 #' summary(result)
 #' }
 #'
@@ -468,7 +469,38 @@ bayes_est <- function(prices, quantities, margins,
     rate = priors$prior_nu_rate
   )
 
+  spec <- .bayes_model_spec(list(
+    demand_model = demand_model,
+    supply_model = supply_int
+  ))
+  observed <- list(
+    prices = as.numeric(df$prices),
+    quantities = as.numeric(df$quantities),
+    margins = as.numeric(df$margins),
+    market = as.character(df$market),
+    year = as.character(df$year),
+    group = as.character(df$group),
+    margin_observed = as.logical(df$margin_observed),
+    outside_price = as.numeric(df$outside_price)
+  )
+  parameters <- list(
+    source = "stanfit",
+    demand_parameter = if (identical(demand_model, "ces")) "gamma" else "alpha",
+    supply_model = supply_model
+  )
+
   new("BayesLogit",
+    spec         = spec,
+    model        = NULL,
+    parameters   = parameters,
+    observed     = observed,
+    diagnostics  = list(
+      status = "completed",
+      source = "estimated",
+      route = "bayes_est",
+      model_spec_version = attr(stan_data, "model_spec_version", exact = TRUE),
+      provenance = metadata
+    ),
     stanfit      = stanfit,
     data         = df,
     stan_data    = stan_data,

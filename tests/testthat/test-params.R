@@ -69,6 +69,13 @@ test_that("bayes_market validates lengths and defaults", {
   m <- simple_market()
   expect_equal(m$n_prod, 3L)
   expect_equal(m$labels, c("a", "a", "b"))
+  expect_true(all(m$margin_observed))
+
+  missing_margins <- bayes_market(
+    prices = c(1, 2), quantities = c(2, 1), margins = NULL,
+    group = c("a", "b"), outside_price = 1
+  )
+  expect_false(any(missing_margins$margin_observed))
 })
 
 test_that("build_conduct_object reproduces the supplied quantity shares", {

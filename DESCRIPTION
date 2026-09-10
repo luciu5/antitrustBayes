@@ -1,5 +1,5 @@
 Package: antitrustBayes
-Title: Bayesian Merger Simulation for Antitrust Analysis
+Title: Bayesian Counterfactual Simulation for Antitrust Analysis
 Version: 0.2.0
 Author: Charles Taragin
 Maintainer: Charles Taragin <ctaragin+antitrustr@gmail.com>
@@ -9,9 +9,9 @@ Authors@R: c(
            role = c("aut", "cre"))
     )
 Description: Bayesian estimation of differentiated products demand and supply
-    models using 'Stan' via 'rstan', with merger simulation via the 'antitrust'
-    package. Provides posterior distributions of merger price effects, consumer
-    welfare changes, and other competition metrics. Supports Bayesian model
+    models using 'Stan' via 'rstan', with counterfactual simulation via the
+    'antitrust' package. Provides posterior distributions of price effects,
+    consumer welfare changes, and other competition metrics. Supports Bayesian model
     averaging and comparison across supply models using bridge sampling,
     WAIC, and LOO-CV.
 License: CC0
@@ -23,7 +23,7 @@ Depends:
     R (>= 4.0.0),
     methods
 Imports:
-    antitrust (>= 0.99.37),
+    antitrust (>= 0.99.38),
     bridgesampling (>= 1.1.0),
     digest,
     loo (>= 2.5.0),
@@ -46,13 +46,12 @@ Collate:
     'antitrustBayes-package.R'
     'bma.R'
     'conduct.R'
-    'params.R'
-    'counterfactual.R'
     'data.R'
     'decisions.R'
     'estimate.R'
     'helpers.R'
     'methods.R'
+    'params.R'
     'priors.R'
     'simulate.R'
     'stanmodels.R'

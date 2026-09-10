@@ -6,7 +6,7 @@
 \alias{BayesSim}
 \alias{show,BayesSim-method}
 \alias{summary,BayesSim-method}
-\title{S4 Class for Bayesian Merger Simulation Results}
+\title{S4 Class for Bayesian Counterfactual Results}
 \usage{
 \S4method{show}{BayesSim}(object)
 
@@ -46,8 +46,8 @@ single-row data frame of market-level statistics; if
 \code{market = FALSE}, each has one row per product.
 }
 \description{
-S4 class holding the results of merger simulations computed
-over posterior draws from a \code{\linkS4class{BayesLogit}} object.
+S4 class holding counterfactual results computed over draws
+from a \code{\linkS4class{BayesFit}} object.
 
 Mirrors the \code{summary} method for \pkg{antitrust} \code{Bertrand}
 objects, but computes posterior means and standard deviations across
@@ -59,11 +59,11 @@ all valid draws.
 \item{\code{sims}}{A \code{list} of \code{antitrust} simulation objects, one per
 valid posterior draw and market.}
 
-\item{\code{price_pre}}{A \code{list} of matrices (draws x products) of pre-merger
+\item{\code{price_pre}}{A \code{list} of matrices (draws x products) of baseline
 prices, one element per market.}
 
 \item{\code{price_post}}{A \code{list} of matrices (draws x products) of
-post-merger prices, one element per market.}
+post-counterfactual prices, one element per market.}
 
 \item{\code{price_change}}{A \code{list} of matrices (draws x products) of
 proportional price changes, one element per market.}
@@ -72,7 +72,7 @@ proportional price changes, one element per market.}
 pre-merger shares.}
 
 \item{\code{shares_post}}{A \code{list} of matrices (draws x products) of
-post-merger shares.}
+post-counterfactual shares.}
 
 \item{\code{market_ids}}{Character vector of market identifiers.}
 
@@ -87,7 +87,7 @@ market.}
 \item{\code{failures}}{A named list containing simulation failure messages by
 market and draw.}
 
-\item{\code{call}}{The matched call to \code{\link{bayes_sim}}.}
+\item{\code{call}}{The matched call to \code{simulate()} or \code{\link{bayes_sim}}.}
 
 \item{\code{metadata}}{Provenance and source-model metadata.}
 }}

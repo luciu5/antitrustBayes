@@ -23,7 +23,7 @@ NULL
     valid <- which(!vapply(sims_mk, is.null, logical(1)))
     draw_results <- vector("list", length(valid))
     for (j in seq_along(valid)) {
-      draw_results[[j]] <- tryCatch(fn(sims_mk[[valid[j]]]),
+      draw_results[[j]] <- tryCatch(fn(.terminal_model(sims_mk[[valid[j]]])),
         error = function(e) NULL
       )
     }
@@ -152,7 +152,7 @@ setMethod("wtp_convert", "BayesLogit", function(object, to_gamma = TRUE) {
 
 # ---- BayesLogit methods ----
 
-#' @rdname BayesLogit-class
+#' @rdname BayesFit-class
 #' @exportMethod show
 setMethod("show", "BayesLogit", function(object) {
   supply_names <- c(
@@ -197,7 +197,7 @@ setMethod("show", "BayesLogit", function(object) {
   invisible(object)
 })
 
-#' @rdname BayesLogit-class
+#' @rdname BayesFit-class
 #' @param object A \code{BayesLogit} object.
 #' @exportMethod summary
 setMethod("summary", "BayesLogit", function(object) {
@@ -386,7 +386,7 @@ setMethod(
 #' @rdname BayesSim-class
 #' @exportMethod show
 setMethod("show", "BayesSim", function(object) {
-  cat("Bayesian Merger Simulation Results\n")
+  cat("Bayesian Counterfactual Simulation Results\n")
   cat("  Markets:", length(object@market_ids), "\n")
   cat("  Posterior draws:", object@n_draws, "\n")
   cat("  Valid simulations per market:\n")
@@ -407,7 +407,7 @@ setMethod("show", "BayesSim", function(object) {
 })
 
 
-#' Summarise Bayesian Merger Simulation Results
+#' Summarise Bayesian Counterfactual Simulation Results
 #'
 #' Mirrors the \code{summary} method for \pkg{antitrust} \code{Bertrand}
 #' objects, but computes posterior means and standard deviations across
@@ -452,7 +452,7 @@ setMethod(
           {
             # summary prints to console; suppress it
             invisible(capture.output(
-              res <- summary(sims_mk[[valid[j]]],
+              res <- summary(.terminal_model(sims_mk[[valid[j]]]),
                 market = market,
                 levels = levels, revenue = revenue,
                 digits = 10, ...

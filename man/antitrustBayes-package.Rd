@@ -4,21 +4,23 @@
 \name{antitrustBayes-package}
 \alias{antitrustBayes-package}
 \alias{antitrustBayes}
-\title{Bayesian Merger Simulation for Antitrust Analysis}
+\title{Bayesian Counterfactual Simulation for Antitrust Analysis}
 \description{
 Bayesian estimation of differentiated products demand and supply
-models using Stan, with merger simulation via the \pkg{antitrust}
-package. Provides posterior distributions of merger price effects,
+models using Stan, with counterfactual simulation via the \pkg{antitrust}
+package. Provides posterior distributions of price effects,
 consumer welfare changes, and other competition metrics.
 }
 \details{
-The package provides two main functions:
+The package provides three main entry points:
 \describe{
 \item{\code{\link{bayes_est}}}{Estimate a Bayesian supply-and-demand
 model using Stan MCMC sampling.}
-\item{\code{\link{bayes_sim}}}{Simulate merger effects using posterior
-draws from \code{bayes_est} and the \pkg{antitrust} package
-infrastructure.}
+\item{\code{\link{bayes_specify}}}{Construct a Bayesian structural fit
+from directly supplied parameter draws.}
+\item{\code{\link[stats]{simulate}}}{Apply an \pkg{antitrust}
+counterfactual across posterior draws. \code{\link{bayes_sim}} is a
+convenience wrapper around this S4 method.}
 }
 }
 \seealso{

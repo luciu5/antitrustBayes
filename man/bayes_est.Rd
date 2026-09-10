@@ -266,7 +266,8 @@ fit
 owner_post <- pnb$group
 owner_post[owner_post == "889018"] <- "298816"
 
-result <- bayes_sim(fit, ownerPost = owner_post, n_draws = 200)
+merger <- antitrust::counterfactual(ownership = owner_post)
+result <- simulate(fit, merger, n_draws = 200)
 summary(result)
 }
 

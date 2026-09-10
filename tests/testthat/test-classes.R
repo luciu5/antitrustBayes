@@ -10,6 +10,9 @@ test_that("BayesLogit class can be instantiated", {
     call         = call("bayes_est")
   )
   expect_s4_class(obj, "BayesLogit")
+  expect_s4_class(obj, "BayesFit")
+  expect_s4_class(obj, "StructuralFit")
+  expect_true(methods::isVirtualClass("BayesFit"))
 })
 
 test_that("BayesSim class can be instantiated", {

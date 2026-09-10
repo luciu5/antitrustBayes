@@ -8,7 +8,7 @@ as_antitrust_fit(object, spec = NULL, ...)
 }
 \arguments{
 \item{object}{A \code{BayesConductLogit} or \code{BayesConductCES} built
-by \code{\link{build_conduct_object}}.}
+by the package's posterior-realization helper.}
 
 \item{spec}{An \code{antitrust_model_spec}. Defaults to a mapping from
 \code{object@supply_model} (see \code{\link{model_spec}} in

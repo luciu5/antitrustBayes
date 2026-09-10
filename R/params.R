@@ -147,6 +147,7 @@ bayes_market <- function(prices, quantities, margins, group,
     margins <- rep(NA_real_, n_prod)
   }
   margins <- as.numeric(margins)
+  margin_observed <- is.finite(margins)
   margins[!is.finite(margins)] <- 0.5
   if (length(margins) != n_prod) {
     stop("'margins' must have one value per product.")
@@ -169,6 +170,7 @@ bayes_market <- function(prices, quantities, margins, group,
       prices = as.numeric(prices),
       quantities = as.numeric(quantities),
       margins = margins,
+      margin_observed = margin_observed,
       group = as.character(group),
       outside_price = outside_price,
       market_side = market_side,
@@ -177,6 +179,92 @@ bayes_market <- function(prices, quantities, margins, group,
       n_prod = n_prod
     ),
     class = "bayes_market"
+  )
+}
+#' Specify a Bayesian structural fit from parameter draws
+#'
+#' Combines directly supplied demand/conduct parameters and an observed market
+#' into a \code{\linkS4class{BayesFit}}. The resulting object uses the same
+#' \code{simulate()} S4 method as a fit returned by \code{\link{bayes_est}},
+#' without running Stan.
+#'
+#' @param params A \code{\link{bayes_params}} object containing one or more
+#'   parameter draws.
+#' @param market A \code{\link{bayes_market}} object describing one market.
+#'
+#' @return A \code{BayesSpecifiedFit}, inheriting from
+#'   \code{\linkS4class{BayesFit}} and \code{antitrust::StructuralFit}.
+#' @export
+#'
+#' @examples
+#' data(pnb)
+#' params <- bayes_params(alpha = 1, s0 = 0.015, supply_model = 1L)
+#' market <- bayes_market(
+#'   prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
+#'   group = pnb$group, outside_price = 1, market_side = "output",
+#'   insideSize = attr(pnb, "insideSize"), labels = pnb$bank
+#' )
+#' fit <- bayes_specify(params, market)
+#' owner_post <- pnb$group
+#' owner_post[owner_post == attr(pnb, "target")] <- attr(pnb, "acquirer")
+#' result <- simulate(fit, antitrust::counterfactual(ownership = owner_post))
+bayes_specify <- function(params, market) {
+  if (!inherits(params, "bayes_params")) {
+    stop("'params' must be a bayes_params object; see bayes_params().")
+  }
+  if (!inherits(market, "bayes_market")) {
+    stop("'market' must be a bayes_market object; see bayes_market().")
+  }
+
+  cl <- match.call()
+  spec <- .bayes_model_spec(params)
+  data <- data.frame(
+    prices = market$prices,
+    quantities = market$quantities,
+    margins = market$margins,
+    market = rep("unit_1", market$n_prod),
+    year = rep("1", market$n_prod),
+    group = market$group,
+    margin_observed = market$margin_observed,
+    outside_price = rep(market$outside_price, market$n_prod),
+    stringsAsFactors = FALSE
+  )
+  observed <- list(
+    prices = market$prices,
+    quantities = market$quantities,
+    margins = market$margins,
+    ownerPre = market$group,
+    labels = market$labels,
+    priceOutside = market$outside_price,
+    insideSize = market$insideSize
+  )
+  metadata <- list(
+    source = "bayes_specify",
+    demand_model = params$demand_model,
+    supply_model = params$supply_model,
+    posterior_draws = params$n_draws
+  )
+
+  methods::new(
+    "BayesSpecifiedFit",
+    spec = spec,
+    model = NULL,
+    parameters = params,
+    observed = observed,
+    diagnostics = list(
+      status = "completed",
+      source = "specified",
+      route = "bayes_specify",
+      posterior_draws = params$n_draws
+    ),
+    data = data,
+    supply_model = as.integer(params$supply_model),
+    demand_model = params$demand_model,
+    market_side = market$market_side,
+    call = cl,
+    metadata = metadata,
+    params = params,
+    market = market
   )
 }
 
@@ -390,7 +478,7 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
 #' without demand recalibration.
 #'
 #' @param object A \code{BayesConductLogit} or \code{BayesConductCES} built
-#'   by \code{\link{build_conduct_object}}.
+#'   by the package's posterior-realization helper.
 #' @param spec An \code{antitrust_model_spec}. Defaults to a mapping from
 #'   \code{object@supply_model} (see \code{\link{model_spec}} in
 #'   \pkg{antitrust}).
@@ -464,64 +552,5 @@ as_antitrust_fit <- function(object, spec = NULL, ...) {
       core_model = use_core,
       custom_economics = custom_reason
     )
-  )
-}
-
-## Extract the terminal legacy S4 result from whatever antitrust::simulate()
-## returned -- a direct model result, or a CounterfactualPath for multi-step
-## counterfactuals (entry/exit/quality/sequential mergers).
-.terminal_model <- function(result) {
-  if (methods::is(result, "CounterfactualPath")) {
-    antitrust::final_result(result)
-  } else {
-    result
-  }
-}
-
-## Assemble a single-market list of per-draw antitrust::simulate() results
-## into a BayesSim, mirroring bayes_sim()'s matrix layout (simulate.R). Used
-## by bayes_counterfactual() for the manual-parameter, single-unit case.
-.assemble_bayes_sim <- function(results, failures, market, params, cl) {
-  n_draws <- length(results)
-  n_prod <- market$n_prod
-  ppre <- matrix(NA_real_, n_draws, n_prod, dimnames = list(NULL, market$labels))
-  ppost <- ppre
-  spre <- ppre
-  spost <- ppre
-
-  for (d in seq_len(n_draws)) {
-    res <- results[[d]]
-    if (is.null(res)) next
-    model <- .terminal_model(res)
-    ppre[d, ] <- model@pricePre
-    ppost[d, ] <- model@pricePost
-    spre[d, ] <- antitrust::calcShares(model, preMerger = TRUE)
-    spost[d, ] <- antitrust::calcShares(model, preMerger = FALSE)
-  }
-
-  n_failed <- sum(!is.na(failures))
-  if (n_failed > 0L) {
-    warning(n_failed, " of ", n_draws,
-            " draw simulations failed. Inspect result@failures for details.",
-            call. = FALSE)
-  }
-
-  unit_id <- "unit_1"
-  methods::new(
-    "BayesSim",
-    sims = stats::setNames(list(results), unit_id),
-    price_pre = stats::setNames(list(ppre), unit_id),
-    price_post = stats::setNames(list(ppost), unit_id),
-    price_change = stats::setNames(list(ppost / ppre - 1), unit_id),
-    shares_pre = stats::setNames(list(spre), unit_id),
-    shares_post = stats::setNames(list(spost), unit_id),
-    market_ids = unit_id,
-    product_labels = stats::setNames(list(market$labels), unit_id),
-    n_draws = as.integer(n_draws),
-    n_valid = stats::setNames(as.integer(n_draws - n_failed), unit_id),
-    failures = stats::setNames(list(failures), unit_id),
-    call = cl,
-    metadata = list(source = "bayes_counterfactual",
-                    supply_model = params$supply_model)
   )
 }

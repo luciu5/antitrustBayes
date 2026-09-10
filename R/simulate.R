@@ -1,426 +1,622 @@
-#' Simulate Merger Effects from Bayesian Posterior
+#' Simulate counterfactuals over Bayesian structural draws
 #'
-#' Takes a fitted \code{\linkS4class{BayesLogit}} object and simulates the
-#' price effects of a merger using posterior draws of demand parameters.
-#' For each draw, the function constructs an \pkg{antitrust} class object
-#' matching the estimated supply model, calibrates marginal costs via
-#' \code{\link[antitrust]{calcMC}}, and solves for post-merger equilibrium
-#' prices via \code{\link[antitrust]{calcPrices}}, yielding posterior
-#' distributions of price changes, share changes, and other competition
-#' metrics.
+#' Applies an \pkg{antitrust} counterfactual to draws stored in a
+#' \code{BayesFit}. For every draw and simulation unit, the method constructs
+#' the pre-counterfactual structural realization, wraps it as an
+#' \code{antitrust::AntitrustFit}, and delegates the scenario solve to
+#' \code{antitrust::simulate()}. The result therefore uses the same ownership,
+#' cost, entry, exit, quality, and multi-step machinery as \pkg{antitrust}.
 #'
-#' @param fit A \code{\linkS4class{BayesLogit}} object from
-#'   \code{\link{bayes_est}}.
-#' @param ownerPost Post-merger ownership: either a vector of firm IDs
-#'   (same length as products in each market) or a named list of ownership
-#'   matrices, one per market.
-#' @param n_draws Integer number of posterior draws to use for simulation.
-#'   Default \code{NULL}, which uses \code{min(200, total_draws)}.
-#' @param mcDelta Numeric vector of proportional marginal cost changes.
-#'   Default \code{NULL} (no cost changes).
-#' @param subset Logical vector indicating which products to include in
-#'   post-merger simulation. Default \code{NULL} (all products).
-#' @param insideSize Total inside quantity. For CES, this is converted to
-#'   inside expenditure using the observed quantity-weighted price. Default 1.
-#' @param priceOutside Optional positive price of the outside good. By default,
-#'   uses the market-year outside price stored in the fitted model.
-#' @param labels Character vector of product labels. If \code{NULL},
-#'   uses group identifiers from the estimation data.
-#' @param market Which market(s) to simulate. Default \code{NULL} (all).
-#' @param year Which year(s) to simulate. Default \code{NULL}, preserving
-#'   market-level behavior for existing callers. When supplied, simulations
-#'   are run for each selected market-year cell.
-#' @param ... Additional arguments passed to
-#'   \code{\link[antitrust]{calcPrices}}.
+#' \code{bayes_sim()} is retained as a convenience wrapper around this S4
+#' method. New code may call \code{simulate()} directly.
 #'
-#' @details
-#' For each posterior draw \eqn{i} and each market \eqn{m}, the function:
-#' \enumerate{
-#'   \item Extracts the Logit price coefficient or CES elasticity and the
-#'     outside quantity share from the posterior.
-#'   \item Computes unconditional shares:
-#'     \eqn{s_j = s_j^{cond} \times (1 - s_0)}.
-#'   \item Inverts either the Logit or CES demand equation for mean values,
-#'     converting CES quantity shares to revenue shares where required by
-#'     \pkg{antitrust}.
-#'   \item Constructs an internal conduct-aware subclass of \pkg{antitrust}'s
-#'     \code{Logit} or \code{CES} class with the draw's demand and cutoff
-#'     parameters.
-#'   \item Calibrates pre- and post-merger marginal costs using
-#'     \code{\link[antitrust]{calcMC}}.
-#'   \item Sets observed prices as the pre-merger equilibrium and solves
-#'     for post-merger equilibrium prices using
-#'     \code{\link[antitrust]{calcPrices}}.
-#' }
+#' @param object,fit A \code{BayesFit}: either a Stan-estimated
+#'   \code{BayesLogit} from \code{bayes_est()} or a fit created by
+#'   \code{bayes_specify()}.
+#' @param ownerPost A post-counterfactual ownership vector or matrix, an
+#'   \code{antitrust::Counterfactual}, or a named list of either, one per
+#'   simulation unit.
+#' @param n_draws Number of posterior draws to simulate. By default, uses at
+#'   most 200 draws.
+#' @param mcDelta Optional vector of proportional marginal-cost changes for
+#'   the legacy ownership interface. Put cost changes in \code{ownerPost} when
+#'   it is a \code{Counterfactual}.
+#' @param subset Optional logical vector selecting products for the legacy
+#'   ownership interface. Put exits in \code{ownerPost} when it is a
+#'   \code{Counterfactual}.
+#' @param insideSize Total inside quantity. For an estimated fit the default is
+#'   one, preserving the historical \code{bayes_sim()} behavior. A specified
+#'   fit defaults to the value stored by \code{bayes_market()}.
+#' @param priceOutside Optional positive outside-good price. The fitted or
+#'   specified market value is used by default.
+#' @param labels Optional product labels.
+#' @param market Which markets to simulate. The specified-fit unit is named
+#'   \code{"unit_1"}.
+#' @param year Which years to simulate. Panel fits require an explicit year;
+#'   the specified-fit year is \code{"1"}.
+#' @param mc.cores Number of parallel fork workers. The default is the number
+#'   of detected cores capped at four; Windows always uses one.
+#' @param ... Additional arguments passed to \code{antitrust::simulate()}.
 #'
-#' Internal subclasses of \pkg{antitrust}'s \code{Logit} and \code{CES}
-#' classes override only the margin equation. This lets all five estimated
-#' conduct models (including the posterior fringe cutoff) use the upstream
-#' equilibrium, elasticity, diversion, welfare, and HMT machinery.
+#' @return A \code{BayesSim} containing one \pkg{antitrust} result (or
+#'   \code{CounterfactualPath}) per selected draw and simulation unit.
 #'
-#' @return A \code{\linkS4class{BayesSim}} object.
-#'
-#' @seealso \code{\link{bayes_est}},
-#'   \code{\link[antitrust]{calcMC}},
-#'   \code{\link[antitrust]{calcPrices}},
-#'   \code{\link[antitrust]{calcShares}}
+#' @seealso \code{bayes_est()}, \code{bayes_specify()},
+#'   \code{\link[antitrust]{counterfactual}},
+#'   \code{\link[antitrust]{simulate}}
 #'
 #' @examples
-#' \donttest{
-#' # See bayes_est() for a complete PNB merger example
 #' data(pnb)
-#' # fit <- bayes_est(prices = pnb$prices, quantities = pnb$quantities,
-#' #   margins = pnb$margins, market = rep("PNB", nrow(pnb)),
-#' #   group = pnb$group, supply_model = "bertrand")
-#' #
-#' # Merge acquirer (298816) and target (889018)
-#' # owner_post <- pnb$group
-#' # owner_post[owner_post == "889018"] <- "298816"
-#' # result <- bayes_sim(fit, ownerPost = owner_post, n_draws = 200)
-#' # summary(result)
-#' }
+#' params <- bayes_params(alpha = 0.65, s0 = 0.015, supply_model = 1L)
+#' market <- bayes_market(
+#'   prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
+#'   group = pnb$group, outside_price = 1,
+#'   insideSize = attr(pnb, "insideSize"), labels = pnb$bank
+#' )
+#' fit <- bayes_specify(params, market)
+#' owner_post <- pnb$group
+#' owner_post[owner_post == attr(pnb, "target")] <- attr(pnb, "acquirer")
+#' result <- simulate(fit, antitrust::counterfactual(ownership = owner_post))
 #'
-#' @export
-bayes_sim <- function(fit, ownerPost,
-                      n_draws = NULL,
-                      mcDelta = NULL,
-                      subset = NULL,
-                      insideSize = 1,
-                      priceOutside = NULL,
-                      labels = NULL,
-                      market = NULL,
-                      year = NULL,
-                      ...) {
+#' @name simulate-BayesFit
+NULL
 
-  cl <- match.call()
+## Keep parallel defaults conservative on shared machines. mclapply() cannot
+## fork on Windows, so explicitly normalize that platform to one worker.
+.default_mc_cores <- function() {
+  if (identical(.Platform$OS.type, "windows")) return(1L)
+  cores <- tryCatch(
+    parallel::detectCores(logical = TRUE),
+    error = function(e) NA_integer_
+  )
+  if (is.na(cores) || cores < 1L) cores <- 1L
+  min(4L, cores)
+}
 
-  if (!is(fit, "BayesLogit")) {
-    stop("'fit' must be a BayesLogit object from bayes_est().")
+.validate_mc_cores <- function(mc.cores) {
+  if (length(mc.cores) != 1L || !is.finite(mc.cores) || mc.cores < 1 ||
+      mc.cores != as.integer(mc.cores)) {
+    stop("'mc.cores' must be a positive integer.")
   }
-  validate_fit_spec(fit)
+  if (identical(.Platform$OS.type, "windows")) return(1L)
+  as.integer(mc.cores)
+}
 
-  draws <- rstan::extract(fit@stanfit)
-  df    <- fit@data
-  price_sd <- fit@price_sd
-  is_ces <- identical(fit@demand_model, "ces")
+.select_unit_arg <- function(x, idx, unit_id, market_id, n_rows,
+                             scalar = FALSE, arg = "argument") {
+  if (is.list(x) && !methods::is(x, "Counterfactual")) {
+    keys <- c(unit_id, market_id)
+    keys <- keys[nzchar(keys)]
+    named_key <- intersect(keys, names(x))
+    if (length(named_key)) return(x[[named_key[[1L]]]])
+    if (length(x) == 1L && is.null(names(x))) return(x[[1L]])
+    stop("No value for simulation unit '", unit_id, "' in '", arg, "'.")
+  }
+  if (is.matrix(x)) return(x)
+  if (scalar && length(x) == 1L) return(x)
+  if (length(x) == n_rows) return(x[idx])
+  x
+}
 
-  # Determine markets/cells to simulate
-  market_f <- as.factor(df$market)
-  market_levels <- levels(market_f)
+.estimated_simulation_units <- function(object, market, year) {
+  validate_fit_spec(object)
+  df <- object@data
+  required <- c("prices", "quantities", "margins", "market", "year",
+                "group", "outside_price")
+  missing_fields <- setdiff(required, names(df))
+  if (length(missing_fields)) {
+    stop("The fitted data are missing required field(s): ",
+         paste(missing_fields, collapse = ", "), ".")
+  }
+
+  market_factor <- as.factor(df$market)
+  selected_markets <- levels(market_factor)
   if (!is.null(market)) {
-    market_levels <- intersect(as.character(market), market_levels)
-    if (length(market_levels) == 0L) {
+    selected_markets <- intersect(as.character(market), selected_markets)
+    if (!length(selected_markets)) {
       stop("None of the specified markets found in the fitted data.")
     }
   }
 
-  year_f <- as.factor(df$year)
-  year_levels <- levels(year_f)
+  year_factor <- as.factor(df$year)
+  selected_years <- levels(year_factor)
   if (!is.null(year)) {
-    year_levels <- intersect(as.character(year), year_levels)
-    if (length(year_levels) == 0L) {
+    selected_years <- intersect(as.character(year), selected_years)
+    if (!length(selected_years)) {
       stop("None of the specified years found in the fitted data.")
     }
   }
 
   if (is.null(year)) {
-    year_counts <- tapply(as.character(df$year), df$market,
+    year_counts <- tapply(as.character(df$year), as.character(df$market),
                           function(x) length(unique(x)))
-    if (any(year_counts[market_levels] > 1L, na.rm = TRUE)) {
+    if (any(year_counts[selected_markets] > 1L, na.rm = TRUE)) {
       stop("year must be supplied when simulating a panel fit; otherwise ",
            "different years would be treated as simultaneous products.",
            call. = FALSE)
     }
+    units <- data.frame(
+      unit_id = selected_markets,
+      market = selected_markets,
+      year = NA_character_,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    units <- unique(data.frame(
+      market = as.character(df$market),
+      year = as.character(df$year),
+      stringsAsFactors = FALSE
+    ))
+    units <- units[
+      units$market %in% selected_markets & units$year %in% selected_years,
+      , drop = FALSE
+    ]
+    if (!nrow(units)) {
+      stop("No market-year cells match the requested market/year filters.")
+    }
+    units$unit_id <- paste(units$market, units$year, sep = "_")
+    units <- units[, c("unit_id", "market", "year"), drop = FALSE]
+    rownames(units) <- NULL
   }
 
-  n_total <- dim(draws$a_market)[1]
-  if (is.null(n_total)) n_total <- length(draws$a_market)
-  if (length(n_total) != 1L || !is.finite(n_total) || n_total < 1L) {
+  market_year_labels <- paste(
+    as.integer(market_factor), as.integer(year_factor), sep = "_"
+  )
+  market_year_factor <- as.factor(market_year_labels)
+  unit_info <- lapply(seq_len(nrow(units)), function(i) {
+    idx <- if (is.na(units$year[[i]])) {
+      which(as.character(df$market) == units$market[[i]])
+    } else {
+      which(as.character(df$market) == units$market[[i]] &
+              as.character(df$year) == units$year[[i]])
+    }
+    list(
+      unit_id = units$unit_id[[i]],
+      market_id = units$market[[i]],
+      year_id = units$year[[i]],
+      idx = idx,
+      market_index = as.integer(market_factor)[idx[[1L]]],
+      market_year_index = as.integer(market_year_factor)[idx[[1L]]]
+    )
+  })
+  list(data = df, units = units, info = unit_info)
+}
+
+.specified_simulation_units <- function(object, market, year) {
+  if (!is.null(market) && !"unit_1" %in% as.character(market)) {
+    stop("None of the specified markets found in the specified fit.")
+  }
+  if (!is.null(year) && !"1" %in% as.character(year)) {
+    stop("None of the specified years found in the specified fit.")
+  }
+  list(
+    data = object@data,
+    units = data.frame(
+      unit_id = "unit_1", market = "unit_1", year = "1",
+      stringsAsFactors = FALSE
+    ),
+    info = list(list(
+      unit_id = "unit_1", market_id = "unit_1", year_id = "1",
+      idx = seq_len(object@market$n_prod),
+      market_index = NA_integer_, market_year_index = NA_integer_
+    ))
+  )
+}
+
+.posterior_draw_count <- function(object, draws = NULL) {
+  if (methods::is(object, "BayesSpecifiedFit")) {
+    return(as.integer(object@params$n_draws))
+  }
+  a_market <- draws$a_market
+  n <- if (is.null(dim(a_market))) length(a_market) else dim(a_market)[[1L]]
+  if (length(n) != 1L || !is.finite(n) || n < 1L) {
     stop("The fitted object contains no posterior draws.", call. = FALSE)
   }
-  if (is.null(n_draws)) {
-    n_draws <- min(200L, n_total)
+  as.integer(n)
+}
+
+.indexed_draw <- function(x, draw, index) {
+  if (is.null(dim(x))) x[[draw]] else x[draw, index]
+}
+
+.estimated_draw_params <- function(object, draws, draw, unit) {
+  is_ces <- identical(object@demand_model, "ces")
+  a_raw <- .indexed_draw(draws$a_market, draw, unit$market_index)
+  mky <- unit$market_year_index
+  s0 <- if ("s0_prob" %in% names(draws)) {
+    .indexed_draw(draws$s0_prob, draw, mky)
+  } else if ("s0" %in% names(draws)) {
+    stats::plogis(.indexed_draw(draws$s0, draw, mky))
+  } else {
+    stats::plogis(.indexed_draw(draws$s0_logit, draw, mky))
   }
+  use_cutoff <- isTRUE(object@stan_data$use_cutoff == 1L)
+  cutoff <- if (use_cutoff) {
+    .indexed_draw(draws$cutoff_share, draw, unit$market_index)
+  } else {
+    0
+  }
+  bargaining <- if (object@supply_model == 5L) {
+    as.numeric(draws$bargaining_power[[draw]])
+  } else {
+    0
+  }
+  slope <- if (is_ces) {
+    1 + a_raw / object@price_sd
+  } else {
+    a_raw / object@price_sd
+  }
+  .bayes_params_raw(
+    alpha = if (is_ces) NULL else slope,
+    gamma = if (is_ces) slope else NULL,
+    s0 = as.numeric(s0),
+    bargaining_power = bargaining,
+    cutoff_share = as.numeric(cutoff),
+    cutoff_scale = 0.2,
+    use_cutoff = use_cutoff,
+    supply_model = object@supply_model
+  )
+}
+
+.terminal_model <- function(result) {
+  if (methods::is(result, "CounterfactualPath")) {
+    antitrust::final_result(result)
+  } else {
+    result
+  }
+}
+
+.result_values <- function(result, fallback_labels) {
+  model <- .terminal_model(result)
+  price_pre <- as.numeric(model@pricePre)
+  price_post <- as.numeric(model@pricePost)
+  shares_pre <- as.numeric(antitrust::calcShares(model, preMerger = TRUE))
+  shares_post <- as.numeric(antitrust::calcShares(model, preMerger = FALSE))
+  k <- length(price_post)
+  lengths <- c(length(price_pre), length(shares_pre), length(shares_post))
+  if (!k || any(lengths != k)) {
+    stop("The simulated result has inconsistent product dimensions.")
+  }
+  labels <- as.character(model@labels)
+  if (length(labels) != k) labels <- names(model@pricePost)
+  if (is.null(labels) || length(labels) != k) {
+    labels <- if (length(fallback_labels) == k) {
+      fallback_labels
+    } else {
+      paste0("product_", seq_len(k))
+    }
+  }
+  list(
+    price_pre = price_pre, price_post = price_post,
+    shares_pre = shares_pre, shares_post = shares_post,
+    labels = labels
+  )
+}
+
+.assemble_unit <- function(raw, market_object) {
+  results <- lapply(raw, `[[`, "result")
+  failures <- vapply(raw, `[[`, character(1), "error")
+  values <- vector("list", length(results))
+  reference_labels <- NULL
+
+  for (i in seq_along(results)) {
+    if (is.null(results[[i]])) next
+    values[[i]] <- tryCatch(
+      .result_values(results[[i]], market_object$labels),
+      error = function(e) {
+        failures[[i]] <<- conditionMessage(e)
+        results[[i]] <<- NULL
+        NULL
+      }
+    )
+    if (is.null(values[[i]])) next
+    if (is.null(reference_labels)) {
+      reference_labels <- values[[i]]$labels
+    } else if (!identical(values[[i]]$labels, reference_labels)) {
+      failures[[i]] <- "The simulated result has inconsistent product labels or dimensions."
+      results[[i]] <- NULL
+      values[[i]] <- NULL
+    }
+  }
+
+  if (is.null(reference_labels)) reference_labels <- market_object$labels
+  n <- length(results)
+  k <- length(reference_labels)
+  empty <- matrix(NA_real_, nrow = n, ncol = k,
+                  dimnames = list(NULL, reference_labels))
+  price_pre <- price_post <- shares_pre <- shares_post <- empty
+  for (i in seq_along(values)) {
+    if (is.null(values[[i]])) next
+    price_pre[i, ] <- values[[i]]$price_pre
+    price_post[i, ] <- values[[i]]$price_post
+    shares_pre[i, ] <- values[[i]]$shares_pre
+    shares_post[i, ] <- values[[i]]$shares_post
+  }
+  list(
+    results = results,
+    failures = failures,
+    labels = reference_labels,
+    price_pre = price_pre,
+    price_post = price_post,
+    price_change = price_post / price_pre - 1,
+    shares_pre = shares_pre,
+    shares_post = shares_post,
+    n_valid = as.integer(sum(vapply(results, Negate(is.null), logical(1))))
+  )
+}
+
+.simulate_bayes_fit <- function(object, ownerPost, n_draws = NULL,
+                                mcDelta = NULL, subset = NULL,
+                                insideSize = NULL, priceOutside = NULL,
+                                labels = NULL, market = NULL, year = NULL,
+                                mc.cores = .default_mc_cores(), ..., .call) {
+  mc.cores <- .validate_mc_cores(mc.cores)
+  specified <- methods::is(object, "BayesSpecifiedFit")
+  draws <- if (specified) NULL else rstan::extract(object@stanfit)
+  setup <- if (specified) {
+    .specified_simulation_units(object, market, year)
+  } else {
+    .estimated_simulation_units(object, market, year)
+  }
+  n_total <- .posterior_draw_count(object, draws)
+  if (is.null(n_draws)) n_draws <- min(200L, n_total)
   if (length(n_draws) != 1L || !is.finite(n_draws) || n_draws < 1 ||
       n_draws != as.integer(n_draws)) {
     stop("'n_draws' must be a positive integer.")
   }
   n_draws <- min(as.integer(n_draws), n_total)
-  draw_idx <- sample(seq_len(n_total), n_draws)
-  n_draws_actual <- length(draw_idx)
-
-  # Prepare market-year index mapping
-  mky_labels <- paste(as.integer(as.factor(df$market)),
-                      as.integer(as.factor(df$year)), sep = "_")
-  mky_f <- as.factor(mky_labels)
-
-  if (is.null(year)) {
-    sim_units <- data.frame(
-      unit_id = market_levels,
-      market = market_levels,
-      year = NA_character_,
-      stringsAsFactors = FALSE
-    )
+  draw_indices <- if (n_total == 1L) {
+    1L
   } else {
-    sim_units <- unique(data.frame(
-      market = as.character(df$market),
-      year = as.character(df$year),
-      stringsAsFactors = FALSE
-    ))
-    sim_units <- sim_units[
-      sim_units$market %in% market_levels & sim_units$year %in% year_levels,
-      ,
-      drop = FALSE
-    ]
-    sim_units$unit_id <- paste(sim_units$market, sim_units$year, sep = "_")
-    sim_units <- sim_units[, c("unit_id", "market", "year")]
-    rownames(sim_units) <- NULL
-    if (nrow(sim_units) == 0L) {
-      stop("No market-year cells match the requested market/year filters.")
-    }
+    sample.int(n_total, n_draws)
   }
 
-  all_sims     <- list()
-  price_pre    <- list()
-  price_post   <- list()
-  price_change <- list()
-  shares_pre   <- list()
-  shares_post  <- list()
-  prod_labels  <- list()
-  failures     <- list()
-  n_valid_vec  <- integer(nrow(sim_units))
-  names(n_valid_vec) <- sim_units$unit_id
+  all_sims <- price_pre <- price_post <- price_change <- list()
+  shares_pre <- shares_post <- product_labels <- failures <- list()
+  n_valid <- integer(length(setup$info))
+  names(n_valid) <- setup$units$unit_id
 
-  select_cell_arg <- function(x, idx, unit_id, mk, scalar = FALSE) {
-    if (is.list(x)) {
-      if (!is.null(x[[unit_id]])) return(x[[unit_id]])
-      return(x[[mk]])
-    }
-    if (is.matrix(x)) return(x)
-    if (scalar && length(x) == 1L) return(x)
-    if (length(x) == nrow(df)) return(x[idx])
-    x
-  }
+  for (u in seq_along(setup$info)) {
+    unit <- setup$info[[u]]
+    idx <- unit$idx
+    unit_id <- unit$unit_id
+    market_id <- unit$market_id
+    df <- setup$data
 
-  for (u in seq_len(nrow(sim_units))) {
-    mk <- sim_units$market[u]
-    yr <- sim_units$year[u]
-    unit_id <- sim_units$unit_id[u]
-    mkt_idx <- if (is.null(year)) {
-      which(df$market == mk)
-    } else {
-      which(df$market == mk & as.character(df$year) == yr)
-    }
-    if (length(mkt_idx) == 0L) next
-
-    mdata <- df[mkt_idx, , drop = FALSE]
-    n_prod <- nrow(mdata)
-
-    # Market index in the factor encoding
-    market_int_val <- as.integer(as.factor(df$market))[mkt_idx[1]]
-
-    # Market-year index (take the first one for this market)
-    mky_int_val <- as.integer(mky_f)[mkt_idx[1]]
-
-    # Ownership: pass vectors or matrices; ownerToMatrix handles conversion
-    ownerPre_m <- as.character(mdata$group)
-    ownerPost_m <- select_cell_arg(ownerPost, mkt_idx, unit_id, mk)
-    if (is.null(ownerPost_m)) {
-      stop("No post-merger ownership supplied for simulation unit '",
-           unit_id, "'.")
-    }
-    if (!is.matrix(ownerPost_m)) {
-      ownerPost_m <- as.character(ownerPost_m)
-    }
-
-    prices_m <- as.numeric(mdata$prices)
-    quantities_m <- as.numeric(mdata$quantities)
-    margins_m <- as.numeric(mdata$margins)
-    margins_m[!is.finite(margins_m)] <- 0.5
-
-    if (is.null(labels)) {
-      labels_m <- as.character(mdata$group)
-    } else {
-      labels_m <- select_cell_arg(labels, mkt_idx, unit_id, mk)
-    }
-    if (length(labels_m) != n_prod) {
-      stop("'labels' must have one value per product in '", unit_id, "'.")
-    }
-
-    # mcDelta
-    if (is.null(mcDelta)) {
-      mcDelta_m <- rep(0, n_prod)
-    } else {
-      mcDelta_m <- select_cell_arg(mcDelta, mkt_idx, unit_id, mk)
-    }
-    if (length(mcDelta_m) != n_prod || any(!is.finite(mcDelta_m)) ||
-        any(mcDelta_m <= -1)) {
-      stop("'mcDelta' must contain finite proportional changes greater than -1 ",
-           "for every product in '", unit_id, "'.")
-    }
-
-    # subset
-    if (is.null(subset)) {
-      subset_m <- rep(TRUE, n_prod)
-    } else {
-      subset_m <- select_cell_arg(subset, mkt_idx, unit_id, mk)
-    }
-    subset_m <- as.logical(subset_m)
-    if (length(subset_m) != n_prod || anyNA(subset_m) || !any(subset_m)) {
-      stop("'subset' must select at least one product in '", unit_id, "'.")
-    }
-
-    outside_price_m <- if (is.null(priceOutside)) {
-      unique(mdata$outside_price)
-    } else {
-      select_cell_arg(priceOutside, mkt_idx, unit_id, mk, scalar = TRUE)
-    }
-    if (length(outside_price_m) != 1L || !is.finite(outside_price_m) ||
-        outside_price_m <= 0) {
-      stop("'priceOutside' must resolve to one positive finite value for '",
-           unit_id, "'.")
-    }
-    inside_size_m <- select_cell_arg(insideSize, mkt_idx, unit_id, mk,
-                                     scalar = TRUE)
-    if (length(inside_size_m) != 1L || !is.finite(inside_size_m) ||
-        inside_size_m <= 0) {
-      stop("'insideSize' must resolve to one positive finite value for '",
-           unit_id, "'.")
-    }
-
-    if (is.matrix(ownerPost_m)) {
-      if (!identical(dim(ownerPost_m), c(n_prod, n_prod))) {
-        stop("An ownership matrix for '", unit_id, "' must be ", n_prod,
-             " by ", n_prod, ".")
+    if (specified) {
+      base_market <- object@market
+      owner_pre <- base_market$group
+      labels_unit <- if (is.null(labels)) {
+        base_market$labels
+      } else {
+        .select_unit_arg(labels, idx, unit_id, market_id, nrow(df),
+                         arg = "labels")
       }
-    } else if (length(ownerPost_m) != n_prod) {
-      stop("'ownerPost' must have one owner per product in '", unit_id, "'.")
+      outside_price <- if (is.null(priceOutside)) {
+        base_market$outside_price
+      } else {
+        .select_unit_arg(priceOutside, idx, unit_id, market_id, nrow(df),
+                         scalar = TRUE, arg = "priceOutside")
+      }
+      inside_size <- if (is.null(insideSize)) {
+        base_market$insideSize
+      } else {
+        .select_unit_arg(insideSize, idx, unit_id, market_id, nrow(df),
+                         scalar = TRUE, arg = "insideSize")
+      }
+      market_object <- bayes_market(
+        prices = base_market$prices,
+        quantities = base_market$quantities,
+        margins = base_market$margins,
+        group = owner_pre,
+        outside_price = outside_price,
+        market_side = object@market_side,
+        insideSize = inside_size,
+        labels = labels_unit
+      )
+    } else {
+      unit_data <- df[idx, , drop = FALSE]
+      owner_pre <- as.character(unit_data$group)
+      labels_unit <- if (is.null(labels)) {
+        as.character(unit_data$group)
+      } else {
+        .select_unit_arg(labels, idx, unit_id, market_id, nrow(df),
+                         arg = "labels")
+      }
+      outside_price <- if (is.null(priceOutside)) {
+        unique(unit_data$outside_price)
+      } else {
+        .select_unit_arg(priceOutside, idx, unit_id, market_id, nrow(df),
+                         scalar = TRUE, arg = "priceOutside")
+      }
+      inside_size <- if (is.null(insideSize)) {
+        1
+      } else {
+        .select_unit_arg(insideSize, idx, unit_id, market_id, nrow(df),
+                         scalar = TRUE, arg = "insideSize")
+      }
+      market_object <- bayes_market(
+        prices = as.numeric(unit_data$prices),
+        quantities = as.numeric(unit_data$quantities),
+        margins = as.numeric(unit_data$margins),
+        group = owner_pre,
+        outside_price = outside_price,
+        market_side = object@market_side,
+        insideSize = inside_size,
+        labels = labels_unit
+      )
     }
 
-    market_m <- bayes_market(
-      prices = prices_m, quantities = quantities_m, margins = margins_m,
-      group = ownerPre_m, outside_price = outside_price_m,
-      market_side = fit@market_side, insideSize = inside_size_m,
-      labels = labels_m
+    scenario <- .select_unit_arg(
+      ownerPost, idx, unit_id, market_id, nrow(df), arg = "ownerPost"
     )
+    is_counterfactual <- methods::is(scenario, "Counterfactual")
+    if (is_counterfactual && (!is.null(mcDelta) || !is.null(subset))) {
+      stop("cannot combine a Counterfactual with legacy scenario argument(s): ",
+           paste(c(if (!is.null(mcDelta)) "mcDelta",
+                   if (!is.null(subset)) "subset"), collapse = ", "))
+    }
 
-    # Pre-allocate result matrices
-    ppre  <- matrix(NA_real_, nrow = n_draws_actual, ncol = n_prod)
-    ppost <- matrix(NA_real_, nrow = n_draws_actual, ncol = n_prod)
-    spre  <- matrix(NA_real_, nrow = n_draws_actual, ncol = n_prod)
-    spost <- matrix(NA_real_, nrow = n_draws_actual, ncol = n_prod)
-    colnames(ppre) <- colnames(ppost) <- labels_m
-    colnames(spre) <- colnames(spost) <- labels_m
-    mkt_sims <- vector("list", n_draws_actual)
-    mkt_failures <- rep(NA_character_, n_draws_actual)
-    n_ok <- 0L
-
-    for (d in seq_along(draw_idx)) {
-      i <- draw_idx[d]
-
-      # Extract posterior draw parameters
-      a_raw <- if (is.null(dim(draws$a_market))) {
-        draws$a_market[i]
-      } else {
-        draws$a_market[i, market_int_val]
+    if (!is_counterfactual) {
+      if (is.null(scenario)) {
+        stop("No post-counterfactual ownership supplied for simulation unit '",
+             unit_id, "'.")
       }
-
-      s0 <- if ("s0_prob" %in% names(draws)) {
-        draws$s0_prob[i, mky_int_val]
-      } else if ("s0" %in% names(draws)) {
-        plogis(draws$s0[i, mky_int_val])
-      } else {
-        plogis(draws$s0_logit[i, mky_int_val])
-      }
-
-      bargaining_draw <- if (fit@supply_model == 5L) {
-        as.numeric(draws$bargaining_power[i])
-      } else {
-        0
-      }
-
-      use_cutoff_fit <- isTRUE(fit@stan_data$use_cutoff == 1L)
-      cutoff_draw <- if (use_cutoff_fit) {
-        if (is.null(dim(draws$cutoff_share))) {
-          draws$cutoff_share[i]
-        } else {
-          draws$cutoff_share[i, market_int_val]
+      if (!is.matrix(scenario)) scenario <- as.character(scenario)
+      if (is.matrix(scenario)) {
+        expected <- c(market_object$n_prod, market_object$n_prod)
+        if (!identical(dim(scenario), expected)) {
+          stop("An ownership matrix for '", unit_id, "' must be ",
+               expected[[1L]], " by ", expected[[2L]], ".")
         }
-      } else {
-        0
-      }
-
-      draw_slope <- if (is_ces) 1 + a_raw / price_sd else a_raw / price_sd
-      params_draw <- .bayes_params_raw(
-        alpha = if (is_ces) NULL else draw_slope,
-        gamma = if (is_ces) draw_slope else NULL,
-        s0 = s0,
-        bargaining_power = bargaining_draw,
-        cutoff_share = as.numeric(cutoff_draw),
-        cutoff_scale = 0.2,
-        use_cutoff = use_cutoff_fit,
-        supply_model = fit@supply_model
-      )
-
-      res <- tryCatch({
-        obj <- build_conduct_object(
-          params_draw, draw_idx = 1L, market = market_m,
-          ownerPre = ownerPre_m, ownerPost = ownerPost_m,
-          mcDelta = mcDelta_m, subset = subset_m
-        )
-        as_antitrust_fit(obj, ...)@model
-      },
-        error = function(e) {
-          mkt_failures[d] <<- conditionMessage(e)
-          NULL
-        }
-      )
-
-      if (!is.null(res)) {
-        n_ok <- n_ok + 1L
-        mkt_sims[[d]] <- res
-        ppre[d, ]  <- res@pricePre
-        ppost[d, ] <- res@pricePost
-        spre[d, ]  <- calcShares(res, preMerger = TRUE)
-        spost[d, ] <- calcShares(res, preMerger = FALSE)
+      } else if (length(scenario) != market_object$n_prod) {
+        stop("'ownerPost' must have one owner per product in '", unit_id, "'.")
       }
     }
 
-    all_sims[[unit_id]]     <- mkt_sims
-    price_pre[[unit_id]]    <- ppre
-    price_post[[unit_id]]   <- ppost
-    price_change[[unit_id]] <- ppost / ppre - 1
-    shares_pre[[unit_id]]   <- spre
-    shares_post[[unit_id]]  <- spost
-    prod_labels[[unit_id]]  <- labels_m
-    failures[[unit_id]]     <- mkt_failures
-    n_valid_vec[unit_id]    <- n_ok
+    mc_delta_unit <- if (is.null(mcDelta)) {
+      rep(0, market_object$n_prod)
+    } else {
+      .select_unit_arg(mcDelta, idx, unit_id, market_id, nrow(df),
+                       arg = "mcDelta")
+    }
+    subset_unit <- if (is.null(subset)) {
+      rep(TRUE, market_object$n_prod)
+    } else {
+      as.logical(.select_unit_arg(
+        subset, idx, unit_id, market_id, nrow(df), arg = "subset"
+      ))
+    }
+    if (!is_counterfactual) {
+      if (length(mc_delta_unit) != market_object$n_prod ||
+          any(!is.finite(mc_delta_unit)) || any(mc_delta_unit <= -1)) {
+        stop("'mcDelta' must contain finite proportional changes greater than -1 ",
+             "for every product in '", unit_id, "'.")
+      }
+      if (length(subset_unit) != market_object$n_prod || anyNA(subset_unit) ||
+          !any(subset_unit)) {
+        stop("'subset' must select at least one product in '", unit_id, "'.")
+      }
+    }
+
+    run_one <- function(draw_index) {
+      params <- if (specified) {
+        object@params
+      } else {
+        .estimated_draw_params(object, draws, draw_index, unit)
+      }
+      parameter_index <- if (specified) draw_index else 1L
+      baseline <- build_conduct_object(
+        params, parameter_index, market_object,
+        ownerPre = owner_pre, ownerPost = owner_pre,
+        mcDelta = rep(0, market_object$n_prod),
+        subset = rep(TRUE, market_object$n_prod)
+      )
+      fit <- as_antitrust_fit(baseline)
+      if (is_counterfactual) {
+        antitrust::simulate(fit, scenario, ...)
+      } else {
+        antitrust::simulate(
+          fit, scenario, mcDelta = mc_delta_unit, subset = subset_unit, ...
+        )
+      }
+    }
+    run_one_safe <- function(draw_index) {
+      tryCatch(
+        list(result = run_one(draw_index), error = NA_character_),
+        error = function(e) list(result = NULL, error = conditionMessage(e))
+      )
+    }
+    raw <- if (length(draw_indices) == 1L || mc.cores == 1L) {
+      lapply(draw_indices, run_one_safe)
+    } else {
+      parallel::mclapply(draw_indices, run_one_safe, mc.cores = mc.cores)
+    }
+    malformed <- !vapply(raw, function(x) {
+      is.list(x) && identical(names(x), c("result", "error"))
+    }, logical(1))
+    raw[malformed] <- list(list(
+      result = NULL, error = "worker process did not return a result"
+    ))
+
+    assembled <- .assemble_unit(raw, market_object)
+    all_sims[[unit_id]] <- assembled$results
+    price_pre[[unit_id]] <- assembled$price_pre
+    price_post[[unit_id]] <- assembled$price_post
+    price_change[[unit_id]] <- assembled$price_change
+    shares_pre[[unit_id]] <- assembled$shares_pre
+    shares_post[[unit_id]] <- assembled$shares_post
+    product_labels[[unit_id]] <- assembled$labels
+    failures[[unit_id]] <- assembled$failures
+    n_valid[[unit_id]] <- assembled$n_valid
   }
 
   n_failed <- sum(vapply(failures, function(x) sum(!is.na(x)), integer(1)))
-  if (n_failed > 0L) {
-    warning(n_failed, " of ", n_draws_actual * nrow(sim_units),
-            " market-draw simulations failed. Inspect result@failures for details.",
-            call. = FALSE)
+  if (n_failed) {
+    warning(
+      n_failed, " of ", length(draw_indices) * length(setup$info),
+      " unit-draw simulations failed. Inspect result@failures for details.",
+      call. = FALSE
+    )
   }
+  metadata <- object@metadata
+  metadata$simulation_route <- "antitrust::simulate"
+  metadata$fit_class <- class(object)[[1L]]
+  metadata$source_supply_model <- object@supply_model
+  metadata$posterior_draws_available <- n_total
+  metadata$posterior_draws_requested <- length(draw_indices)
+  metadata$draw_indices <- as.integer(draw_indices)
 
-  sim_metadata <- fit@metadata
-  sim_metadata$source_supply_model <- fit@supply_model
-  sim_metadata$posterior_draws_requested <- n_draws_actual
-
-  new("BayesSim",
-    sims           = all_sims,
-    price_pre      = price_pre,
-    price_post     = price_post,
-    price_change   = price_change,
-    shares_pre     = shares_pre,
-    shares_post    = shares_post,
-    market_ids     = sim_units$unit_id,
-    product_labels = prod_labels,
-    n_draws        = as.integer(n_draws_actual),
-    n_valid        = n_valid_vec,
-    failures       = failures,
-    call           = cl,
-    metadata       = sim_metadata
+  methods::new(
+    "BayesSim",
+    sims = all_sims,
+    price_pre = price_pre,
+    price_post = price_post,
+    price_change = price_change,
+    shares_pre = shares_pre,
+    shares_post = shares_post,
+    market_ids = as.character(setup$units$unit_id),
+    product_labels = product_labels,
+    n_draws = as.integer(length(draw_indices)),
+    n_valid = n_valid,
+    failures = failures,
+    call = .call,
+    metadata = metadata
   )
+}
+
+#' @rdname simulate-BayesFit
+#' @exportMethod simulate
+setMethod(
+  "simulate", "BayesFit",
+  function(object, ownerPost, n_draws = NULL, mcDelta = NULL, subset = NULL,
+           insideSize = NULL, priceOutside = NULL, labels = NULL,
+           market = NULL, year = NULL,
+           mc.cores = .default_mc_cores(), ...) {
+    if (missing(ownerPost)) stop("'ownerPost' must be supplied for simulate().")
+    .simulate_bayes_fit(
+      object = object, ownerPost = ownerPost, n_draws = n_draws,
+      mcDelta = mcDelta, subset = subset, insideSize = insideSize,
+      priceOutside = priceOutside, labels = labels, market = market,
+      year = year, mc.cores = mc.cores, ..., .call = match.call()
+    )
+  }
+)
+
+#' @rdname simulate-BayesFit
+#' @export
+bayes_sim <- function(fit, ownerPost, n_draws = NULL, mcDelta = NULL,
+                      subset = NULL, insideSize = NULL,
+                      priceOutside = NULL, labels = NULL,
+                      market = NULL, year = NULL,
+                      mc.cores = .default_mc_cores(), ...) {
+  if (missing(ownerPost)) stop("'ownerPost' must be supplied for bayes_sim().")
+  result <- simulate(
+    fit, ownerPost = ownerPost, n_draws = n_draws,
+    mcDelta = mcDelta, subset = subset, insideSize = insideSize,
+    priceOutside = priceOutside, labels = labels,
+    market = market, year = year, mc.cores = mc.cores, ...
+  )
+  result@call <- match.call()
+  result
 }
