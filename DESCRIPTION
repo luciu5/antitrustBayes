@@ -41,6 +41,7 @@ Suggests:
     bayesplot
 VignetteBuilder: knitr
 Config/testthat/edition: 3
+Config/antitrustBayes/qa-canonical-r: 4.6.1
 Collate:
     'AllClasses.R'
     'antitrustBayes-package.R'
