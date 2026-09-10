@@ -146,7 +146,7 @@ static constexpr std::array<const char*, 410> locations_array__ =
   " (in 'ces_supply', line 352, column 4 to line 355, column 6)",
   " (in 'ces_supply', line 356, column 4 to column 55)",
   " (in 'ces_supply', line 360, column 4 to column 38)",
-  " (in 'ces_supply', line 361, column 4 to column 57)",
+  " (in 'ces_supply', line 361, column 4 to column 65)",
   " (in 'ces_supply', line 362, column 4 to column 44)",
   " (in 'ces_supply', line 364, column 6 to column 72)",
   " (in 'ces_supply', line 365, column 6 to line 367, column 8)",
@@ -3300,9 +3300,9 @@ public:
         stan::model::assign(pred_shareIn, stan::math::exp(pred_log_q),
           "assigning variable pred_shareIn", stan::model::index_uni(i));
         current_statement__ = 118;
-        stan::model::assign(pred_shareUncond,
-          (stan::model::rvalue(s0_prob, "s0_prob",
-             stan::model::index_uni(mky)) *
+        stan::model::assign(pred_shareUncond, ((1.0 -
+          stan::model::rvalue(s0_prob, "s0_prob", stan::model::index_uni(mky)))
+          *
           stan::model::rvalue(pred_shareIn, "pred_shareIn",
             stan::model::index_uni(i))),
           "assigning variable pred_shareUncond", stan::model::index_uni(i));

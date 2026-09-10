@@ -166,7 +166,7 @@ test_that("log_lik matches an independent Student-t computation for share/margin
   expect_equal(actual_ll_m, draws_m$log_lik_margin[draw_idx, ], tolerance = 1e-8)
 })
 
-test_that("pred_shareIn implements (s0/(1-s0))*exp(delta), not s0*exp(delta)", {
+test_that("predicted shares distinguish conditional and unconditional identities", {
   d <- make_rho_smoke_data(N = 8)
   fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 7)
   fit <- suppressWarnings(bayes_est(
@@ -194,8 +194,12 @@ test_that("pred_shareIn implements (s0/(1-s0))*exp(delta), not s0*exp(delta)", {
   expect_equal(actual_pred_shareIn, expected_pred_shareIn, tolerance = 1e-6)
   expect_true(max(abs(actual_pred_shareIn - wrong_pred_shareIn)) > 1e-3)
 
+  # s0_prob is the outside quantity share, so 1 - s0_prob is the total
+  # inside quantity share. The generated unconditional product share must
+  # therefore satisfy s_j = (1 - s0) * s_{j|I}.
   pred_shareUncond <- draws$pred_shareUncond[draw_idx, ]
-  expect_equal(pred_shareUncond, s0_prob[mky] * actual_pred_shareIn, tolerance = 1e-8)
+  expect_equal(pred_shareUncond, (1 - s0_prob[mky]) * actual_pred_shareIn,
+               tolerance = 1e-8)
 })
 
 test_that("share-only likelihood does not use the equilibrium-margin information that identifies s0", {

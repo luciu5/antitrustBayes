@@ -374,11 +374,11 @@ generated quantities {
     );
     real pred_log_margin = log(pred_inv_margin + 1e-9);
 
-    // pred_shareIn is the predicted *conditional inside* share (matches
-    // log_shareIn); s0_prob[mky]*pred_shareIn is the predicted
-    // *unconditional* share, not pred_shareIn itself.
+    // pred_shareIn is the predicted *conditional inside* quantity share
+    // (matches log_shareIn). Convert it to the *unconditional* product
+    // quantity share by multiplying by the total inside share, 1 - s0.
     pred_shareIn[i] = exp(pred_log_q);
-    pred_shareUncond[i] = s0_prob[mky] * pred_shareIn[i];
+    pred_shareUncond[i] = (1.0 - s0_prob[mky]) * pred_shareIn[i];
     pred_marginNormInv[i] = pred_inv_margin;
 
     if (likelihood_mode != 3) {
