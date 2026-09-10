@@ -2,6 +2,18 @@ rho_test_dt_scaled_log <- function(x, mu, s, nu) {
   stats::dt((x - mu) / s, df = nu, log = TRUE) - log(s)
 }
 
+# Sampling tests in this file exercise the compiled Stan models and are kept
+# opt-in so the independent density checks remain part of the fast suite.
+skip_unless_rho_stan_tests <- function() {
+  enabled <- tolower(Sys.getenv("ANTITRUSTBAYES_RUN_STAN_TESTS", "false"))
+  if (!identical(enabled, "true")) {
+    testthat::skip(paste0(
+      "Stan sampling tests are opt-in; set ",
+      "ANTITRUSTBAYES_RUN_STAN_TESTS=true to run them."
+    ))
+  }
+}
+
 # Standard bivariate Student-t log density with correlation rho and Stan-style
 # "scale" parameters s1, s2 (not SDs).
 rho_test_dbvt_joint_log <- function(x1, x2, mu1, mu2, s1, s2, rho, nu) {
@@ -77,6 +89,7 @@ test_that("nu -> Inf recovers the historical Normal conditional", {
 })
 
 test_that("fixed and estimated df fits compile and produce finite draws", {
+  skip_unless_rho_stan_tests()
   d <- make_rho_smoke_data()
   fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 1)
 
@@ -107,6 +120,7 @@ test_that("fixed and estimated df fits compile and produce finite draws", {
 })
 
 test_that("rho is never instantiated when no margins are observed", {
+  skip_unless_rho_stan_tests()
   d <- make_rho_smoke_data()
   fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 1)
   fit <- suppressWarnings(bayes_est(
@@ -123,6 +137,7 @@ test_that("rho is never instantiated when no margins are observed", {
 })
 
 test_that("log_lik matches an independent Student-t computation for share/margin-only modes", {
+  skip_unless_rho_stan_tests()
   d <- make_rho_smoke_data()
   fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 1)
   draw_idx <- 1L
@@ -166,7 +181,73 @@ test_that("log_lik matches an independent Student-t computation for share/margin
   expect_equal(actual_ll_m, draws_m$log_lik_margin[draw_idx, ], tolerance = 1e-8)
 })
 
+test_that("CES rho and Student-t log_lik agree with independent calculations", {
+  skip_unless_rho_stan_tests()
+  d <- make_rho_smoke_data(seed = 321, N = 12)
+  stan_options <- list(chains = 1, iter = 80, warmup = 40, refresh = 0, seed = 19)
+
+  fit <- suppressWarnings(bayes_est(
+    prices = d$prices, quantities = d$quantities, margins = d$margins,
+    market = d$market, group = d$group,
+    demand_model = "ces", supply_model = "bertrand",
+    df = 5, use_rho = TRUE, likelihood = "joint",
+    stan_options = stan_options
+  ))
+  draws <- rstan::extract(fit@stanfit)
+  draw_idx <- 1L
+
+  # The active CES fit must expose finite structural quantities, including
+  # the correlation used by the factored bivariate Student-t likelihood.
+  expect_equal(fit@stanfit@par_dims[["rho_raw"]], 1L)
+  rho <- as.numeric(draws$rho[draw_idx])
+  expect_true(is.finite(rho))
+  expect_true(is.finite(as.numeric(draws$s0_prob[draw_idx, 1L])))
+  expect_true(is.finite(as.numeric(draws$gamma_structural_market[draw_idx, 1L])))
+
+  # Reconstruct the generated joint log likelihood for one paired observation
+  # from the public Stan draws and the independent R Student-t density.
+  i <- 1L
+  log_share_obs <- fit@stan_data$log_shareIn[i]
+  log_margin_obs <- fit@stan_data$log_marginNormInv[i]
+  pred_log_q <- log(as.numeric(draws$pred_shareIn[draw_idx, i]))
+  pred_log_margin <- log(as.numeric(draws$pred_marginNormInv[draw_idx, i]) + 1e-9)
+  sigma_share <- as.numeric(draws$sigma_share[draw_idx])
+  sigma_margin <- as.numeric(draws$sigma_margin[draw_idx])
+  nu <- as.numeric(draws$nu[draw_idx])
+
+  scale_share <- sigma_share * sqrt((nu - 2) / nu)
+  ll_share <- rho_test_dt_scaled_log(
+    log_share_obs, pred_log_q, scale_share, nu
+  )
+  err_share <- log_share_obs - pred_log_q
+  z_s <- err_share / sigma_share
+  mu_margin_cond <- pred_log_margin + rho *
+    (sigma_margin / sigma_share) * err_share
+  scale_margin_cond <- sigma_margin * sqrt(1 - rho^2) *
+    sqrt((nu - 2 + z_s^2) / (nu + 1))
+  ll_margin <- rho_test_dt_scaled_log(
+    log_margin_obs, mu_margin_cond, scale_margin_cond, nu + 1
+  )
+  expected_ll <- ll_share + ll_margin
+  actual_ll <- as.numeric(draws$log_lik[draw_idx, i])
+  expect_equal(actual_ll, expected_ll, tolerance = 1e-5)
+
+  # With rho disabled and no observed margin equation, Stan uses a zero-length
+  # rho_raw parameter and the transformed correlation is exactly zero.
+  fit_inactive <- suppressWarnings(bayes_est(
+    prices = d$prices, quantities = d$quantities, margins = d$margins,
+    market = d$market, group = d$group,
+    demand_model = "ces", supply_model = "bertrand",
+    df = 5, use_rho = FALSE, margin_observed = rep(FALSE, length(d$prices)),
+    likelihood = "joint", stan_options = stan_options
+  ))
+  expect_equal(fit_inactive@stanfit@par_dims[["rho_raw"]], 0)
+  inactive_rho <- rstan::extract(fit_inactive@stanfit, "rho")[[1]]
+  expect_true(all(inactive_rho == 0))
+})
+
 test_that("predicted shares distinguish conditional and unconditional identities", {
+  skip_unless_rho_stan_tests()
   d <- make_rho_smoke_data(N = 8)
   fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 7)
   fit <- suppressWarnings(bayes_est(
@@ -203,6 +284,7 @@ test_that("predicted shares distinguish conditional and unconditional identities
 })
 
 test_that("share-only likelihood does not use the equilibrium-margin information that identifies s0", {
+  skip_unless_rho_stan_tests()
   # likelihood_mode == 2 (share = "share") never touches margin_obs /
   # log_marginNormInv in the Stan model block, so s0's posterior should be
   # (up to MCMC noise) invariant to the observed margins, unlike the joint
