@@ -171,9 +171,12 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #' @param use_market_resid_scale Logical.
 #' @param use_alpha_market_pool Logical.
 #' @param use_s0_market_year_pool Logical.
+#' @param use_s0_market_pool Logical. If true, use one latent outside quantity
+#'   share per market before any market-year \code{X_s0} adjustment.
 #' @param use_hmt Logical.
 #' @param use_centered_alpha Logical.
-#' @param use_centered_s0_pool Logical.
+#' @param use_centered_s0_pool Logical. Select the centered parameterization
+#'   for either outside-share pooling mode.
 #' @param priors Named list of prior hyperparameters.
 #' @param X_s0 Optional model matrix for s0 covariates.
 #' @param outside_price Positive scalar or one value per market-year.
@@ -181,6 +184,9 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #' @param margin_observed Optional logical margin-observation mask.
 #' @param likelihood_mode Integer: 1 joint, 2 share only, 3 margin only.
 #' @param loo_cluster Optional natural predictive-cluster identifier.
+#' @param estimate_df Logical; estimate the Student-t degrees of freedom.
+#' @param resid_df_fixed Fixed Student-t degrees of freedom when
+#'   \code{estimate_df = FALSE}.
 #' @return A list suitable for passing to \code{rstan::sampling}.
 #' @keywords internal
 prepare_stan_data <- function(prices, quantities, margins, market, year, group,
@@ -418,6 +424,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   use_market_resid_scale = FALSE,
                                   use_alpha_market_pool = FALSE,
                                   use_s0_market_year_pool = FALSE,
+                                  use_s0_market_pool = FALSE,
                                   use_centered_alpha = FALSE,
                                   use_centered_s0_pool = FALSE,
                                   margin_observed = NULL,
@@ -621,6 +628,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       use_market_resid_scale = as.integer(use_market_resid_scale),
       use_alpha_market_pool = as.integer(use_alpha_market_pool),
       use_s0_market_year_pool = as.integer(use_s0_market_year_pool),
+      use_s0_market_pool = as.integer(use_s0_market_pool),
       use_centered_alpha = as.integer(use_centered_alpha),
       use_centered_s0_pool = as.integer(use_centered_s0_pool),
       use_hmt = as.integer(use_hmt),

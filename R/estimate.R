@@ -56,8 +56,10 @@
 #' @param use_market_resid_scale Logical. If \code{TRUE}, allow market-level
 #'   share and inverse-margin residual scales with hierarchical shrinkage.
 #'   Default \code{FALSE}.
-#' @param use_alpha_market_pool Logical. If \code{TRUE}, allow market-level
-#'   logit price coefficients with hierarchical shrinkage. Default \code{TRUE}.
+#' @param use_alpha_market_pool Logical. If \code{TRUE}, allow the standardized
+#'   price effect to vary by market with hierarchical shrinkage. For Logit this
+#'   gives market-level price coefficients; for CES it gives market-level
+#'   structural elasticities \code{gamma}. Default \code{TRUE}.
 #' @param use_s0_market_year_pool Logical. If \code{TRUE}, allow market-year
 #'   outside shares with hierarchical shrinkage (one outside share per
 #'   market-year). Default \code{FALSE}. Mutually exclusive with
@@ -66,18 +68,20 @@
 #'   several periods with sparse per-cell information, its hyper-scale can be
 #'   poorly identified (low BFMI). Prefer \code{use_s0_market_pool} in that
 #'   regime.
-#' @param use_s0_market_pool Logical. If \code{TRUE}, pool the outside share at
-#'   the \emph{market} level: one outside share per market, shared across all of
-#'   that market's periods, with hierarchical shrinkage across markets
+#' @param use_s0_market_pool Logical. If \code{TRUE}, pool the outside quantity
+#'   share at the \emph{market} level: one latent share per market, shared
+#'   across all of that market's periods before any market-year \code{X_s0}
+#'   adjustment, with hierarchical shrinkage across markets
 #'   (structurally parallel to \code{use_alpha_market_pool}). Better identified
 #'   than \code{use_s0_market_year_pool} when markets are observed over multiple
 #'   periods, because each market-level effect is disciplined by all of the
 #'   market's observations. Default \code{FALSE}. Mutually exclusive with
 #'   \code{use_s0_market_year_pool}.
 #' @param use_centered_alpha Logical. If \code{TRUE}, use the centered
-#'   parameterization for market-level price coefficients. Default \code{FALSE}.
+#'   parameterization for the selected market-level price-effect pool (Logit
+#'   price coefficients or CES structural elasticities). Default \code{FALSE}.
 #' @param use_centered_s0_pool Logical. If \code{TRUE}, use the centered
-#'   parameterization for market-year outside-share pooling. Default \code{FALSE}.
+#'   parameterization for either outside-share pooling mode. Default \code{FALSE}.
 #' @param use_hmt Logical. If \code{TRUE}, apply a soft Hypothetical
 #'   Monopolist Test penalty. Default \code{FALSE}.
 #' @param X_s0 Optional model matrix of market-year covariates for the outside
@@ -85,8 +89,9 @@
 #'   the input data after factor encoding.
 #' @param outside_price Positive outside-good price used to put CES outside
 #'   quantity and revenue shares on a common scale. Supply a scalar (default
-#'   \code{1}) or one value per market-year. Stored for Logit fits as part of
-#'   the common Logit/CES comparison contract, but otherwise unused by Logit.
+#'   \code{1}) or one value per market-year. For Logit it does not enter the
+#'   fitted likelihood, but is retained for posterior structural-model
+#'   reconstruction and counterfactual routing.
 #' @param prior_manifest Prespecified proper prior manifest: \code{"baseline"},
 #'   \code{"tight"}, or \code{"diffuse"}. User-supplied \code{priors}
 #'   override individual entries in the selected manifest.
@@ -118,9 +123,11 @@
 #'   \item{\code{"logit"}}{Standard multinomial logit. Uses quantity shares
 #'     and price levels. The absolute price coefficient alpha measures price
 #'     sensitivity; its sign is determined by \code{market_side}.}
-#'   \item{\code{"ces"}}{Constant Elasticity of Substitution. Uses revenue
-#'     shares and log-prices in output markets. The elasticity of substitution
-#'     gamma (= sigma) controls substitution patterns.}
+#'   \item{\code{"ces"}}{Constant Elasticity of Substitution. Its demand
+#'     likelihood uses conditional quantity shares and log-prices in output
+#'     markets; revenue shares enter the CES supply first-order conditions.
+#'     The elasticity of substitution gamma (= sigma) controls substitution
+#'     patterns.}
 #' }
 #'
 #' Five supply models are supported:
@@ -435,6 +442,7 @@ bayes_est <- function(prices, quantities, margins,
       use_market_resid_scale = use_market_resid_scale,
       use_alpha_market_pool = use_alpha_market_pool,
       use_s0_market_year_pool = use_s0_market_year_pool,
+      use_s0_market_pool = use_s0_market_pool,
       use_centered_alpha = use_centered_alpha,
       use_centered_s0_pool = use_centered_s0_pool,
       margin_observed = margin_observed,

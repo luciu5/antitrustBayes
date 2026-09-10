@@ -22,6 +22,7 @@ prepare_ces_stan_data(
   use_market_resid_scale = FALSE,
   use_alpha_market_pool = FALSE,
   use_s0_market_year_pool = FALSE,
+  use_s0_market_pool = FALSE,
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
   margin_observed = NULL,
@@ -68,9 +69,13 @@ greater than 1 are valid for input-market markdowns.}
 
 \item{use_s0_market_year_pool}{Logical.}
 
+\item{use_s0_market_pool}{Logical. If true, use one latent outside quantity
+share per market before any market-year \code{X_s0} adjustment.}
+
 \item{use_centered_alpha}{Logical.}
 
-\item{use_centered_s0_pool}{Logical.}
+\item{use_centered_s0_pool}{Logical. Select the centered parameterization
+for either outside-share pooling mode.}
 
 \item{margin_observed}{Optional logical margin-observation mask.}
 
@@ -79,6 +84,11 @@ greater than 1 are valid for input-market markdowns.}
 \item{likelihood_mode}{Integer: 1 joint, 2 share only, 3 margin only.}
 
 \item{loo_cluster}{Optional natural predictive-cluster identifier.}
+
+\item{estimate_df}{Logical; estimate the Student-t degrees of freedom.}
+
+\item{resid_df_fixed}{Fixed Student-t degrees of freedom when
+\code{estimate_df = FALSE}.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.

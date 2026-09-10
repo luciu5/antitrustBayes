@@ -97,6 +97,7 @@ data {
   int<lower=0, upper=1> use_market_resid_scale;
   int<lower=0, upper=1> use_alpha_market_pool;
   int<lower=0, upper=1> use_s0_market_year_pool;
+  int<lower=0, upper=1> use_s0_market_pool;
   int<lower=0, upper=1> use_centered_alpha;
   int<lower=0, upper=1> use_centered_s0_pool;
   int<lower=0, upper=1> use_hmt;
@@ -156,11 +157,16 @@ parameters {
   vector<lower=0>[pool_alpha_by_market == 1 ? 1 : 0] sigma_log_a_vec;
   vector[(pool_alpha_by_market == 1 && use_centered_alpha == 0) ? N_market : 0] r_market_a_raw;
   vector[(pool_alpha_by_market == 1 && use_centered_alpha == 1) ? N_market : 0] log_a_market_pool;
-  vector[use_s0_market_year_pool == 1 ? 0 : N_market_year] s0_logit;
-  vector[use_s0_market_year_pool == 1 ? 1 : 0] mu_s0_pool_vec;
-  vector<lower=0>[use_s0_market_year_pool == 1 ? 1 : 0] sigma_s0_pool_vec;
+  vector[(use_s0_market_year_pool == 1 || use_s0_market_pool == 1)
+         ? 0 : N_market_year] s0_logit;
+  vector[(use_s0_market_year_pool == 1 || use_s0_market_pool == 1)
+         ? 1 : 0] mu_s0_pool_vec;
+  vector<lower=0>[(use_s0_market_year_pool == 1 || use_s0_market_pool == 1)
+                  ? 1 : 0] sigma_s0_pool_vec;
   vector[(use_s0_market_year_pool == 1 && use_centered_s0_pool == 0) ? N_market_year : 0] s0_pool_raw;
   vector[(use_s0_market_year_pool == 1 && use_centered_s0_pool == 1) ? N_market_year : 0] eta_s0_pool;
+  vector[(use_s0_market_pool == 1 && use_centered_s0_pool == 0) ? N_market : 0] s0_market_raw;
+  vector[(use_s0_market_pool == 1 && use_centered_s0_pool == 1) ? N_market : 0] eta_s0_market;
   vector<lower=0, upper=1>[use_cutoff == 1 ? N_market : 0] cutoff_share;
   vector[rho_active == 1 ? 1 : 0] rho_raw;
   real log_sigma_share;
@@ -215,7 +221,15 @@ transformed parameters {
   for (mky in 1:N_market_year) {
     real base_logit;
     real x_beta = K_s0 > 0 ? X_s0[mky] * beta_s0 : 0.0;
-    if (use_s0_market_year_pool == 1) {
+    if (use_s0_market_pool == 1) {
+      // One quantity outside share per market, applied to every market-year.
+      // The CES revenue share R0 is transformed below using period-specific
+      // outside and inside price indices, so R0 may still vary by year.
+      int m = mky_to_market[mky];
+      base_logit = use_centered_s0_pool == 1
+        ? eta_s0_market[m]
+        : mu_s0_pool_vec[1] + sigma_s0_pool_vec[1] * s0_market_raw[m];
+    } else if (use_s0_market_year_pool == 1) {
       base_logit = use_centered_s0_pool == 1
         ? eta_s0_pool[mky]
         : mu_s0_pool_vec[1] + sigma_s0_pool_vec[1] * s0_pool_raw[mky];
@@ -272,7 +286,13 @@ model {
     cutoff_share ~ beta(prior_cutoff_alpha, prior_cutoff_beta);
     mu_b_fringe_vec ~ normal(0, prior_sigma_meanval_fringe);
   }
-  if (use_s0_market_year_pool == 1) {
+  if (use_s0_market_pool == 1) {
+    mu_s0_pool_vec ~ normal(s0_prior_mean, s0_prior_sd);
+    sigma_s0_pool_vec ~ normal(0, prior_sigma_s0_pool);
+    if (use_centered_s0_pool == 1) {
+      eta_s0_market ~ normal(mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
+    } else s0_market_raw ~ std_normal();
+  } else if (use_s0_market_year_pool == 1) {
     mu_s0_pool_vec ~ normal(s0_prior_mean, s0_prior_sd);
     sigma_s0_pool_vec ~ normal(0, prior_sigma_s0_pool);
     if (use_centered_s0_pool == 1) {

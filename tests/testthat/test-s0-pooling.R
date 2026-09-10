@@ -23,6 +23,35 @@ make_panel <- function(seed = 7, n_markets = 3, n_years = 3, n_firms = 4) {
   )
 }
 
+# CES fixture with strictly sub-unit Lerner indices and deliberately different
+# inside price indices across years.  The latter makes the quantity-share s0
+# versus revenue-share R0 distinction observable in the pooling smoke test.
+make_ces_panel <- function(seed = 31, n_markets = 3, n_years = 3,
+                           n_firms = 4) {
+  set.seed(seed)
+  grid <- expand.grid(
+    m = seq_len(n_markets), y = seq_len(n_years), f = seq_len(n_firms)
+  )
+  n <- nrow(grid)
+  prices <- 1 + 0.2 * grid$m + 0.4 * grid$y + 0.05 * grid$f +
+    rnorm(n, 0, 0.005)
+  quantities <- exp(rnorm(n, 0, 0.5))
+  margins <- 0.30 * exp(rnorm(n, 0, 0.03))
+  list(
+    prices = prices, quantities = quantities, margins = margins,
+    market = paste0("M", grid$m), year = paste0("Y", grid$y),
+    group = paste0("M", grid$m, "_F", grid$f)
+  )
+}
+
+skip_stan_pooling <- function() {
+  skip_on_cran()
+  skip_if(
+    !identical(tolower(Sys.getenv("ANTITRUSTBAYES_RUN_STAN_TESTS")), "true"),
+    "set ANTITRUSTBAYES_RUN_STAN_TESTS=true to run Stan sampling tests"
+  )
+}
+
 test_that("use_s0_market_pool and use_s0_market_year_pool are mutually exclusive", {
   d <- make_panel()
   expect_error(
@@ -35,10 +64,43 @@ test_that("use_s0_market_pool and use_s0_market_year_pool are mutually exclusive
     ),
     "at most one"
   )
+  d_ces <- make_ces_panel()
+  expect_error(
+    bayes_est(
+      prices = d_ces$prices, quantities = d_ces$quantities,
+      margins = d_ces$margins, market = d_ces$market,
+      year = d_ces$year, group = d_ces$group,
+      demand_model = "ces", market_side = "output", supply_model = "bertrand",
+      use_s0_market_pool = TRUE, use_s0_market_year_pool = TRUE,
+      stan_options = list(chains = 1, iter = 50, warmup = 25, refresh = 0)
+    ),
+    "at most one"
+  )
+})
+
+test_that("CES market-level s0 pooling reaches the Stan data contract", {
+  d <- make_ces_panel()
+  for (centered in c(FALSE, TRUE)) {
+    sd <- prepare_ces_stan_data(
+      prices = d$prices, quantities = d$quantities, margins = d$margins,
+      market = d$market, year = d$year, group = d$group,
+      supply_model = 1L, use_cutoff = FALSE, use_rho = TRUE,
+      use_hmt = FALSE, priors = list(),
+      use_s0_market_year_pool = FALSE,
+      use_s0_market_pool = TRUE,
+      use_centered_s0_pool = centered
+    )
+    expect_equal(sd$use_s0_market_pool, 1L)
+    expect_equal(sd$use_s0_market_year_pool, 0L)
+    expect_equal(sd$N_market, 3L)
+    expect_equal(sd$N_market_year, 9L)
+    expect_equal(sd$K_s0, 0L)
+    expect_equal(length(sd$inside_price_index), sd$N_market_year)
+  }
 })
 
 test_that("market-level s0 pooling yields one outside share per market (constant across years)", {
-  skip_on_cran()
+  skip_stan_pooling()
   d <- make_panel(seed = 21)
   fit <- suppressWarnings(bayes_est(
     prices = d$prices, quantities = d$quantities, margins = d$margins,
@@ -68,8 +130,57 @@ test_that("market-level s0 pooling yields one outside share per market (constant
   }
 })
 
+test_that("CES market-level s0 pooling keeps quantity s0 fixed but transforms R0 by prices", {
+  skip_stan_pooling()
+  d <- make_ces_panel()
+  for (centered in c(FALSE, TRUE)) {
+    fit <- suppressWarnings(bayes_est(
+      prices = d$prices, quantities = d$quantities, margins = d$margins,
+      market = d$market, year = d$year, group = d$group,
+      demand_model = "ces", market_side = "output", supply_model = "bertrand",
+      use_alpha_market_pool = TRUE,
+      use_s0_market_pool = TRUE, use_centered_s0_pool = centered,
+      priors = list(prior_sigma_s0_pool = 0.3),
+      stan_options = list(chains = 1, iter = 160, warmup = 80, refresh = 0, seed = 3)
+    ))
+    expect_s4_class(fit, "BayesLogit")
+
+    s0_prob <- rstan::extract(fit@stanfit, "s0_prob")[[1]]
+    R0_prob <- rstan::extract(fit@stanfit, "R0_prob")[[1]]
+    mky_levels <- attr(fit@stan_data, "mky_levels")
+    market_of_mky <- sub("_.*$", "", mky_levels)
+
+    # Check the implemented bounded version of
+    # logit(R0) = logit(s0) + log(p0) - log(pbar_inside).
+    for (j in seq_len(fit@stan_data$N_market_year)) {
+      eta <- qlogis(s0_prob[, j]) + log(fit@stan_data$outside_price[j]) -
+        log(fit@stan_data$inside_price_index[j])
+      expected_R0 <- 1e-6 + (1 - 2e-6) * plogis(eta)
+      expect_equal(R0_prob[, j], expected_R0, tolerance = 1e-10)
+    }
+
+    for (mk in unique(market_of_mky)) {
+      cols <- which(market_of_mky == mk)
+      if (length(cols) < 2L) next
+
+      # A market-pool effect is shared draw-for-draw, not merely in posterior
+      # expectation. X_s0 is NULL in this fit, so no year-specific term exists.
+      for (j in cols[-1L]) {
+        expect_equal(s0_prob[, j], s0_prob[, cols[1L]], tolerance = 1e-12)
+      }
+
+      # R0 can still vary because the CES conversion uses period-specific
+      # inside and outside prices.
+      r0_diffs <- vapply(cols[-1L], function(j) {
+        max(abs(R0_prob[, j] - R0_prob[, cols[1L]]))
+      }, numeric(1))
+      expect_gt(max(r0_diffs), 1e-8)
+    }
+  }
+})
+
 test_that("market-year s0 pooling gives a distinct outside share per market-year", {
-  skip_on_cran()
+  skip_stan_pooling()
   d <- make_panel(seed = 22)
   fit <- suppressWarnings(bayes_est(
     prices = d$prices, quantities = d$quantities, margins = d$margins,
