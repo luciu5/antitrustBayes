@@ -145,23 +145,6 @@ jobs:
           ANTITRUSTBAYES_RUN_STAN_TESTS: "false"
         run: R CMD check --no-manual "${PACKAGE_TARBALL}"
 
-      - name: Install built package for deterministic tests
-        run: R CMD INSTALL --preclean "${PACKAGE_TARBALL}"
-
-      - name: Run normal package test suite without MCMC
-        env:
-          ANTITRUSTBAYES_RUN_STAN_TESTS: "false"
-        run: |
-          Rscript - <<'RSCRIPT'
-          library(testthat)
-          library(antitrustBayes)
-          testthat::test_dir(
-            file.path("tests", "testthat"),
-            reporter = "summary", package = "antitrustBayes",
-            load_package = "installed"
-          )
-          RSCRIPT
-
   stan:
     name: Stan smoke tests (antitrust ${{ inputs.antitrust_ref || '103c2491607d7f164f5e4e00fc21d6ea79331138' }})
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_stan_tests == true)
