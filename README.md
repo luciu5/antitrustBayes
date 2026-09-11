@@ -22,7 +22,7 @@ Additional utilities:
 
 ## Installation
 
-The `refactor` branch currently depends on the matching development stack.
+The current `main` branch depends on the matching development stack.
 Install the known-compatible `antitrust` revision before installing
 `antitrustBayes`; do not rely on either repository's default branch:
 
@@ -31,7 +31,9 @@ Install the known-compatible `antitrust` revision before installing
 remotes::install_github(
   "luciu5/antitrust@103c2491607d7f164f5e4e00fc21d6ea79331138"
 )
-remotes::install_github("luciu5/antitrustBayes@refactor")
+remotes::install_github(
+  "luciu5/antitrustBayes@c9d0bfea98d57484a0a2a318d5561d2c510bfe91"
+)
 ```
 
 The dependency-stack CI uses the same pinned `antitrust` SHA by default and
