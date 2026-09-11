@@ -78,10 +78,35 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Install selected antitrust revision first
+        shell: bash
         run: |
           set -euo pipefail
-          Rscript -e 'install.packages("remotes", repos = "https://cloud.r-project.org")'
-          Rscript -e 'remotes::install_github(paste0(Sys.getenv("ANTITRUST_REPO"), "@", Sys.getenv("ANTITRUST_SHA")), dependencies = TRUE, upgrade = "never")'
+          checkout_dir="$(mktemp -d)"
+          git clone --no-checkout "https://github.com/${ANTITRUST_REPO}.git" "${checkout_dir}"
+          git -C "${checkout_dir}" fetch --depth 1 origin "${ANTITRUST_SHA}"
+          git -C "${checkout_dir}" checkout --detach "${ANTITRUST_SHA}"
+          checked_out_sha="$(git -C "${checkout_dir}" rev-parse HEAD)"
+          if [[ "${checked_out_sha}" != "${ANTITRUST_SHA}" ]]; then
+            echo "::error::Checked-out antitrust SHA ${checked_out_sha} does not match ${ANTITRUST_SHA}" >&2
+            exit 1
+          fi
+          echo "ANTITRUST_CHECKOUT_DIR=${checkout_dir}" >> "${GITHUB_ENV}"
+          Rscript --vanilla - "${checkout_dir}" <<'RSCRIPT'
+          args <- commandArgs(trailingOnly = TRUE)
+          desc <- read.dcf(file.path(args[[1]], "DESCRIPTION"))[1, ]
+          imports <- desc[["Imports"]]
+          if (!is.na(imports) && nzchar(imports)) {
+              packages <- trimws(strsplit(imports, ",", fixed = TRUE)[[1]])
+              packages <- sub("\\s*\\(.*$", "", packages)
+              packages <- packages[nzchar(packages)]
+              missing <- packages[!vapply(packages, requireNamespace, logical(1), quietly = TRUE)]
+              if (length(missing)) {
+                  install.packages(missing, repos = "https://cloud.r-project.org")
+              }
+          }
+          RSCRIPT
+          R CMD INSTALL --no-multiarch "${checkout_dir}"
+          echo "antitrust installed from verified checkout SHA: ${checked_out_sha}" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Install remaining package dependencies
         uses: r-lib/actions/setup-r-dependencies@v2
@@ -90,13 +115,22 @@ jobs:
           extra-packages: any::rcmdcheck
 
       - name: Reassert selected antitrust revision after dependency resolution
+        shell: bash
         run: |
           set -euo pipefail
-          Rscript -e 'remotes::install_github(paste0(Sys.getenv("ANTITRUST_REPO"), "@", Sys.getenv("ANTITRUST_SHA")), dependencies = FALSE, upgrade = "never")'
+          checked_out_sha="$(git -C "${ANTITRUST_CHECKOUT_DIR}" rev-parse HEAD)"
+          if [[ "${checked_out_sha}" != "${ANTITRUST_SHA}" ]]; then
+            echo "::error::Reasserted antitrust SHA ${checked_out_sha} does not match ${ANTITRUST_SHA}" >&2
+            exit 1
+          fi
+          R CMD INSTALL --no-multiarch "${ANTITRUST_CHECKOUT_DIR}"
 
       - name: Verify selected antitrust remains installed
         run: |
-          Rscript -e 'd <- packageDescription("antitrust"); stopifnot(packageVersion("antitrust") >= "0.99.38", identical(tolower(d$RemoteSha), tolower(Sys.getenv("ANTITRUST_SHA"))))'
+          set -euo pipefail
+          checked_out_sha="$(git -C "${ANTITRUST_CHECKOUT_DIR}" rev-parse HEAD)"
+          test "${checked_out_sha}" = "${ANTITRUST_SHA}"
+          Rscript -e 'stopifnot(packageVersion("antitrust") >= "0.99.38")'
 
       - name: Build package
         run: |
@@ -173,10 +207,35 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Install selected antitrust revision first
+        shell: bash
         run: |
           set -euo pipefail
-          Rscript -e 'install.packages("remotes", repos = "https://cloud.r-project.org")'
-          Rscript -e 'remotes::install_github(paste0(Sys.getenv("ANTITRUST_REPO"), "@", Sys.getenv("ANTITRUST_SHA")), dependencies = TRUE, upgrade = "never")'
+          checkout_dir="$(mktemp -d)"
+          git clone --no-checkout "https://github.com/${ANTITRUST_REPO}.git" "${checkout_dir}"
+          git -C "${checkout_dir}" fetch --depth 1 origin "${ANTITRUST_SHA}"
+          git -C "${checkout_dir}" checkout --detach "${ANTITRUST_SHA}"
+          checked_out_sha="$(git -C "${checkout_dir}" rev-parse HEAD)"
+          if [[ "${checked_out_sha}" != "${ANTITRUST_SHA}" ]]; then
+            echo "::error::Checked-out antitrust SHA ${checked_out_sha} does not match ${ANTITRUST_SHA}" >&2
+            exit 1
+          fi
+          echo "ANTITRUST_CHECKOUT_DIR=${checkout_dir}" >> "${GITHUB_ENV}"
+          Rscript --vanilla - "${checkout_dir}" <<'RSCRIPT'
+          args <- commandArgs(trailingOnly = TRUE)
+          desc <- read.dcf(file.path(args[[1]], "DESCRIPTION"))[1, ]
+          imports <- desc[["Imports"]]
+          if (!is.na(imports) && nzchar(imports)) {
+              packages <- trimws(strsplit(imports, ",", fixed = TRUE)[[1]])
+              packages <- sub("\\s*\\(.*$", "", packages)
+              packages <- packages[nzchar(packages)]
+              missing <- packages[!vapply(packages, requireNamespace, logical(1), quietly = TRUE)]
+              if (length(missing)) {
+                  install.packages(missing, repos = "https://cloud.r-project.org")
+              }
+          }
+          RSCRIPT
+          R CMD INSTALL --no-multiarch "${checkout_dir}"
+          echo "antitrust installed from verified checkout SHA: ${checked_out_sha}" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Install remaining package dependencies
         uses: r-lib/actions/setup-r-dependencies@v2
@@ -185,13 +244,22 @@ jobs:
           extra-packages: any::rcmdcheck
 
       - name: Reassert selected antitrust revision after dependency resolution
+        shell: bash
         run: |
           set -euo pipefail
-          Rscript -e 'remotes::install_github(paste0(Sys.getenv("ANTITRUST_REPO"), "@", Sys.getenv("ANTITRUST_SHA")), dependencies = FALSE, upgrade = "never")'
+          checked_out_sha="$(git -C "${ANTITRUST_CHECKOUT_DIR}" rev-parse HEAD)"
+          if [[ "${checked_out_sha}" != "${ANTITRUST_SHA}" ]]; then
+            echo "::error::Reasserted antitrust SHA ${checked_out_sha} does not match ${ANTITRUST_SHA}" >&2
+            exit 1
+          fi
+          R CMD INSTALL --no-multiarch "${ANTITRUST_CHECKOUT_DIR}"
 
       - name: Verify selected antitrust remains installed
         run: |
-          Rscript -e 'd <- packageDescription("antitrust"); stopifnot(packageVersion("antitrust") >= "0.99.38", identical(tolower(d$RemoteSha), tolower(Sys.getenv("ANTITRUST_SHA"))))'
+          set -euo pipefail
+          checked_out_sha="$(git -C "${ANTITRUST_CHECKOUT_DIR}" rev-parse HEAD)"
+          test "${checked_out_sha}" = "${ANTITRUST_SHA}"
+          Rscript -e 'stopifnot(packageVersion("antitrust") >= "0.99.38")'
 
       - name: Build package
         run: |
