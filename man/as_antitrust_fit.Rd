@@ -14,7 +14,9 @@ by the package's posterior-realization helper.}
 \code{object@supply_model} (see \code{\link{model_spec}} in
 \pkg{antitrust}).}
 
-\item{...}{Additional arguments passed to \code{antitrust::calcPrices()}.}
+\item{...}{Additional arguments passed to the public
+\code{antitrust::specify()} constructor for the baseline realization.
+Counterfactual scenario options belong to \code{antitrust::simulate()}.}
 }
 \value{
 An \code{antitrust::AntitrustFit}.

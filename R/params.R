@@ -390,10 +390,10 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
 }
 
 ## Build a registered antitrust model from the already specified posterior
-## demand parameters. antitrust::specify() is the parameterized constructor;
-## it does not recalibrate demand. The temporary construction supplies the
-## concrete class and its mature methods, after which the posterior slots and
-## ownership state are restored explicitly.
+## demand parameters. antitrust::specify() is the public parameterized
+## constructor; it does not recalibrate demand. Supplying ownerPre for both
+## sides makes this realization scenario-neutral: all post-merger changes are
+## applied later by antitrust::simulate().
 .bayes_core_model <- function(object, spec, ...) {
   core_parameters <- object@slopes
   margins <- antitrust::calcMargins(object, preMerger = TRUE, level = FALSE)
@@ -436,35 +436,21 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
     args$bargpowerPost <- rep(beta, length(object@prices))
   }
 
-  concrete <- do.call(antitrust::specify, args)
-  model <- concrete@model
-
-  ## Drop the constructor's persistent cost cache. It was computed before
-  ## the posterior slots below were restored and must not override the FOC
-  ## recovery from this realization.
-  attr(model, "antitrust_cost_state") <- NULL
-  model@prices <- object@prices
-  model@shares <- object@shares
-  model@margins <- object@margins
-  model@ownerPre <- object@ownerPre
-  model@ownerPost <- object@ownerPost
-  model@mcDelta <- object@mcDelta
-  model@subset <- object@subset
-  model@insideSize <- object@insideSize
-  model@priceStart <- object@priceStart
-  model@pricePre <- object@prices
-  model@pricePost <- object@prices
-  model@shareInside <- object@shareInside
-  model@output <- object@output
-  model@labels <- object@labels
-  model@slopes <- core_parameters
-  model@mcPre <- antitrust::calcMC(model, preMerger = TRUE)
-  model@mcPost <- antitrust::calcMC(model, preMerger = FALSE)
-  model@pricePost <- if (spec$conduct == "auction2nd") {
-    antitrust::calcPrices(model, preMerger = FALSE)
-  } else {
-    antitrust::calcPrices(model, preMerger = FALSE, ...)
+  ## Keep public constructor controls available to callers. Scenario fields
+  ## are rejected by specify(), where they belong in simulate().
+  dots <- list(...)
+  duplicate <- intersect(names(dots), names(args))
+  if (length(duplicate)) {
+    stop("argument(s) supplied more than once: ",
+         paste(duplicate, collapse = ", "))
   }
+  args <- c(args, dots)
+
+  ## specify() returns the registered model with its baseline cost state and
+  ## baseline prices initialized by antitrust. No private state or slots are
+  ## rewritten here, and no counterfactual equilibrium is solved locally.
+  model <- do.call(antitrust::specify, args)@model
+
   model
 }
 
@@ -482,7 +468,9 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
 #' @param spec An \code{antitrust_model_spec}. Defaults to a mapping from
 #'   \code{object@supply_model} (see \code{\link{model_spec}} in
 #'   \pkg{antitrust}).
-#' @param ... Additional arguments passed to \code{antitrust::calcPrices()}.
+#' @param ... Additional arguments passed to the public
+#'   \code{antitrust::specify()} constructor for the baseline realization.
+#'   Counterfactual scenario options belong to \code{antitrust::simulate()}.
 #'
 #' @return An \code{antitrust::AntitrustFit}.
 #' @export

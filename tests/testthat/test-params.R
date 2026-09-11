@@ -217,18 +217,20 @@ test_that("FOCs recover model costs and positive cost shocks raise prices", {
   params <- bayes_params(alpha = 0.65, s0 = 0.015, supply_model = 1L)
   base <- build_conduct_object(params, 1L, market,
                                ownerPre = owner, ownerPost = owner)
-  shocked <- build_conduct_object(params, 1L, market,
-                                  ownerPre = owner, ownerPost = owner,
-                                  mcDelta = rep(0.02, market$n_prod))
   base_fit <- suppressWarnings(as_antitrust_fit(base))
-  shocked_fit <- suppressWarnings(as_antitrust_fit(shocked))
+  shocked <- suppressWarnings(antitrust::simulate(
+    base_fit,
+    ownerPost = owner,
+    mcDelta = rep(0.02, market$n_prod)
+  ))
   model <- base_fit@model
   foc <- model@pricePre - model@mcPre -
     antitrust::calcMargins(model, TRUE, level = TRUE)
 
   expect_lt(max(abs(foc)), 1e-8)
+  expect_equal(shocked@mcPost, model@mcPre * 1.02, tolerance = 1e-10)
   expect_gt(sum(market$quantities *
-                (shocked_fit@model@pricePost - base_fit@model@pricePost)), 0)
+                (shocked@pricePost - model@pricePre)), 0)
 })
 
 test_that("as_antitrust_fit does not mutate the conduct object", {
