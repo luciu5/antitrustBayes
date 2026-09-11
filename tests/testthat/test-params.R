@@ -192,6 +192,47 @@ test_that("multiproduct Logit bargaining keeps its explicit custom equation", {
   )), 1e-6)
 })
 
+test_that("custom posterior fits are scenario-neutral baselines", {
+  market <- pnb_market()
+  params <- bayes_params(
+    alpha = 0.65, s0 = 0.015, supply_model = 1L,
+    use_cutoff = TRUE, cutoff_share = 0.2
+  )
+  object <- build_conduct_object(
+    params, 1L, market,
+    ownerPre = market$group,
+    ownerPost = pnb_owner_post(),
+    mcDelta = rep(0.02, market$n_prod),
+    subset = seq_len(market$n_prod) != market$n_prod
+  )
+  fit <- suppressWarnings(as_antitrust_fit(object))
+  model <- fit@model
+
+  expect_s4_class(model, "BayesConductLogit")
+  expect_equal(model@ownerPost, model@ownerPre)
+  expect_equal(model@mcDelta, rep(0, market$n_prod))
+  expect_true(all(model@subset))
+  expect_equal(model@pricePre, object@prices)
+  expect_equal(model@pricePost, object@prices)
+  expect_equal(model@mcPost, model@mcPre, tolerance = 1e-10)
+  expect_equal(
+    antitrust::calcMC(model, preMerger = FALSE),
+    model@mcPre,
+    tolerance = 1e-10
+  )
+
+  scenario <- suppressWarnings(antitrust::simulate(
+    fit,
+    ownerPost = object@ownerPost,
+    mcDelta = object@mcDelta,
+    subset = object@subset
+  ))
+  expect_s4_class(scenario, "BayesConductLogit")
+  expect_equal(scenario@ownerPost, object@ownerPost)
+  expect_equal(scenario@mcDelta, object@mcDelta)
+  expect_equal(scenario@subset, object@subset)
+})
+
 test_that("MonCom registration preserves ownership-invariant margins and prices", {
   market <- pnb_market()
   params <- bayes_params(alpha = 0.65, s0 = 0.015, supply_model = 2L)

@@ -494,17 +494,21 @@ as_antitrust_fit <- function(object, spec = NULL, ...) {
   model <- if (use_core) {
     .bayes_core_model(object, spec, ...)
   } else {
-    object@mcPre <- antitrust::calcMC(object, preMerger = TRUE)
-    object@mcPost <- antitrust::calcMC(object, preMerger = FALSE)
-    object@pricePre <- object@prices
-    ownership_only_moncom <- object@supply_model == 2L &&
-      all(object@mcDelta == 0) && all(object@subset)
-    object@pricePost <- if (ownership_only_moncom) {
-      object@prices
-    } else {
-      antitrust::calcPrices(object, preMerger = FALSE, ...)
-    }
-    object
+    ## Custom cutoff and multiproduct Logit bargaining equations remain
+    ## Bayes-owned, but the returned fit still represents the observed
+    ## baseline. Scenario state carried by a manually constructed conduct
+    ## object belongs in simulate(), just as it does for registered models.
+    model <- object
+    nprod <- length(model@prices)
+    model@ownerPost <- model@ownerPre
+    model@mcDelta <- rep(0, nprod)
+    model@subset <- rep(TRUE, nprod)
+    model@priceStart <- model@prices
+    model@pricePre <- model@prices
+    model@pricePost <- model@prices
+    model@mcPre <- antitrust::calcMC(model, preMerger = TRUE)
+    model@mcPost <- antitrust::calcMC(model, preMerger = FALSE)
+    antitrust::initialize_cost_state(model)
   }
   model@mktSize <- model@insideSize / model@shareInside
 
