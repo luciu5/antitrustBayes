@@ -149,7 +149,7 @@ transformed data {
 parameters {
   vector[is_single_market == 0 ? 1 : 0] mu_b_market_vec;
   vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;
-  vector[is_single_market == 0 ? N_market : 0] b_market_rot;
+  vector[is_single_market == 0 ? N_market : 0] b_market_raw;
   vector[N_group] b_group_raw;
   real<lower=0> sigma_b_strat;
   vector[use_cutoff == 1 ? 1 : 0] mu_b_fringe_vec;
@@ -188,6 +188,7 @@ transformed parameters {
   real sigma_log_a = 0.0;
   vector[N_market] a_market;
   vector[N_market] b_market;
+  vector[N_market] b_market_rot;
   vector[N_group] b_quality_all = sigma_b_strat * (b_group_raw - mean(b_group_raw));
   real mu_b_fringe = 0.0;
   vector[N_market_year] s0;
@@ -248,12 +249,15 @@ transformed parameters {
 
   if (is_single_market == 1) {
     b_market = rep_vector(0.0, N_market);
+    b_market_rot = rep_vector(0.0, N_market);
   } else {
+    b_market = mu_b_market_vec[1]
+      + sigma_b_market_vec[1] * b_market_raw;
     for (m in 1:N_market) {
       if (n_mky_per_market[m] > 1) {
-        b_market[m] = b_market_rot[m] - mean_logit_s0_market[m];
+        b_market_rot[m] = b_market[m] + mean_logit_s0_market[m];
       } else {
-        b_market[m] = b_market_rot[m];
+        b_market_rot[m] = b_market[m];
       }
     }
   }
@@ -278,7 +282,7 @@ model {
   if (is_single_market == 0) {
     mu_b_market_vec ~ normal(0, 1);
     sigma_b_market_vec ~ normal(0, 0.5);
-    b_market ~ normal(mu_b_market_vec[1], sigma_b_market_vec[1]);
+    b_market_raw ~ std_normal();
   }
   b_group_raw ~ std_normal();
   sigma_b_strat ~ normal(1, prior_sigma_meanval_strat);

@@ -152,7 +152,7 @@ transformed data {
 parameters {
   vector[is_single_market == 0 ? 1 : 0] mu_b_market_vec;
   vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;
-  vector[is_single_market == 0 ? N_market : 0] gamma_market;
+  vector[is_single_market == 0 ? N_market : 0] b_market_raw;
   vector[N_group] b_group_raw;
   real<lower=0> sigma_b_strat;
   vector[use_cutoff == 1 ? 1 : 0] mu_b_fringe_vec;
@@ -196,6 +196,7 @@ transformed parameters {
   vector[N_market] a_market;
   vector[N_market] log_a_market_derived = rep_vector(0.0, N_market);
   vector[N_market] b_market;
+  vector[N_market] gamma_market;
   vector[N_group] b_quality_all = sigma_b_strat * (b_group_raw - mean(b_group_raw));
   real mu_b_fringe = 0.0;
   vector[N_market_year] s0;
@@ -255,21 +256,20 @@ transformed parameters {
   if (is_single_market == 1) {
     // A single market has no cross-market intercept to speak of; normalize
     // it to zero and let s0's level be identified directly off the share
-    // equation, rather than sampling a free gamma_market that would compete
-    // with s0 for the same variation.
+    // equation.
     b_market = rep_vector(0.0, N_market);
+    gamma_market = rep_vector(0.0, N_market);
   } else {
+    b_market = mu_b_market_vec[1]
+      + sigma_b_market_vec[1] * b_market_raw;
     for (m in 1:N_market) {
       if (n_mky_per_market[m] > 1) {
-        // Rotated coordinate: gamma_market centers the *level* of the
-        // market intercept to be neutral to the outside-share level while
-        // retaining relative market-year movements. Needed because
-        // logit(s0) no longer cancels out of the restored share prediction.
-        b_market[m] = gamma_market[m] - mean_logit_s0_market[m];
+        // Retain the historical rotated coordinate as a derived quantity;
+        // b_market itself is sampled noncentrally to avoid a scale funnel.
+        gamma_market[m] = b_market[m] + mean_logit_s0_market[m];
       } else {
-        // One market-year: nothing to rotate against, so the intercept is
-        // just gamma_market directly and logit(s0) survives uncancelled.
-        b_market[m] = gamma_market[m];
+        // With one market-year there is no outside-share rotation.
+        gamma_market[m] = b_market[m];
       }
     }
   }
@@ -312,7 +312,7 @@ model {
   if (is_single_market == 0) {
     mu_b_market_vec ~ normal(0, 1);
     sigma_b_market_vec ~ normal(0, 0.5);
-    b_market ~ normal(mu_b_market_vec[1], sigma_b_market_vec[1]);
+    b_market_raw ~ std_normal();
   }
   b_group_raw ~ std_normal();
   sigma_b_strat ~ normal(1, prior_sigma_meanval_strat);

@@ -52,6 +52,66 @@ skip_stan_pooling <- function() {
   )
 }
 
+test_that("multi-market intercept hierarchies are noncentered", {
+  skip_stan_pooling()
+
+  cases <- list(
+    logit = list(
+      data = make_panel(seed = 19),
+      args = list(demand_model = "logit"),
+      rotated_name = "gamma_market"
+    ),
+    ces = list(
+      data = make_ces_panel(seed = 19),
+      args = list(demand_model = "ces", market_side = "output"),
+      rotated_name = "b_market_rot"
+    )
+  )
+
+  for (case in cases) {
+    d <- case$data
+    fit <- suppressWarnings(do.call(
+      bayes_est,
+      c(
+        list(
+          prices = d$prices, quantities = d$quantities, margins = d$margins,
+          market = d$market, year = d$year, group = d$group,
+          supply_model = "bertrand", use_alpha_market_pool = TRUE,
+          use_s0_market_pool = TRUE,
+          priors = list(prior_sigma_s0_pool = 0.3),
+          stan_options = list(
+            chains = 1, iter = 160, warmup = 80, refresh = 0, seed = 3
+          )
+        ),
+        case$args
+      )
+    ))
+
+    expect_equal(fit@stanfit@par_dims[["b_market_raw"]], 3L)
+    draws <- rstan::extract(
+      fit@stanfit,
+      pars = c(
+        "mu_b_market_vec", "sigma_b_market_vec", "b_market_raw",
+        "b_market", case$rotated_name, "mean_logit_s0_market"
+      )
+    )
+    mu <- as.numeric(draws$mu_b_market_vec)
+    sigma <- as.numeric(draws$sigma_b_market_vec)
+    for (m in seq_len(3L)) {
+      expect_equal(
+        draws$b_market[, m],
+        mu + sigma * draws$b_market_raw[, m],
+        tolerance = 1e-10
+      )
+      expect_equal(
+        draws[[case$rotated_name]][, m],
+        draws$b_market[, m] + draws$mean_logit_s0_market[, m],
+        tolerance = 1e-10
+      )
+    }
+  }
+})
+
 test_that("use_s0_market_pool and use_s0_market_year_pool are mutually exclusive", {
   d <- make_panel()
   expect_error(
