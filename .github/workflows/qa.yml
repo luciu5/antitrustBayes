@@ -8,7 +8,7 @@ on:
       antitrust_ref:
         description: "antitrust branch or commit SHA to install"
         required: true
-        default: "24caac92a6c8ad4dc1d3d754c4c26ad0afd4248f"
+        default: "103c2491607d7f164f5e4e00fc21d6ea79331138"
         type: string
       run_stan_tests:
         description: "Run the opt-in Stan sampling/parity tier"
@@ -24,11 +24,11 @@ permissions:
 env:
   R_VERSION: "4.6.1"
   ANTITRUST_REPO: "luciu5/antitrust"
-  ANTITRUST_REQUESTED_REF: ${{ inputs.antitrust_ref || '24caac92a6c8ad4dc1d3d754c4c26ad0afd4248f' }}
+  ANTITRUST_REQUESTED_REF: ${{ inputs.antitrust_ref || '103c2491607d7f164f5e4e00fc21d6ea79331138' }}
 
 jobs:
   fast:
-    name: fast QA (antitrust ${{ inputs.antitrust_ref || '24caac92a6c8ad4dc1d3d754c4c26ad0afd4248f' }})
+    name: fast QA (antitrust ${{ inputs.antitrust_ref || '103c2491607d7f164f5e4e00fc21d6ea79331138' }})
     runs-on: ubuntu-latest
     env:
       QA_TIER: fast
@@ -129,7 +129,7 @@ jobs:
           RSCRIPT
 
   stan:
-    name: Stan smoke tests (antitrust ${{ inputs.antitrust_ref || '24caac92a6c8ad4dc1d3d754c4c26ad0afd4248f' }})
+    name: Stan smoke tests (antitrust ${{ inputs.antitrust_ref || '103c2491607d7f164f5e4e00fc21d6ea79331138' }})
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_stan_tests == true)
     runs-on: ubuntu-latest
     env:

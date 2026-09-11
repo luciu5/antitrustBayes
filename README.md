@@ -29,7 +29,7 @@ Install the known-compatible `antitrust` revision before installing
 ```r
 # Install from GitHub (requires remotes)
 remotes::install_github(
-  "luciu5/antitrust@24caac92a6c8ad4dc1d3d754c4c26ad0afd4248f"
+  "luciu5/antitrust@103c2491607d7f164f5e4e00fc21d6ea79331138"
 )
 remotes::install_github("luciu5/antitrustBayes@refactor")
 ```
