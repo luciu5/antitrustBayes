@@ -178,7 +178,7 @@ data {
   array[N] int<lower=1, upper=N> market_obs_order;
   array[N_market] int<lower=1> market_obs_start;
   array[N_market] int<lower=1> market_obs_n;
-  array[N_market_year] int<lower=1, upper=N> market_mky_order;
+  array[N_market_year] int<lower=1, upper=N_market_year> market_mky_order;
   array[N_market] int<lower=1> market_mky_start;
   array[N_market] int<lower=1> market_mky_n;
 }
@@ -592,7 +592,7 @@ generated quantities {
             s0_prob[mky], alpha_structural_market[m], supply_model, structure,
             response[mky_pos_in_market[mky]], firm_mky_start, firm_mky_n,
             firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
-          if (margin_obs[i] == 1) {
+          if (likelihood_mode != 2 && margin_obs[i] == 1) {
             ell[pos, kk] = stack_margin_density(log_marginNormInv[i],
               log(invmargin[pos, kk] + 1e-9), log_shareIn[i], sharepred[i],
               sigma_share_market[m], sigma_margin_market[m], rho, nu, rho_active);
@@ -616,13 +616,27 @@ generated quantities {
           }
         }
         {
-          real cum = 0;
+          int median_k = partition_component_k[cstart];
+          // k_support is positional and need not be sorted.  Evaluate each
+          // numeric support point's CDF and choose the smallest weighted
+          // median, rather than treating component order as numeric order.
           for (kk in 1:nk) {
             int cc = cstart + kk - 1;
-            if (cum < 0.5 && cum + postprob[kk] >= 0.5)
-              posterior_k_median[u] = partition_component_k[cc];
-            cum += postprob[kk];
+            if (partition_component_k[cc] > median_k)
+              median_k = partition_component_k[cc];
           }
+          for (kk in 1:nk) {
+            int cc = cstart + kk - 1;
+            real cum = 0;
+            for (rr in 1:nk) {
+              int cr = cstart + rr - 1;
+              if (partition_component_k[cr] <= partition_component_k[cc])
+                cum += postprob[rr];
+            }
+            if (cum >= 0.5 && partition_component_k[cc] < median_k)
+              median_k = partition_component_k[cc];
+          }
+          posterior_k_median[u] = median_k;
         }
         unit_margin_loglik[u] = likelihood_mode == 2 ? 0 : log_sum_exp(score);
         log_lik_margin_market[m] = unit_margin_loglik[u];
