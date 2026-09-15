@@ -4,6 +4,36 @@
 
 .stack_bridge_or <- function(x, y) if (is.null(x) || !length(x)) y else x[[1L]]
 
+.stack_component_role_probability <- function(k, probability, n_firm) {
+  k <- as.integer(k)
+  probability <- as.numeric(probability)
+  if (length(k) != length(probability) || !length(k) || anyNA(k) ||
+      any(!is.finite(probability)) || any(probability < 0) ||
+      sum(probability) <= 0 || length(n_firm) != 1L ||
+      !is.finite(n_firm) || n_firm != as.integer(n_firm) || n_firm < 0L) {
+    stop("The ordered-k component distribution is malformed.", call. = FALSE)
+  }
+  probability <- probability / sum(probability)
+  vapply(seq_len(as.integer(n_firm)), function(rank) {
+    sum(probability[k >= rank])
+  }, numeric(1))
+}
+
+.stack_discrete_quantile <- function(k, probability, prob) {
+  k <- as.integer(k)
+  probability <- as.numeric(probability)
+  if (length(k) != length(probability) || !length(k) || anyNA(k) ||
+      any(!is.finite(probability)) || any(probability < 0) ||
+      sum(probability) <= 0 || length(prob) != 1L || !is.finite(prob) ||
+      prob < 0 || prob > 1) {
+    stop("The ordered-k quantile inputs are malformed.", call. = FALSE)
+  }
+  ord <- order(k)
+  k <- k[ord]
+  probability <- probability[ord] / sum(probability)
+  k[[which(cumsum(probability) >= prob - 1e-12)[1L]]]
+}
+
 .stack_bridge_units <- function(fit, market = NULL, year = NULL) {
   if (methods::is(fit, "BayesSpecifiedFit")) {
     d <- fit@data
@@ -647,9 +677,6 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
     ord <- order(x); x <- x[ord]; w <- w[ord] / sum(w)
     x[[which(cumsum(w) >= prob - 1e-12)[1L]]]
   }
-  discrete_quantile <- function(k, p, prob) {
-    k[[which(cumsum(p) >= prob - 1e-12)[1L]]]
-  }
   component_for_cell <- function(ii, sizes, market_label, year_label) {
     if (!direct && !stack) return(NULL)
     if (estimated) {
@@ -757,12 +784,11 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
       k <- comp$k
       post_p <- as.numeric(comp$posterior); post_p <- post_p / sum(post_p)
       prior_p <- as.numeric(comp$prior); prior_p <- prior_p / sum(prior_p)
-      role <- comp$leader_probability %||% vapply(seq_along(sizes), function(j) {
-        sum(post_p[k >= j])
-      }, numeric(1))
-      prior_role <- comp$prior_leader_probability %||% vapply(seq_along(sizes), function(j) {
-        sum(prior_p[k >= j])
-      }, numeric(1))
+      ## Component probabilities and the fixed whole-market rank determine
+      ## role probabilities for every ranked firm, including firms absent in
+      ## this market-year. The Stan firm GQ only has active firm-year rows.
+      role <- .stack_component_role_probability(k, post_p, length(sizes))
+      prior_role <- .stack_component_role_probability(k, prior_p, length(sizes))
       names(role) <- firm_ids; names(prior_role) <- firm_ids
       if (stack) {
         base$firm_leader_probability <- I(list(role))
@@ -773,9 +799,13 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
       base$prior_firm_leader_probability <- I(list(prior_role))
       base$realized_k_posterior <- I(list(stats::setNames(post_p, as.character(k))))
       base$realized_k_mean <- sum(k * post_p)
-      base$realized_k_median <- discrete_quantile(k, post_p, .5)
-      base$realized_k_lower <- discrete_quantile(k, post_p, (1 - level) / 2)
-      base$realized_k_upper <- discrete_quantile(k, post_p, 1 - (1 - level) / 2)
+      base$realized_k_median <- .stack_discrete_quantile(k, post_p, .5)
+      base$realized_k_lower <- .stack_discrete_quantile(
+        k, post_p, (1 - level) / 2
+      )
+      base$realized_k_upper <- .stack_discrete_quantile(
+        k, post_p, 1 - (1 - level) / 2
+      )
       ## For cutoff mixtures this is E_theta[pi_k(theta)], while direct
       ## ordered-k fits report the supplied market prior itself.
       base$prior_k_pmf <- I(list(stats::setNames(prior_p, as.character(k))))

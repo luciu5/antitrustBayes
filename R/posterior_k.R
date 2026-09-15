@@ -157,6 +157,13 @@
     }
     ans
   })
+  flattened_indices <- unlist(component_indices, use.names = FALSE)
+  if (length(flattened_indices) != length(k) ||
+      anyDuplicated(flattened_indices) ||
+      !setequal(flattened_indices, seq_along(k))) {
+    stop("Stan partition unit component ranges must form a disjoint complete map.",
+         call. = FALSE)
+  }
   if (length(unique(unit_market)) != n_unit) {
     stop("Exact ordered-k requires one partition unit per market; the Stan map has ",
          "multiple units for at least one market.", call. = FALSE)

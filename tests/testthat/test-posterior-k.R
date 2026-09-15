@@ -101,6 +101,33 @@ test_that("posterior_k fails clearly on missing or malformed generated draws", {
   )
 })
 
+test_that("posterior_k rejects overlapping legacy component ranges", {
+  stan_data <- list(
+    N_partition_unit = 2L,
+    partition_unit_market = c(1L, 2L),
+    partition_unit_start = c(1L, 2L),
+    partition_unit_count = c(2L, 2L),
+    partition_component_k = c(1L, 2L, 3L)
+  )
+  attr(stan_data, "market_levels") <- c("m1", "m2")
+  fit <- methods::new(
+    "BayesLogit", stanfit = NULL,
+    data = data.frame(market = c("m1", "m2")),
+    stan_data = stan_data, price_sd = 1,
+    supply_model = 1L, demand_model = "logit", market_side = "input",
+    call = quote(fake()),
+    metadata = list(structure = "stackelberg", partition_prior = "ordered_k",
+                    posterior_draws = 1L)
+  )
+  expect_error(
+    posterior_k(fit, draws = list(
+      posterior_component_prob = matrix(c(.2, .3, .5), nrow = 1L),
+      prior_component_prob = matrix(rep(1 / 3, 3), nrow = 1L)
+    )),
+    "disjoint complete map"
+  )
+})
+
 test_that("posterior_k validates each market distribution separately", {
   stan_data <- list(
     N_partition_unit = 2L, partition_unit_market = c(1L, 2L),

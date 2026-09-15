@@ -120,6 +120,23 @@ test_that("Stack summaries distinguish cutoff mixtures and direct ordered-k", {
   expect_true(all(is.na(ordered$by_market_year$cutoff_mean)))
   expect_equal(sum(ordered$by_market_year$realized_k_posterior[[1L]]), 1,
                tolerance = 1e-12)
+
+  unsorted <- bayes_specify(
+    bayes_params(alpha = .7, s0 = .2, supply_model = 1L,
+                 structure = "fringe", k_support = c(2L, 0L, 1L),
+                 k_prior = c(.4, .3, .3)), market
+  )
+  uq <- bayes_cutoff_summary(unsorted)$by_market_year
+  expect_equal(uq$realized_k_median, 1)
+  expect_equal(uq$realized_k_lower, 0)
+  expect_equal(uq$realized_k_upper, 2)
+})
+
+test_that("component role probabilities include firms absent from a period", {
+  got <- .stack_component_role_probability(
+    k = c(1L, 2L), probability = c(.25, .75), n_firm = 3L
+  )
+  expect_equal(got, c(1, .75, 0))
 })
 
 test_that("fringe smooth core summaries retain cutoff and outside-share dependence", {
