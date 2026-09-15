@@ -271,6 +271,7 @@ NULL
     structure = structure,
     partition_prior = object@metadata$partition_prior %||%
       attr(object@stan_data, "partition_prior", exact = TRUE) %||% "cutoff",
+    k_support = .stack_whole_or(object@metadata$k_support, NULL),
     k_prior = .stack_whole_or(object@metadata$k_prior, NULL),
     k_scope = object@metadata$k_scope %||%
       attr(object@stan_data, "k_scope", exact = TRUE) %||% "market"
