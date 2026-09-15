@@ -22,6 +22,7 @@
   fixed_k = NULL,
   role_offset = 0L,
   leadersPost = NULL,
+  corePost = NULL,
   ...
 )
 
@@ -41,6 +42,7 @@ bayes_sim(
   fixed_k = NULL,
   role_offset = 0L,
   leadersPost = NULL,
+  corePost = NULL,
   ...
 )
 }
@@ -51,8 +53,8 @@ bayes_sim(
 
 \item{ownerPost}{A post-counterfactual ownership vector or matrix, an
 \code{antitrust::Counterfactual}, or a named list of either, one per
-simulation unit. It may be omitted for a Stackelberg cost-only
-counterfactual supplied through \code{mcDelta}.}
+simulation unit. It may be omitted for native exact hard-role cost-only
+counterfactuals supplied through \code{mcDelta}.}
 
 \item{n_draws}{Number of posterior draws to simulate. By default, uses at
 most 200 draws.}
@@ -83,15 +85,19 @@ the specified-fit year is \code{"1"}.}
 \item{mc.cores}{Number of parallel fork workers. The default is the number
 of detected cores capped at four; Windows always uses one.}
 
-\item{role_mapping}{Stackelberg role realization: posterior mixture draw,
-posterior MAP, or cutoff threshold. The default is \code{"mixture"}.}
+\item{role_mapping}{Exact role realization: posterior mixture draw,
+posterior MAP, or legacy cutoff threshold. The default is
+\code{"mixture"}; threshold is unavailable for ordered-k fringe.}
 
-\item{fixed_k}{Optional explicit positive leader count (scalar or named by
-simulation unit), used by native Stackelberg reconstruction.}
+\item{fixed_k}{Optional explicit leader or strategic-core count (scalar or
+named by simulation unit). Fringe permits zero.}
 
 \item{role_offset}{Integer adjacent-partition sensitivity offset.}
 
-\item{leadersPost}{Optional exact post-counterfactual firm-role override.}
+\item{leadersPost}{Optional Stackelberg post-counterfactual leader override.}
+
+\item{corePost}{Optional exact-fringe post-counterfactual strategic-core
+override. An empty vector gives a wholly MonCom post state.}
 
 \item{...}{Additional arguments passed to \code{antitrust::simulate()}.}
 }
@@ -102,9 +108,9 @@ A \code{BayesSim} containing one \pkg{antitrust} result (or
 \description{
 Applies an \pkg{antitrust} counterfactual to draws stored in a
 \code{BayesFit}. Legacy structures delegate to \code{antitrust::simulate()}.
-New Stackelberg structures reconstruct the native coordination model and
-route supported one-step ownership, cost, leader, and exit changes through
-\code{coordination::stackelberg_simulate()}.
+Exact Stackelberg and ordered-k core-fringe structures reconstruct native
+coordination models and route supported one-step ownership, cost, role, and
+exit changes through the corresponding deterministic simulator.
 }
 \details{
 \code{bayes_sim()} is retained as a convenience wrapper around this S4

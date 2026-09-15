@@ -199,17 +199,22 @@
 }
 
 .stack_bridge_select_k <- function(component, params, sizes, role_mapping,
-                                   fixed_k, role_offset, support_max = NULL) {
+                                   fixed_k, role_offset, support_min = NULL,
+                                   support_max = NULL) {
+  if (is.null(support_min)) support_min <- min(component$k)
   if (is.null(support_max)) support_max <- max(component$k)
-  if (length(support_max) != 1L || !is.finite(support_max) ||
-      support_max != as.integer(support_max) || support_max < 1L ||
+  if (length(support_min) != 1L || !is.finite(support_min) ||
+      support_min != as.integer(support_min) || support_min < 0L ||
+      length(support_max) != 1L || !is.finite(support_max) ||
+      support_max != as.integer(support_max) || support_max < support_min ||
       support_max > length(sizes)) {
-    stop("The supplied Stackelberg partition support is malformed.")
+    stop("The supplied ordered-k partition support is malformed.")
   }
   if (!is.null(fixed_k)) {
     if (length(fixed_k) != 1L || !is.finite(fixed_k) || fixed_k != as.integer(fixed_k) ||
-        fixed_k < 1L || fixed_k > support_max) {
-      stop("'fixed_k' must be an integer in the supported range 1:", support_max, ".")
+        !as.integer(fixed_k) %in% component$k) {
+      stop("'fixed_k' must be an integer in the supplied support {",
+           paste(component$k, collapse = ", "), "}.")
     }
     return(as.integer(fixed_k))
   }
@@ -226,14 +231,15 @@
     sample(component$k, 1L, prob = component$probability)
   }
   k <- base_k + as.integer(role_offset)
-  if (k < 1L || k > support_max) {
-    stop("'role_offset' selects a leader count outside the supported range 1:",
-         support_max, ".")
+  if (!k %in% component$k) {
+    stop("'role_offset' selects a role count outside the supplied support {",
+         paste(component$k, collapse = ", "), "}.")
   }
   ## A sensitivity offset changes the rank boundary.  Reject only a boundary
   ## that actually splits an observed tie; proximity of the continuous
   ## cutoff to a firm size is not itself evidence of an unsupported split.
-  if (role_offset != 0L && !is.null(component$cutoff) && k < length(sizes) &&
+  if (role_offset != 0L && !is.null(component$cutoff) && k > 0L &&
+      k < length(sizes) &&
       isTRUE(sizes[[k]] == sizes[[k + 1L]])) {
     stop("'role_offset' cannot split a tied firm-size boundary.")
   }
@@ -367,6 +373,165 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     normalization = .stack_whole_or(fit@metadata$prior_normalization, list(
       mode = "native_stan_normalized", model_spec_version = 8L,
       partition_support = "1:N"
+    )),
+    demand_anchoring = list(
+      method = "observed_conditional_shares",
+      description = paste(
+        "Mean utilities/values are reconstructed from the observed",
+        "conditional product shares for each posterior demand draw."
+      ),
+      conditional_share_residual = NA_real_
+    ),
+    residuals = residual_vector,
+    normalized_residuals = normalized_diag
+  )
+  out
+}
+
+#' Reconstruct a native coordination exact core-fringe model
+#'
+#' Reconstructs one hard ordered-k realization from a Bayesian fringe fit.
+#' The top k firms in the stored whole-market ranking form the simultaneous
+#' strategic core; all remaining active firms are monopolistically competitive.
+#'
+#' @param fit A \code{BayesFit} with \code{structure = "fringe"} and
+#'   \code{partition_prior = "ordered_k"}.
+#' @param draw Posterior draw index.
+#' @param market,year Optional selectors; exactly one market-year is required.
+#' @param role_mapping One of \code{"mixture"} or \code{"map"}.
+#' @param fixed_k Optional explicit strategic-core count, including zero.
+#' @param role_offset Integer adjacent-partition sensitivity offset.
+#' @param insideSize Bayesian inside quantity convention.
+#' @param priceOutside Outside-good price override.
+#' @param labels Product labels override.
+#' @param ... Passed to \code{coordination::core_fringe()}.
+#' @return A native \code{coordination::CoreFringeLogit} or
+#'   \code{coordination::CoreFringeCES} object.
+#' @export
+bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
+                                    role_mapping = c("mixture", "map"),
+                                    fixed_k = NULL, role_offset = 0L,
+                                    insideSize = NULL, priceOutside = NULL,
+                                    labels = NULL, ...) {
+  if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.")
+  structure_name <- .stack_bridge_or(
+    fit@metadata$structure,
+    if (isTRUE(fit@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous"
+  )
+  partition_prior <- .stack_bridge_or(fit@metadata$partition_prior, "cutoff")
+  if (!identical(structure_name, "fringe") ||
+      !identical(partition_prior, "ordered_k")) {
+    stop("fit must be an exact ordered-k fringe model.", call. = FALSE)
+  }
+  role_mapping <- match.arg(role_mapping)
+  if (!requireNamespace("coordination", quietly = TRUE) ||
+      utils::packageVersion("coordination") < "0.0.0.9003") {
+    stop("native Bayesian reconstruction requires coordination >= 0.0.0.9003.")
+  }
+  unit <- .stack_bridge_units(fit, market, year)
+  draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else {
+    rstan::extract(fit@stanfit)
+  }
+  .core_fringe_bridge_model_draw(
+    fit = fit, unit = unit, draw = as.integer(draw),
+    role_mapping = role_mapping, fixed_k = fixed_k, role_offset = role_offset,
+    insideSize = insideSize, priceOutside = priceOutside, labels = labels,
+    draws = draws, dots = list(...)
+  )
+}
+
+.core_fringe_bridge_model_draw <- function(fit, unit, draw,
+                                           role_mapping, fixed_k, role_offset,
+                                           insideSize, priceOutside, labels,
+                                           draws = NULL, dots = list()) {
+  structure_name <- .stack_bridge_or(fit@metadata$structure, "simultaneous")
+  partition_prior <- .stack_bridge_or(fit@metadata$partition_prior, "cutoff")
+  if (!identical(structure_name, "fringe") ||
+      !identical(partition_prior, "ordered_k")) {
+    stop("fit must be an exact ordered-k fringe model.", call. = FALSE)
+  }
+  params <- .stack_bridge_params(fit, unit, as.integer(draw), draws = draws)
+  df <- unit$data
+  demand <- fit@demand_model
+  sizes <- .stack_bridge_ranked_sizes(fit, unit, df, demand)
+  comp <- .stack_bridge_component_prob(
+    fit, unit, params, sizes, as.integer(draw), draws = draws
+  )
+  k <- .stack_bridge_select_k(
+    comp, params, sizes, role_mapping, fixed_k, role_offset,
+    support_min = min(comp$k), support_max = max(comp$k)
+  )
+  ranked <- names(sizes)
+  core_ids <- if (k > 0L) ranked[seq_len(k)] else character()
+  active_core <- intersect(core_ids, unique(as.character(df$group)))
+  p <- as.numeric(df$prices)
+  q <- as.numeric(df$quantities)
+  t <- q / sum(q)
+  p0 <- if (is.null(priceOutside)) {
+    if ("outside_price" %in% names(df)) unique(df$outside_price)[1L] else 1
+  } else as.numeric(priceOutside)
+  if (length(p0) != 1L || !is.finite(p0) || p0 <= 0) {
+    stop("priceOutside must be positive and finite.")
+  }
+  inside <- if (is.null(insideSize)) {
+    if (methods::is(fit, "BayesSpecifiedFit")) fit@market$insideSize else 1
+  } else as.numeric(insideSize)
+  if (length(inside) != 1L || !is.finite(inside) || inside <= 0) {
+    stop("insideSize must be positive and finite.")
+  }
+  if (is.null(labels)) {
+    labels <- if (methods::is(fit, "BayesSpecifiedFit")) {
+      fit@market$labels
+    } else {
+      paste0("product_", seq_along(p))
+    }
+  }
+  if (length(labels) != length(p)) stop("labels must have one value per product.")
+  conduct <- if (params$supply_model == 1L) "bertrand" else "cournot"
+  if (identical(demand, "ces")) {
+    avgp <- sum(p * t)
+    R0 <- params$s0 * p0 / (params$s0 * p0 + (1 - params$s0) * avgp)
+    shares <- p * t * (1 - R0) / avgp
+    args <- list(
+      prices = p, shares = shares, margins = as.numeric(df$margins),
+      ownerPre = as.character(df$group), corePre = active_core,
+      demand = "ces", conduct = conduct, output = TRUE,
+      insideSize = inside * avgp, normIndex = NA, priceOutside = p0,
+      gamma = params$gamma, labels = labels
+    )
+  } else {
+    shares <- t * (1 - params$s0)
+    args <- list(
+      prices = p, shares = shares, margins = as.numeric(df$margins),
+      ownerPre = as.character(df$group), corePre = active_core,
+      demand = "logit", conduct = conduct,
+      output = identical(fit@market_side, "output"), insideSize = inside,
+      normIndex = NA, priceOutside = p0, alpha = params$alpha,
+      labels = labels
+    )
+  }
+  if (length(dots)) {
+    dup <- intersect(names(dots), names(args))
+    if (length(dup)) {
+      stop("argument(s) supplied more than once: ", paste(dup, collapse = ", "))
+    }
+    args <- c(args, dots)
+  }
+  out <- do.call(coordination::core_fringe, args)
+  residual_diag <- out@diagnostics$residualsPre
+  residual_vector <- if (is.list(residual_diag)) residual_diag$all else residual_diag
+  normalized_diag <- if (is.list(residual_diag)) residual_diag$normalizedAll else {
+    residual_vector / pmax(abs(p), 1e-12)
+  }
+  out@diagnostics$bayes_reconstruction <- list(
+    draw = as.integer(draw), market = unit$market, year = unit$year,
+    structure = structure_name, role_mapping = role_mapping, selected_k = k,
+    strategic_core = active_core, market_core_ids = core_ids,
+    component_k = comp$k, component_probability = comp$probability,
+    partition_prior = params$partition_prior, k_scope = params$k_scope,
+    normalization = .stack_whole_or(fit@metadata$prior_normalization, list(
+      mode = "native_stan_normalized", model_spec_version = 8L,
+      partition_support = "0:N"
     )),
     demand_anchoring = list(
       method = "observed_conditional_shares",

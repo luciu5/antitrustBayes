@@ -174,13 +174,13 @@ test_that("role offsets reject selected tied boundaries only", {
     .stack_bridge_select_k(direct_component,
                            list(partition_prior = "ordered_k"),
                            c(.4, .3, .2, .1), "map", 4L, 0L),
-    "supported range 1:3"
+    "supplied support"
   )
   expect_error(
     .stack_bridge_select_k(direct_component,
                            list(partition_prior = "ordered_k"),
                            c(.4, .3, .2, .1), "map", NULL, 2L),
-    "supported range 1:3"
+    "supplied support"
   )
 })
 
@@ -301,7 +301,7 @@ test_that("shared-market cache uses full component support for selected years", 
   expect_error(
     .stack_k_cache(fit, draws, setup, 1L, "map", fixed_k = 4L,
                    role_offset = 0L),
-    "shared market support 1:3"
+    "shared market support"
   )
 })
 
@@ -358,4 +358,92 @@ test_that("exact fringe cutoff summary reports ordered strategic-core states", {
     c(.2, .3, .5)
   )
   expect_true(is.na(got$cutoff_mean))
+})
+
+test_that("exact fringe reconstructs and simulates through coordination", {
+  skip_if_not_installed("coordination", minimum_version = "0.0.0.9003")
+  market <- bayes_market(
+    prices = c(10, 11, 12), quantities = c(10, 8, 6),
+    margins = c(.3, .28, .25), group = c("a", "b", "c"),
+    outside_price = 1, market_side = "output", insideSize = 100,
+    labels = c("p1", "p2", "p3")
+  )
+  fit <- bayes_specify(
+    bayes_params(
+      alpha = 1.4, s0 = .25, supply_model = 1L, structure = "fringe",
+      k_support = 0:3, k_prior = c(.1, .2, .3, .4)
+    ),
+    market
+  )
+  none <- bayes_core_fringe_model(fit, fixed_k = 0L, role_mapping = "map")
+  expect_s4_class(none, "CoreFringeLogit")
+  expect_length(none@corePre, 0L)
+  expect_equal(unname(none@pricePre), market$prices, tolerance = 1e-7)
+
+  two <- bayes_core_fringe_model(fit, fixed_k = 2L, role_mapping = "map")
+  expect_identical(two@corePre, c("a", "b"))
+  expect_equal(two@diagnostics$bayes_reconstruction$selected_k, 2L)
+
+  sparse_support <- bayes_specify(
+    bayes_params(
+      alpha = 1.4, s0 = .25, supply_model = 1L, structure = "fringe",
+      k_support = c(0L, 2L), k_prior = c(.4, .6)
+    ),
+    market
+  )
+  expect_error(
+    bayes_core_fringe_model(sparse_support, fixed_k = 1L),
+    "supplied support"
+  )
+
+  sim <- bayes_sim(
+    fit, n_draws = 1L, fixed_k = 1L, mcDelta = c(.02, 0, 0),
+    mc.cores = 1L
+  )
+  expect_equal(sim@n_valid[[1L]], 1L)
+  expect_identical(sim@metadata$simulation_route,
+                   "coordination::core_fringe_simulate")
+  expect_identical(sim@metadata$k_cache[[1L]][[1L]], 1L)
+  expect_true(all(is.finite(sim@price_post[[1L]][1, ])))
+
+  fit_ces <- bayes_specify(
+    bayes_params(
+      gamma = 2.4, s0 = .25, supply_model = 1L, structure = "fringe",
+      k_support = 0:3, k_prior = rep(.25, 4)
+    ),
+    market
+  )
+  ces <- bayes_core_fringe_model(fit_ces, fixed_k = 2L)
+  expect_s4_class(ces, "CoreFringeCES")
+  expect_identical(ces@corePre, c("a", "b"))
+  expect_equal(unname(ces@pricePre), market$prices, tolerance = 1e-7)
+})
+
+test_that("exact fringe maps merged core ownership and permits k zero", {
+  skip_if_not_installed("coordination", minimum_version = "0.0.0.9003")
+  market <- bayes_market(
+    prices = c(10, 11, 12), quantities = c(12, 8, 5),
+    margins = c(.3, .28, .25), group = c("a", "b", "c"),
+    outside_price = 1, market_side = "output", insideSize = 100,
+    labels = c("p1", "p2", "p3")
+  )
+  fit <- bayes_specify(
+    bayes_params(
+      alpha = 1.3, s0 = .2, supply_model = 3L, structure = "fringe",
+      k_support = 0:3, k_prior = rep(.25, 4)
+    ),
+    market
+  )
+  merged <- bayes_sim(
+    fit, ownerPost = c("ab", "ab", "c"), n_draws = 1L,
+    fixed_k = 1L, mc.cores = 1L
+  )
+  expect_identical(merged@sims[[1L]][[1L]]@corePost, "ab")
+
+  all_moncom <- bayes_sim(
+    fit, ownerPost = c("ab", "ab", "c"), n_draws = 1L,
+    fixed_k = 0L, corePost = character(), mc.cores = 1L
+  )
+  expect_length(all_moncom@sims[[1L]][[1L]]@corePost, 0L)
+  expect_identical(all_moncom@metadata$k_cache[[1L]][[1L]], 0L)
 })
