@@ -35,13 +35,17 @@
 #'   \code{\link{bayes_sim}}).
 #' @param structure Supply structure: \code{"simultaneous"},
 #'   \code{"fringe"}, or \code{"stackelberg"}.
-#' @param partition_prior For Stackelberg, \code{"cutoff"} selects the
-#'   conditioned common-boundary lottery; \code{"ordered_k"} selects a
-#'   prespecified positive-count prior.
-#' @param k_prior Ordered-count probabilities supplied in a supported
-#'   package format; \code{NULL} gives a uniform prior over positive support.
-#' @param k_scope Whether direct ordered-k is common across a
-#'   \code{"market"} or specific to each \code{"period"}.
+#' @param partition_prior For explicit fringe, \code{"cutoff"} retains the
+#'   smooth legacy robustness mode; \code{"ordered_k"} selects the exact
+#'   finite support. Explicit Stackelberg uses \code{"ordered_k"}.
+#' @param k_support Ordered integer counts. Fringe supports may include zero;
+#'   Stackelberg supports must be positive. The vector must be feasible in
+#'   every selected market.
+#' @param k_prior Positional probabilities corresponding to \code{k_support};
+#'   \code{NULL} gives a uniform prior. Values must be finite, non-negative,
+#'   and sum to one.
+#' @param k_scope Retained for legacy cutoff preparation; exact ordered-k is
+#'   always common across the complete market panel.
 #'
 #' @return A list of class \code{bayes_params} with one element per draw
 #'   (length 1 for a point estimate).
@@ -50,7 +54,8 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
                           bargaining_power = 0, cutoff_share = 0,
                           cutoff_scale = 0.2, use_cutoff = FALSE,
                           supply_model, structure = NULL,
-                          partition_prior = "cutoff", k_prior = NULL,
+                          partition_prior = "cutoff", k_support = NULL,
+                          k_prior = NULL,
                           k_scope = "market") {
   if (is.null(alpha) == is.null(gamma)) {
     stop("Supply exactly one of 'alpha' (logit) or 'gamma' (ces).")
@@ -75,20 +80,53 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
     structure = structure, use_cutoff = use_cutoff,
     use_cutoff_supplied = !missing(use_cutoff)
   )
+  k_scope <- match.arg(k_scope, c("market", "period"))
   if (resolved_structure$name == "stackelberg" && !(supply_model %in% c(1L, 3L))) {
     stop("Bayesian Stackelberg supports only Bertrand (1) and Cournot (3) supply models.")
   }
-  partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
-  k_scope <- match.arg(k_scope, c("market", "period"))
-  if (resolved_structure$name != "stackelberg" && partition_prior != "cutoff") {
-    stop("partition_prior = 'ordered_k' is supported only for structure = 'stackelberg'.")
-  }
   cutoff_scale_supplied <- !missing(cutoff_scale) && !is.null(cutoff_scale)
-  if (identical(resolved_structure$name, "stackelberg") &&
-      identical(partition_prior, "ordered_k") && cutoff_scale_supplied) {
-    stop("'cutoff_scale' is not defined for partition_prior = 'ordered_k'.")
+  partition_prior_supplied <- !missing(partition_prior)
+  exact_structure <- resolved_structure$supplied &&
+    resolved_structure$name %in% c("fringe", "stackelberg")
+  if (exact_structure) {
+    if (!partition_prior_supplied) partition_prior <- "ordered_k"
+    partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
+    if (identical(resolved_structure$name, "stackelberg") &&
+        partition_prior != "ordered_k") {
+      stop("Explicit Stackelberg requires partition_prior = 'ordered_k'.")
+    }
+    if (identical(partition_prior, "cutoff") &&
+        (!is.null(k_support) || !is.null(k_prior))) {
+      stop("'k_support' and 'k_prior' require partition_prior = 'ordered_k'.")
+    }
+    if (identical(partition_prior, "ordered_k")) {
+      if (is.null(k_support)) {
+        stop("Explicit ordered-k structures require 'k_support'.")
+      }
+      if (cutoff_scale_supplied) {
+        stop("'cutoff_scale' is not defined for exact ordered-k structures.")
+      }
+      if (!identical(k_scope, "market")) {
+        stop("Exact ordered-k uses one partition per market; 'k_scope' must be 'market'.")
+      }
+      if (is.list(k_prior)) {
+        stop("Exact ordered-k requires a positional numeric 'k_prior' vector.")
+      }
+    }
+  } else {
+    ## Calls without an explicit structure retain the historical simultaneous
+    ## or smooth-fringe interpretation, including ignoring k arguments.
+    partition_prior <- "cutoff"
+    k_scope <- "market"
+    k_support <- NULL
+    k_prior <- NULL
   }
-
+  .stack_validate_public_k(k_support, k_prior, resolved_structure$name)
+  if (exact_structure && resolved_structure$name == "fringe" &&
+      identical(partition_prior, "ordered_k") &&
+      !(supply_model %in% c(1L, 3L))) {
+    stop("Exact ordered-k fringe supports only Bertrand and Cournot supply models.")
+  }
   n <- length(slope)
   recycle <- function(x, name) {
     if (length(x) == 1L) return(rep(x, n))
@@ -129,6 +167,7 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
     structure = resolved_structure$name,
     structure_code = as.integer(resolved_structure$code),
     partition_prior = partition_prior,
+    k_support = k_support,
     k_prior = k_prior,
     k_scope = k_scope
   )
@@ -142,7 +181,8 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
                                bargaining_power, cutoff_share,
                                cutoff_scale, use_cutoff, supply_model,
                                structure = NULL, structure_code = NULL,
-                               partition_prior = "cutoff", k_prior = NULL,
+                               partition_prior = "cutoff", k_support = NULL,
+                               k_prior = NULL,
                                k_scope = "market") {
   is_ces <- !is.null(gamma)
   resolved_structure <- .stack_resolve_structure(
@@ -162,6 +202,7 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
       structure = resolved_structure$name,
       structure_code = as.integer(if (is.null(structure_code)) resolved_structure$code else structure_code),
       partition_prior = partition_prior,
+      k_support = k_support,
       k_prior = k_prior,
       k_scope = k_scope,
       demand_model = if (is_ces) "ces" else "logit",
@@ -270,6 +311,8 @@ bayes_specify <- function(params, market) {
 
   cl <- match.call()
   spec <- .bayes_model_spec(params)
+  specified_metadata <- .stack_specified_metadata(params, market)
+  resolved_partition <- specified_metadata$partition
   data <- data.frame(
     prices = market$prices,
     quantities = market$quantities,
@@ -299,14 +342,28 @@ bayes_specify <- function(params, market) {
     structure_code = params$structure_code %||% if (isTRUE(params$use_cutoff)) 1L else 0L,
     cutoff_scale = params$cutoff_scale,
     partition_prior = params$partition_prior %||% "cutoff",
+    k_support = .stack_whole_or(params$k_support, NULL),
     k_prior = .stack_whole_or(params$k_prior, NULL),
     k_scope = params$k_scope %||% "market",
     prior_normalization = list(
       mode = "supplied_draws",
       model_spec_version = 8L,
-      partition_support = if (identical(params$structure, "stackelberg")) "1:N" else NULL,
+      partition_support = if (is.null(resolved_partition)) NULL else
+        resolved_partition$partition_supports,
+      k_support = .stack_whole_or(params$k_support, NULL),
+      k_prior = .stack_whole_or(params$k_prior, NULL),
+      k_support_resolved = if (is.null(resolved_partition)) NULL else
+        resolved_partition$partition_supports,
+      k_prior_resolved = if (is.null(resolved_partition)) NULL else
+        resolved_partition$k_prior_by_unit,
+      firm_market_ranking = specified_metadata$ranking,
       source = "bayes_specify"
-    )
+    ),
+    k_support_resolved = if (is.null(resolved_partition)) NULL else
+      resolved_partition$partition_supports,
+    k_prior_resolved = if (is.null(resolved_partition)) NULL else
+      resolved_partition$k_prior_by_unit,
+    firm_market_ranking = specified_metadata$ranking
   )
 
   methods::new(

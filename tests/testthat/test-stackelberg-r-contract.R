@@ -9,9 +9,8 @@ test_that("Stackelberg preparation preserves unique firm-MY and partition maps",
   d <- prepare_stan_data(
     prices, quantities, margins, market, year, group,
     supply_model = 1L, structure = "stackelberg",
-    partition_prior = "ordered_k", k_prior = list(
-      m1 = c(`1` = .6, `2` = .4), m2 = c(`1` = .25, `2` = .75)
-    ), k_scope = "market", use_rho = FALSE, use_hmt = FALSE
+    k_support = c(1L, 2L), k_prior = c(.6, .4),
+    use_rho = FALSE, use_hmt = FALSE
   )
   expect_equal(d$N_firm_mky, 8L)
   expect_equal(d$mky_to_partition_unit, array(c(1L, 1L, 2L, 2L)))
@@ -36,30 +35,33 @@ test_that("Stackelberg preparation preserves unique firm-MY and partition maps",
   expect_true(all(vapply(d[new_fields], function(x) length(dim(x)) == 1L,
                          logical(1))))
 
-  period <- prepare_stan_data(
-    prices, quantities, margins, market, year, group,
-    supply_model = 1L, structure = "stackelberg",
-    partition_prior = "ordered_k", k_prior = c(`1` = .6, `2` = .4),
-    k_scope = "period", use_rho = FALSE, use_hmt = FALSE
+  expect_error(
+    prepare_stan_data(
+      prices, quantities, margins, market, year, group,
+      supply_model = 1L, structure = "stackelberg",
+      k_support = c(1L, 2L), k_prior = c(.6, .4),
+      k_scope = "period", use_rho = FALSE, use_hmt = FALSE
+    ),
+    "one partition per market"
   )
-  expect_equal(period$N_partition_unit, 4L)
-  expect_equal(period$N_partition_component, 8L)
 
-  cutoff <- prepare_stan_data(
-    prices, quantities, margins, market, year, group,
-    supply_model = 1L, structure = "stackelberg", cutoff_scale = .037,
-    use_rho = FALSE, use_hmt = FALSE
+  expect_error(
+    prepare_stan_data(
+      prices, quantities, margins, market, year, group,
+      supply_model = 1L, structure = "stackelberg",
+      k_support = c(1L, 2L), cutoff_scale = .037,
+      use_rho = FALSE, use_hmt = FALSE
+    ),
+    "not defined"
   )
-  expect_equal(cutoff$N_partition_unit, 4L)
-  expect_equal(cutoff$cutoff_scale, .037)
-  expect_equal(attr(cutoff, "model_spec_version"), 8L)
 })
 
 test_that("fringe cutoff scales remain prespecified and are carried into data", {
   d <- prepare_stan_data(
     prices = c(1.5, 1.8), quantities = c(10, 8), margins = c(.3, .25),
     market = c("m", "m"), year = c("y", "y"), group = c("a", "b"),
-    supply_model = 1L, structure = "fringe", cutoff_scale = .37,
+    supply_model = 1L, structure = "fringe", partition_prior = "cutoff",
+    cutoff_scale = .37,
     use_rho = FALSE, use_hmt = FALSE
   )
   expect_equal(d$cutoff_scale, .37)
@@ -71,7 +73,8 @@ test_that("singleton CES common vectors retain one-dimensional Stan shapes", {
   d <- prepare_ces_stan_data(
     prices = 2, quantities = 1, margins = .3,
     market = "m", year = "y", group = factor("z", levels = c("z", "a")),
-    supply_model = 1L, structure = "stackelberg", market_side = "output",
+    supply_model = 1L, structure = "stackelberg", k_support = 1L,
+    market_side = "output",
     use_cutoff = FALSE, use_rho = FALSE, use_hmt = FALSE, priors = list()
   )
   common_fields <- c("shareIn", "revShare", "firm_revShare", "marginNormInv",
@@ -91,24 +94,26 @@ test_that("Stack summaries distinguish cutoff mixtures and direct ordered-k", {
   cutoff_fit <- bayes_specify(
     bayes_params(alpha = c(.7, .7), s0 = .2,
                  cutoff_share = c(.1, .5), cutoff_scale = .03,
-                 supply_model = 1L, structure = "stackelberg"), market
+                 supply_model = 1L, structure = "fringe",
+                 partition_prior = "cutoff"), market
   )
   cutoff <- bayes_cutoff_summary(cutoff_fit)$by_market_year
   expect_equal(length(cutoff$firm_ids[[1L]]), 3L)
-  expect_true(length(cutoff$firm_leader_probability[[1L]]) == 3L)
+  expect_null(cutoff$firm_leader_probability[[1L]])
+  expect_true(length(cutoff$firm_strategic_probability[[1L]]) == 3L)
   expect_equal(cutoff$firm_core_probability[[1L]],
-               cutoff$firm_leader_probability[[1L]])
+               cutoff$firm_strategic_probability[[1L]])
   expect_true(cutoff$raw_k_pmf[[1L]][["0"]] > 0)
   expect_true(cutoff$hard_k_pmf[[1L]][["3"]] > 0)
-  expect_equal(cutoff$core_share_conditional[[1L]], 1, tolerance = 1e-12)
+  expect_true(cutoff$core_share_conditional[[1L]] < 1)
   expect_identical(cutoff_fit@metadata$prior_normalization$mode,
                    "supplied_draws")
   expect_false("external_offset" %in% names(cutoff_fit@metadata$prior_normalization))
 
   ordered_fit <- bayes_specify(
     bayes_params(alpha = .7, s0 = .2, supply_model = 1L,
-                 structure = "stackelberg", partition_prior = "ordered_k",
-                 k_prior = c(`1` = .2, `2` = .3, `3` = .5)), market
+                 structure = "stackelberg", k_support = 1:3,
+                 k_prior = c(.2, .3, .5)), market
   )
   ordered <- bayes_cutoff_summary(ordered_fit)
   expect_null(ordered$cutoff_posterior)
@@ -127,7 +132,7 @@ test_that("fringe smooth core summaries retain cutoff and outside-share dependen
   fit <- bayes_specify(
     bayes_params(alpha = c(.7, .7), s0 = c(.1, .8), cutoff_share = c(.2, .9),
                  cutoff_scale = c(.1, .2), supply_model = 1L,
-                 structure = "fringe"), market
+                 structure = "fringe", partition_prior = "cutoff"), market
   )
   got <- bayes_cutoff_summary(fit)$by_market_year
   expect_null(got$firm_leader_probability[[1L]])
@@ -188,7 +193,8 @@ test_that("bridge and canonical preparation agree on tied firm ranks", {
   d <- prepare_stan_data(
     prices, quantities, c(.3, .3, .3, .3),
     market = c("m", "m", "m", "m"), year = rep("y", 4), group = g,
-    supply_model = 1L, structure = "stackelberg", use_rho = FALSE,
+    supply_model = 1L, structure = "stackelberg", k_support = 1:2,
+    k_prior = c(.5, .5), use_rho = FALSE,
     use_hmt = FALSE
   )
   expected <- .stack_bridge_sizes(data.frame(
@@ -272,9 +278,9 @@ test_that("specified Stackelberg simulation uses the native one-step route", {
     labels = paste0("p", 1:4)
   )
   fit <- bayes_specify(
-    bayes_params(alpha = c(.7, .8), s0 = .2, cutoff_share = .3,
-                 cutoff_scale = .03, supply_model = 1L,
-                 structure = "stackelberg"), market
+    bayes_params(alpha = c(.7, .8), s0 = .2, supply_model = 1L,
+                 structure = "stackelberg", k_support = 1:3,
+                 k_prior = rep(1 / 3, 3)), market
   )
   native <- bayes_stackelberg_model(fit, draw = 1L, fixed_k = 1L,
                                     role_mapping = "map")

@@ -97,11 +97,17 @@
 #'   \code{use_cutoff} flag selects simultaneous or fringe.
 #' @param cutoff_scale Prespecified positive transition scale.  Legacy fringe
 #'   defaults to \code{0.2}; Stackelberg defaults to \code{0.01}.
-#' @param partition_prior Stackelberg partition prior, \code{"cutoff"} or
+#' @param partition_prior Explicit fringe may use \code{"cutoff"} for the
+#'   smooth legacy robustness mode; exact fringe and Stackelberg use
 #'   \code{"ordered_k"}.
-#' @param k_prior Optional named ordered-k prior, or named list by market.
-#' @param k_scope Whether one ordered partition is shared by all periods in a
-#'   market (\code{"market"}, default) or independently selected per period.
+#' @param k_support Explicit vector of unique integer leader counts. Fringe
+#'   supports may include zero; Stackelberg supports must be positive and
+#'   feasible in every selected market.
+#' @param k_prior Positional probabilities corresponding to \code{k_support}.
+#'   Values are finite, non-negative, and must sum to one. \code{NULL} gives
+#'   a uniform prior.
+#' @param k_scope Legacy cutoff scope selector. Exact ordered-k uses one
+#'   partition and one firm ranking for the complete market panel.
 #' @param prior_manifest Prespecified proper prior manifest: \code{"baseline"},
 #'   \code{"tight"}, or \code{"diffuse"}. User-supplied \code{priors}
 #'   override individual entries in the selected manifest.
@@ -256,6 +262,7 @@ bayes_est <- function(prices, quantities, margins,
                       structure = NULL,
                       cutoff_scale = NULL,
                       partition_prior = "cutoff",
+                      k_support = NULL,
                       k_prior = NULL,
                       k_scope = "market",
                       ...) {
@@ -271,7 +278,6 @@ bayes_est <- function(prices, quantities, margins,
   if (identical(structure, "simultaneous") && cutoff_scale_supplied) {
     stop("'cutoff_scale' is only defined for fringe and Stackelberg structures.")
   }
-  cutoff_scale <- .stack_resolve_scale(structure, cutoff_scale)
   demand_model <- match.arg(demand_model)
   prior_manifest <- match.arg(prior_manifest)
   likelihood <- match.arg(likelihood)
@@ -294,14 +300,48 @@ bayes_est <- function(prices, quantities, margins,
   if (structure == "stackelberg" && !(supply_model %in% c("bertrand", "cournot"))) {
     stop("Bayesian Stackelberg supports only Bertrand and Cournot supply models.")
   }
-  partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
-  k_scope <- match.arg(k_scope, c("market", "period"))
-  if (identical(structure, "stackelberg") && identical(partition_prior, "ordered_k") &&
-      cutoff_scale_supplied) {
-    stop("'cutoff_scale' is not defined for partition_prior = 'ordered_k'.")
+  partition_prior_supplied <- !missing(partition_prior)
+  exact_structure <- resolved_structure$supplied &&
+    structure %in% c("fringe", "stackelberg")
+  if (exact_structure) {
+    if (!partition_prior_supplied) partition_prior <- "ordered_k"
+    partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
+    if (structure == "stackelberg" && partition_prior != "ordered_k") {
+      stop("Explicit Stackelberg requires partition_prior = 'ordered_k'.")
+    }
+    if (partition_prior == "ordered_k") {
+      if (is.null(k_support)) {
+        stop("Explicit ordered-k structures require 'k_support'.")
+      }
+      if (cutoff_scale_supplied) {
+        stop("'cutoff_scale' is not defined for exact ordered-k structures.")
+      }
+      if (!isTRUE(k_scope == "market")) {
+        stop("Exact ordered-k uses one partition per market; 'k_scope' must be 'market'.")
+      }
+      if (is.list(k_prior)) {
+        stop("Exact ordered-k requires a positional numeric 'k_prior' vector.")
+      }
+    } else if (!is.null(k_support) || !is.null(k_prior)) {
+      stop("'k_support' and 'k_prior' require partition_prior = 'ordered_k'.")
+    }
+  } else {
+    ## No explicit structure means the historical simultaneous or smooth
+    ## fringe path. Its k arguments are deliberately ignored.
+    partition_prior <- "cutoff"
+    k_support <- NULL
+    k_prior <- NULL
   }
-  if (structure != "stackelberg" && partition_prior != "cutoff") {
-    stop("partition_prior = 'ordered_k' is supported only for structure = 'stackelberg'.")
+  k_scope <- match.arg(k_scope, c("market", "period"))
+  .stack_validate_public_k(k_support, k_prior, structure)
+  cutoff_scale <- if (exact_structure && partition_prior == "ordered_k") {
+    NULL
+  } else {
+    .stack_resolve_scale(structure, cutoff_scale)
+  }
+  if (exact_structure && structure == "fringe" && partition_prior == "ordered_k" &&
+      !(supply_model %in% c("bertrand", "cournot"))) {
+    stop("Exact ordered-k fringe supports only Bertrand and Cournot supply models.")
   }
   supply_int <- switch(supply_model,
     bertrand      = 1L,
@@ -462,10 +502,13 @@ bayes_est <- function(prices, quantities, margins,
                          (identical(structure, "stackelberg") &&
                           identical(partition_prior, "ordered_k"))) NULL else cutoff_scale,
       partition_prior = partition_prior,
+      k_support = k_support,
       k_prior = k_prior,
       k_scope = k_scope
     )
-    stan_mod <- stanmodels[[if (structure == "stackelberg") {
+    stan_mod <- stanmodels[[if (structure == "stackelberg" ||
+                                (exact_structure && structure == "fringe" &&
+                                 partition_prior == "ordered_k")) {
       "logit_stackelberg"
     } else "logit_supply"]]
     price_sd_val <- stan_data$price_sd
@@ -502,10 +545,13 @@ bayes_est <- function(prices, quantities, margins,
                          (identical(structure, "stackelberg") &&
                           identical(partition_prior, "ordered_k"))) NULL else cutoff_scale,
       partition_prior = partition_prior,
+      k_support = k_support,
       k_prior = k_prior,
       k_scope = k_scope
     )
-    stan_mod <- stanmodels[[if (structure == "stackelberg") {
+    stan_mod <- stanmodels[[if (structure == "stackelberg" ||
+                                (exact_structure && structure == "fringe" &&
+                                 partition_prior == "ordered_k")) {
       "ces_stackelberg"
     } else "ces_supply"]]
     price_sd_val <- stan_data$log_price_sd
@@ -531,8 +577,15 @@ bayes_est <- function(prices, quantities, margins,
   metadata$structure_code <- as.integer(.stack_structure_code[[structure]])
   metadata$cutoff_scale <- cutoff_scale
   metadata$partition_prior <- partition_prior
+  metadata$k_support <- k_support
   metadata$k_scope <- k_scope
   metadata$k_prior <- k_prior
+  partition_metadata <- attr(stan_data, "partition_metadata", exact = TRUE)
+  metadata$k_support_resolved <- if (is.null(partition_metadata)) NULL else
+    partition_metadata$partition_supports
+  metadata$k_prior_resolved <- if (is.null(partition_metadata)) NULL else
+    partition_metadata$k_prior_by_unit
+  metadata$firm_market_ranking <- attr(stan_data, "firm_market_ranking", exact = TRUE)
   metadata$resolved_priors <- priors
   metadata$df_mode <- if (estimate_df) "estimated" else "fixed"
   metadata$resid_df_fixed <- if (estimate_df) NA_real_ else resid_df_fixed
@@ -543,7 +596,12 @@ bayes_est <- function(prices, quantities, margins,
   metadata$prior_normalization <- list(
     mode = "native_stan_normalized",
     model_spec_version = 8L,
-    partition_support = if (identical(structure, "stackelberg")) "1:N" else NULL
+    partition_support = k_support,
+    k_support = k_support,
+    k_prior = k_prior,
+    k_support_resolved = metadata$k_support_resolved,
+    k_prior_resolved = metadata$k_prior_resolved,
+    firm_market_ranking = metadata$firm_market_ranking
   )
 
   spec <- .bayes_model_spec(list(

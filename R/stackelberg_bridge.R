@@ -54,7 +54,8 @@
       gamma = if (identical(p$demand_model, "ces")) p$gamma[draw] else NULL,
       s0 = p$s0[draw], structure = p$structure,
       cutoff = p$cutoff_share[draw], cutoff_scale = p$cutoff_scale[draw],
-      partition_prior = p$partition_prior, k_prior = p$k_prior,
+      partition_prior = p$partition_prior, k_support = p$k_support,
+      k_prior = p$k_prior,
       k_scope = p$k_scope, supply_model = p$supply_model
     ))
   }
@@ -64,7 +65,8 @@
     alpha = p$alpha[[1L]], gamma = p$gamma[[1L]], s0 = p$s0[[1L]],
     structure = p$structure, cutoff = p$cutoff_share[[1L]],
     cutoff_scale = p$cutoff_scale[[1L]], partition_prior = p$partition_prior,
-    k_prior = p$k_prior, k_scope = p$k_scope, supply_model = p$supply_model
+    k_support = p$k_support, k_prior = p$k_prior,
+    k_scope = p$k_scope, supply_model = p$supply_model
   )
 }
 
@@ -95,14 +97,11 @@
 .stack_bridge_prior <- function(params, sizes, group, market_label = NULL) {
   n <- length(sizes)
   if (identical(params$partition_prior, "ordered_k")) {
-    dummy <- list(
-      firm_mky_n = n, firm_mky_market = 1L,
-      firm_mky_market_year = 1L
-    )
-    supports <- list(seq_len(n))
+    supports <- list(as.integer(params$k_support))
     units <- data.frame(market = 1L, market_label = .stack_bridge_or(market_label, "unit_1"))
-    pr <- .stack_validate_k_prior(params$k_prior, supports, units, "period")[[1L]]
-    return(list(k = seq_len(n), probability = as.numeric(pr), cutoff = NULL))
+    pr <- .stack_validate_k_prior(params$k_prior, supports, units, "market",
+                                  k_support = params$k_support)[[1L]]
+    return(list(k = supports[[1L]], probability = as.numeric(pr), cutoff = NULL))
   }
   lp <- stackelberg_partition_logprob(sizes, params$cutoff,
                                      params$cutoff_scale)
@@ -467,7 +466,8 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
     } else {
       if (direct) {
         comp <- .stack_bridge_prior(
-          list(partition_prior = "ordered_k", k_prior = params$k_prior),
+          list(partition_prior = "ordered_k", k_support = params$k_support,
+               k_prior = params$k_prior),
           sizes, group = NULL, market_label = "unit_1"
         )
         list(k = comp$k, posterior = comp$probability, prior = comp$probability,

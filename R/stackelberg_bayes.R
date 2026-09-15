@@ -108,16 +108,94 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
   out
 }
 
-.stack_validate_k_prior <- function(k_prior, supports, units, k_scope) {
-  ## Returns one validated probability vector per partition unit.  A NULL
-  ## prior means a uniform prior over all supported counts.
+.stack_validate_k_support <- function(k_support, structure,
+                                      n_by_market = NULL) {
+  if (is.null(k_support)) return(NULL)
+  if (!is.numeric(k_support) || !length(k_support) || anyNA(k_support) ||
+      any(!is.finite(k_support)) || any(k_support != floor(k_support)) ||
+      anyDuplicated(k_support)) {
+    stop("'k_support' must be a non-empty vector of unique finite integers.")
+  }
+  lower <- if (identical(structure, "fringe")) 0L else 1L
+  if (any(k_support < lower)) {
+    if (identical(structure, "fringe")) {
+      stop("Fringe 'k_support' must contain non-negative integers.")
+    }
+    stop("Stackelberg 'k_support' must contain strictly positive integers.")
+  }
+  if (!is.null(n_by_market) && length(n_by_market) &&
+      any(k_support > min(n_by_market))) {
+    stop("Every value in 'k_support' must be feasible in every selected market.")
+  }
+  k_support
+}
+
+.stack_validate_public_k <- function(k_support, k_prior, structure) {
+  if (identical(structure, "simultaneous")) return(invisible(NULL))
+  ks <- .stack_validate_k_support(k_support, structure)
+  if (!is.null(k_prior) && !is.numeric(k_prior) && !is.list(k_prior)) {
+    stop("'k_prior' must be a numeric vector or a list of numeric vectors.")
+  }
+  if (is.numeric(k_prior)) {
+    if (anyNA(k_prior) || any(!is.finite(k_prior)) || any(k_prior < 0)) {
+      stop("'k_prior' must contain finite non-negative probabilities.")
+    }
+    if (!is.null(ks) && length(k_prior) != length(ks)) {
+      stop("'k_prior' must have the same length as 'k_support'.")
+    }
+    if (!is.null(ks) && abs(sum(k_prior) - 1) > 1e-8) {
+      stop("'k_prior' must sum to one within numerical tolerance.")
+    }
+  }
+  invisible(NULL)
+}
+
+.stack_validate_k_prior <- function(k_prior, supports, units, k_scope,
+                                    k_support = NULL) {
+  ## The public form is positional: k_prior[j] belongs to k_support[j].
+  ## Named count vectors/lists remain a compatibility path for old fits when
+  ## no explicit support was supplied.
   nunit <- length(supports)
   if (is.null(k_prior)) {
-    return(lapply(supports, function(k) rep(1 / length(k), length(k))))
+    return(lapply(supports, function(k) {
+      if (!length(k)) return(numeric())
+      rep(1 / length(k), length(k))
+    }))
+  }
+  positional <- is.numeric(k_prior) &&
+    (is.null(names(k_prior)) || !length(names(k_prior)) || !is.null(k_support))
+  if (is.numeric(k_prior) && positional) {
+    if (anyNA(k_prior) || any(!is.finite(k_prior)) || any(k_prior < 0) ||
+        abs(sum(k_prior) - 1) > 1e-8) {
+      stop("'k_prior' must contain finite non-negative values and sum to one.")
+    }
+    if (is.null(k_support)) {
+      common <- unique(unlist(supports, use.names = FALSE))
+      if (length(k_prior) != length(common)) {
+        stop("Positional 'k_prior' requires the same length as the common support.")
+      }
+      k_support <- common
+    } else if (length(k_prior) != length(k_support)) {
+      stop("'k_prior' must have the same length as 'k_support'.")
+    }
+    out <- vector("list", nunit)
+    for (u in seq_len(nunit)) {
+      support <- supports[[u]]
+      bad <- k_support[k_prior > 0 & !(k_support %in% support)]
+      if (length(bad)) {
+        stop("'k_prior' assigns positive mass to unsupported leader count(s): ",
+             paste(bad, collapse = ", "))
+      }
+      ans <- numeric(length(support)); names(ans) <- as.character(support)
+      keep <- match(support, k_support)
+      ans[] <- ifelse(is.na(keep), 0, k_prior[keep])
+      out[[u]] <- ans
+    }
+    return(out)
   }
   if (is.numeric(k_prior)) {
     if (is.null(names(k_prior)) || any(!nzchar(names(k_prior)))) {
-      stop("'k_prior' must be a named numeric vector or named list by market.")
+      stop("'k_prior' must be positional or a named numeric vector by count.")
     }
     choices <- rep(list(k_prior), nunit)
   } else if (is.list(k_prior)) {
@@ -126,33 +204,29 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
     }
     choices <- vector("list", nunit)
     for (u in seq_len(nunit)) {
-      nm <- if (k_scope == "market") as.character(units$market[u]) else {
-        as.character(units$market[u])
-      }
+      nm <- as.character(units$market[u])
       pick <- k_prior[[nm]]
-      ## Also accept market labels supplied as names in units.
       if (is.null(pick) && !is.null(units$market_label)) {
         pick <- k_prior[[units$market_label[u]]]
       }
-      if (is.null(pick)) {
-        stop("'k_prior' has no entry for market '", nm, "'.")
-      }
+      if (is.null(pick)) stop("'k_prior' has no entry for market '", nm, "'.")
       choices[[u]] <- pick
     }
-  } else stop("'k_prior' must be NULL, a named numeric vector, or named list by market.")
-
+  } else stop("'k_prior' must be numeric or a named list by market.")
   out <- vector("list", nunit)
   for (u in seq_len(nunit)) {
     z <- choices[[u]]
     if (!is.numeric(z) || is.null(names(z)) || any(!nzchar(names(z))) ||
         anyNA(z) || any(!is.finite(z)) || any(z < 0)) {
-      stop("Each 'k_prior' must contain finite non-negative named probabilities.")
+      stop("Each legacy 'k_prior' must contain finite non-negative named probabilities.")
     }
     kk <- suppressWarnings(as.integer(names(z)))
     if (anyNA(kk) || any(names(z) != as.character(kk))) {
       stop("'k_prior' names must be integer leader counts.")
     }
-    if (any(kk < 0L) || anyDuplicated(kk)) stop("'k_prior' contains invalid or duplicate leader counts.")
+    if (any(kk < 0L) || anyDuplicated(kk)) {
+      stop("'k_prior' contains invalid or duplicate leader counts.")
+    }
     if (abs(sum(z) - 1) > 1e-8) stop("Each 'k_prior' must sum to one.")
     support <- supports[[u]]
     bad <- kk[z > 0 & !(kk %in% support)]
@@ -172,26 +246,66 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
                                    market_int, group_levels, metric = c("logit", "ces")) {
   metric <- match.arg(metric)
   mky_int <- as.integer(mky_int); group_int <- as.integer(group_int)
-  n_mky <- max(mky_int); N <- length(mky_int)
+  market_int <- as.integer(market_int)
+  if (!length(mky_int) || length(group_int) != length(mky_int) ||
+      length(shareIn) != length(mky_int) || length(revShare) != length(mky_int) ||
+      length(market_int) != length(mky_int)) {
+    stop("Firm-market ranking inputs must have one value per observation.")
+  }
+  n_mky <- max(mky_int); N <- length(mky_int); n_market <- max(market_int)
   rows <- vector("list", n_mky)
   obs_to <- integer(N)
   cursor <- 0L
-  for (m in seq_len(n_mky)) {
-    ii <- which(mky_int == m)
-    gs <- sort(unique(group_int[ii]))
-    vals_in <- vapply(gs, function(g) sum(shareIn[ii[group_int[ii] == g]]), numeric(1))
-    vals_rev <- vapply(gs, function(g) sum(revShare[ii[group_int[ii] == g]]), numeric(1))
+
+  ## Rank the complete market panel once.  Each firm-period is first reduced
+  ## to one aggregate share, absent firm-periods contribute zero, and periods
+  ## receive equal weight.  The resulting rank is inherited by every
+  ## firm-market-year row below.
+  market_rows <- vector("list", n_market)
+  obs_to_market <- integer(N)
+  fm_cursor <- 0L
+  for (mm in seq_len(n_market)) {
+    mky_mm <- sort(unique(mky_int[market_int == mm]))
+    gs <- sort(unique(group_int[market_int == mm]))
+    period_in <- matrix(0, nrow = length(gs), ncol = length(mky_mm))
+    period_rev <- matrix(0, nrow = length(gs), ncol = length(mky_mm))
+    for (tt in seq_along(mky_mm)) {
+      ii <- which(mky_int == mky_mm[[tt]])
+      for (gg in seq_along(gs)) {
+        jj <- ii[group_int[ii] == gs[[gg]]]
+        if (length(jj)) {
+          period_in[gg, tt] <- sum(shareIn[jj])
+          period_rev[gg, tt] <- sum(revShare[jj])
+        }
+      }
+    }
+    vals_in <- rowMeans(period_in)
+    vals_rev <- rowMeans(period_rev)
     metric_v <- if (metric == "logit") vals_in else vals_rev
-    ## The secondary declared firm-ID order is deterministic and only resolves
-    ## storage ties.  It must agree with the native bridge's character IDs,
-    ## even when the input factor levels have a custom order.
     firm_labels <- as.character(group_levels[gs])
     ord <- order(-metric_v, firm_labels)
     gs <- gs[ord]; vals_in <- vals_in[ord]; vals_rev <- vals_rev[ord]
+    n <- length(gs)
+    jj <- seq.int(fm_cursor + 1L, fm_cursor + n); fm_cursor <- fm_cursor + n
+    market_rows[[mm]] <- list(group = gs, shareIn = vals_in, revShare = vals_rev,
+                              rank = seq_len(n), start = jj[1L], n = n,
+                              market = mm)
+    ii_mm <- which(market_int == mm)
+    obs_to_market[ii_mm] <- jj[match(group_int[ii_mm], gs)]
+  }
+
+  for (m in seq_len(n_mky)) {
+    ii <- which(mky_int == m)
+    mm <- market_int[ii[[1L]]]
+    mkt <- market_rows[[mm]]
+    present <- mkt$group[mkt$group %in% unique(group_int[ii])]
+    gs <- present[order(match(present, mkt$group))]
+    vals_in <- vapply(gs, function(g) sum(shareIn[ii[group_int[ii] == g]]), numeric(1))
+    vals_rev <- vapply(gs, function(g) sum(revShare[ii[group_int[ii] == g]]), numeric(1))
     n <- length(gs); jj <- seq.int(cursor + 1L, cursor + n); cursor <- cursor + n
     rows[[m]] <- list(group = gs, shareIn = vals_in, revShare = vals_rev,
-                      rank = seq_len(n), start = jj[1L], n = n,
-                      market = market_int[ii[1L]], mky = m)
+                      rank = mkt$rank[match(gs, mkt$group)], start = jj[1L], n = n,
+                      market = mm, mky = m)
     obs_to[ii] <- jj[match(group_int[ii], gs)]
   }
   all <- do.call(rbind, lapply(rows, function(z) data.frame(
@@ -209,15 +323,31 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
     firm_mky_start = as.integer(vapply(rows, function(z) z$start, integer(1))),
     firm_mky_n = as.integer(vapply(rows, function(z) z$n, integer(1))),
     obs_to_firm_mky = as.integer(obs_to),
-    firm_mky_group_label = as.character(group_levels[all$group])
+    firm_mky_group_label = as.character(group_levels[all$group]),
+    N_firm_market = fm_cursor,
+    firm_market_shareIn = as.numeric(unlist(lapply(market_rows, `[[`, "shareIn"))),
+    firm_market_revShare = as.numeric(unlist(lapply(market_rows, `[[`, "revShare"))),
+    firm_market_market = as.integer(unlist(lapply(market_rows, function(z) {
+      rep.int(z$market, z$n)
+    }))),
+    firm_market_group = as.integer(unlist(lapply(market_rows, `[[`, "group"))),
+    firm_market_rank = as.integer(unlist(lapply(market_rows, `[[`, "rank"))),
+    firm_market_start = as.integer(vapply(market_rows, function(z) z$start, integer(1))),
+    firm_market_n = as.integer(vapply(market_rows, function(z) z$n, integer(1))),
+    firm_market_group_label = as.character(group_levels[
+      as.integer(unlist(lapply(market_rows, `[[`, "group")))
+    ]),
+    obs_to_firm_market = as.integer(obs_to_market)
   )
 }
 
 .stack_partition_arrays <- function(firm, mky_to_market, market_levels,
                                     k_prior = NULL, k_scope = "market",
-                                    partition_prior = "cutoff") {
+                                    partition_prior = "cutoff", k_support = NULL,
+                                    structure = c("stackelberg", "fringe")) {
   k_scope <- match.arg(k_scope, c("market", "period"))
   partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
+  structure <- match.arg(structure)
   ## A continuous common boundary is a market-year object.  The ordered-k
   ## prior is the only choice for which market scope shares one count over
   ## all observed periods.
@@ -228,9 +358,9 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
     units <- data.frame(market = seq_len(n_market), stringsAsFactors = FALSE)
     units$market_label <- market_levels
     supports <- lapply(seq_len(n_market), function(mm) {
-      ns <- firm$firm_mky_n[mky_to_market == mm]
-      nmax <- if (length(ns)) min(ns) else 0L
-      if (nmax < 1L) integer() else seq_len(nmax)
+      nmax <- firm$firm_market_n[mm]
+      lower <- if (structure == "fringe") 0L else 1L
+      if (is.null(k_support)) seq.int(lower, nmax) else as.integer(k_support)
     })
     mky_to_unit <- as.integer(mky_to_market)
   } else {
@@ -239,12 +369,20 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
                         stringsAsFactors = FALSE)
     supports <- lapply(seq_len(n_mky), function(mm) {
       nmax <- firm$firm_mky_n[mm]
-      if (nmax < 1L) integer() else seq_len(nmax)
+      lower <- if (structure == "fringe") 0L else 1L
+      if (is.null(k_support)) seq.int(lower, nmax) else as.integer(k_support)
     })
     mky_to_unit <- seq_len(n_mky)
   }
+  if (any(vapply(supports, length, integer(1)) == 0L)) {
+    stop("Each selected market must contain at least one feasible partition count.")
+  }
+  if (!is.null(k_support)) {
+    .stack_validate_k_support(k_support, structure,
+                              n_by_market = firm$firm_market_n)
+  }
   probs <- if (partition_prior == "ordered_k") {
-    .stack_validate_k_prior(k_prior, supports, units, k_scope)
+    .stack_validate_k_prior(k_prior, supports, units, k_scope, k_support)
   } else lapply(supports, function(k) rep(NA_real_, length(k)))
   comp_unit <- integer(); comp_k <- integer(); comp_prior <- numeric()
   unit_start <- integer(length(supports)); unit_count <- integer(length(supports))
@@ -276,7 +414,10 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
     k_scope = effective_scope,
     requested_k_scope = k_scope,
     k_prior_by_unit = probs,
-    partition_supports = supports
+    partition_supports = supports,
+    supplied_k_support = k_support,
+    supplied_k_prior = k_prior,
+    firm_market = firm
   )
 }
 
@@ -287,18 +428,28 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
                                group_levels, shares, revShare, structure,
                                demand_model = "logit",
                                partition_prior = "cutoff", k_prior = NULL,
-                               k_scope = "market", cutoff_scale = NULL) {
+                               k_scope = "market", cutoff_scale = NULL,
+                               k_support = NULL) {
   firm <- .stack_unique_firm_mky(mky_int, group_int, shares, revShare,
                                  market_int, group_levels,
                                  metric = if (identical(demand_model, "ces")) "ces" else "logit")
   p <- .stack_partition_arrays(firm, stan_data$mky_to_market,
                                attr(stan_data, "market_levels"), k_prior,
-                               k_scope, partition_prior)
+                               k_scope, partition_prior, k_support,
+                               structure = .stack_or(structure$name, structure))
   ## Return only names declared in the Stackelberg Stan data block.  The
   ## descriptive labels and nested prior metadata stay in fit metadata; Stan
   ## rejects unknown list elements during data validation.
   array1 <- function(x) array(x, dim = length(x))
-  c(
+  market_obs <- lapply(seq_len(stan_data$N_market), function(mm) {
+    which(as.integer(market_int) == mm)
+  })
+  market_mky <- lapply(seq_len(stan_data$N_market), function(mm) {
+    which(as.integer(stan_data$mky_to_market) == mm)
+  })
+  market_obs_n <- lengths(market_obs)
+  market_mky_n <- lengths(market_mky)
+  out <- c(
     list(
       N_firm_mky = firm$N_firm_mky,
       firm_mky_shareIn = array1(firm$firm_mky_shareIn),
@@ -310,6 +461,21 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
       firm_mky_start = array1(firm$firm_mky_start),
       firm_mky_n = array1(firm$firm_mky_n),
       obs_to_firm_mky = array1(firm$obs_to_firm_mky),
+      N_firm_market = firm$N_firm_market,
+      firm_market_shareIn = array1(firm$firm_market_shareIn),
+      firm_market_revShare = array1(firm$firm_market_revShare),
+      firm_market_market = array1(firm$firm_market_market),
+      firm_market_group = array1(firm$firm_market_group),
+      firm_market_rank = array1(firm$firm_market_rank),
+      firm_market_start = array1(firm$firm_market_start),
+      firm_market_n = array1(firm$firm_market_n),
+      obs_to_firm_market = array1(firm$obs_to_firm_market),
+      market_obs_order = array1(unlist(market_obs, use.names = FALSE)),
+      market_obs_start = array1(cumsum(c(1L, head(market_obs_n, -1L)))),
+      market_obs_n = array1(market_obs_n),
+      market_mky_order = array1(unlist(market_mky, use.names = FALSE)),
+      market_mky_start = array1(cumsum(c(1L, head(market_mky_n, -1L)))),
+      market_mky_n = array1(market_mky_n),
       N_partition_unit = p$N_partition_unit,
       partition_unit_market = array1(p$partition_unit_market),
       partition_unit_market_year = array1(p$partition_unit_market_year),
@@ -323,10 +489,78 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
       partition_component_k = array1(p$partition_component_k),
       partition_prior_logprob = array1(p$partition_prior_logprob),
       partition_prior_probability = array1(p$partition_prior_probability),
-      structure = as.integer(.stack_structure_code[[.stack_or(structure$name, structure)]]),
+      structure = as.integer(
+        .stack_structure_code[[.stack_or(structure$name, structure)]]
+      ),
       partition_prior_code = as.integer(identical(partition_prior, "ordered_k")),
       k_scope_code = as.integer(identical(p$k_scope, "market")),
       cutoff_scale = .stack_resolve_scale(.stack_or(structure$name, structure), cutoff_scale)
     )
+  )
+  attr(out, "firm_market_ranking") <- list(
+    rule = "equal_period_mean_after_firm_period_aggregation",
+    metric = if (identical(demand_model, "ces")) {
+      "conditional_inside_revenue_share"
+    } else {
+      "conditional_inside_quantity_share"
+    },
+    tie_break = "descending_share_then_ascending_firm_label",
+    N_firm_market = firm$N_firm_market,
+    firm_market_shareIn = firm$firm_market_shareIn,
+    firm_market_revShare = firm$firm_market_revShare,
+    firm_market_market = firm$firm_market_market,
+    firm_market_group = firm$firm_market_group,
+    firm_market_rank = firm$firm_market_rank,
+    firm_market_group_label = firm$firm_market_group_label,
+    obs_to_firm_market = firm$obs_to_firm_market
+  )
+  attr(out, "partition_metadata") <- p
+  out
+}
+
+## Build the same fixed ranking and exact partition metadata for a one-market
+## bayes_specify() object.  Specified fits have no Stan data list, so this
+## information lives in their fit metadata instead.
+.stack_specified_metadata <- function(params, market) {
+  exact <- identical(params$partition_prior, "ordered_k") &&
+    params$structure %in% c("fringe", "stackelberg")
+  if (!exact) return(list(ranking = NULL, partition = NULL))
+  labels <- sort(unique(as.character(market$group)))
+  group_int <- match(as.character(market$group), labels)
+  q <- as.numeric(market$quantities)
+  share <- q / sum(q)
+  revenue <- as.numeric(market$prices) * q
+  rev_share <- revenue / sum(revenue)
+  firm <- .stack_unique_firm_mky(
+    mky_int = rep.int(1L, market$n_prod), group_int = group_int,
+    shareIn = share, revShare = rev_share,
+    market_int = rep.int(1L, market$n_prod), group_levels = labels,
+    metric = if (identical(params$demand_model, "ces")) "ces" else "logit"
+  )
+  p <- .stack_partition_arrays(
+    firm, mky_to_market = 1L, market_levels = "unit_1",
+    k_prior = params$k_prior, k_scope = "market",
+    partition_prior = params$partition_prior,
+    k_support = params$k_support, structure = params$structure
+  )
+  list(
+    ranking = list(
+      rule = "equal_period_mean_after_firm_period_aggregation",
+      metric = if (identical(params$demand_model, "ces")) {
+        "conditional_inside_revenue_share"
+      } else {
+        "conditional_inside_quantity_share"
+      },
+      tie_break = "descending_share_then_ascending_firm_label",
+      N_firm_market = firm$N_firm_market,
+      firm_market_shareIn = firm$firm_market_shareIn,
+      firm_market_revShare = firm$firm_market_revShare,
+      firm_market_market = firm$firm_market_market,
+      firm_market_group = firm$firm_market_group,
+      firm_market_rank = firm$firm_market_rank,
+      firm_market_group_label = firm$firm_market_group_label,
+      obs_to_firm_market = firm$obs_to_firm_market
+    ),
+    partition = p
   )
 }

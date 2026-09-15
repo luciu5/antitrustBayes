@@ -187,6 +187,10 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #' @param estimate_df Logical; estimate the Student-t degrees of freedom.
 #' @param resid_df_fixed Fixed Student-t degrees of freedom when
 #'   \code{estimate_df = FALSE}.
+#' @param k_support Explicit unique integer leader counts. Fringe supports may
+#'   include zero; Stackelberg supports must be positive.
+#' @param k_prior Positional probabilities corresponding to \code{k_support};
+#'   \code{NULL} gives a uniform prior.
 #' @return A list suitable for passing to \code{rstan::sampling}.
 #' @keywords internal
 prepare_stan_data <- function(prices, quantities, margins, market, year, group,
@@ -211,6 +215,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               structure = NULL,
                               cutoff_scale = NULL,
                               partition_prior = "cutoff",
+                              k_support = NULL,
                               k_prior = NULL,
                               k_scope = "market") {
   N <- length(prices)
@@ -220,13 +225,37 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     structure = structure, use_cutoff = use_cutoff,
     use_cutoff_supplied = FALSE
   )
-  partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
-  k_scope <- match.arg(k_scope, c("market", "period"))
-  if (resolved_structure$name != "stackelberg" && partition_prior != "cutoff") {
-    stop("partition_prior = 'ordered_k' is supported only for structure = 'stackelberg'.")
+  partition_prior_supplied <- !missing(partition_prior)
+  exact_structure <- resolved_structure$supplied &&
+    resolved_structure$name %in% c("fringe", "stackelberg")
+  if (exact_structure) {
+    if (!partition_prior_supplied) partition_prior <- "ordered_k"
+    partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
+    if (resolved_structure$name == "stackelberg" && partition_prior != "ordered_k") {
+      stop("Explicit Stackelberg requires partition_prior = 'ordered_k'.")
+    }
+    if (partition_prior == "ordered_k") {
+      if (is.null(k_support)) stop("Explicit ordered-k structures require 'k_support'.")
+      if (!identical(k_scope, "market")) {
+        stop("Exact ordered-k uses one partition per market; 'k_scope' must be 'market'.")
+      }
+      if (is.list(k_prior)) {
+        stop("Exact ordered-k requires a positional numeric 'k_prior' vector.")
+      }
+    } else if (!is.null(k_support) || !is.null(k_prior)) {
+      stop("'k_support' and 'k_prior' require partition_prior = 'ordered_k'.")
+    }
+  } else {
+    ## Omitted structure retains legacy simultaneous/smooth-fringe behavior.
+    partition_prior <- "cutoff"
+    k_support <- NULL
+    k_prior <- NULL
   }
-  if (resolved_structure$name == "stackelberg" && !(supply_model %in% c(1L, 3L))) {
-    stop("Bayesian Stackelberg supports only Bertrand (1) and Cournot (3) supply models.")
+  k_scope <- match.arg(k_scope, c("market", "period"))
+  .stack_validate_public_k(k_support, k_prior, resolved_structure$name)
+  if (resolved_structure$name %in% c("stackelberg", "fringe") &&
+      partition_prior == "ordered_k" && !(supply_model %in% c(1L, 3L))) {
+    stop("Exact ordered-k fringe/Stackelberg supports only Bertrand and Cournot supply models.")
   }
   cutoff_scale_supplied <- !missing(cutoff_scale) && !is.null(cutoff_scale)
   if (identical(resolved_structure$name, "simultaneous") && cutoff_scale_supplied) {
@@ -236,7 +265,15 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       identical(partition_prior, "ordered_k") && cutoff_scale_supplied) {
     stop("'cutoff_scale' is not defined for partition_prior = 'ordered_k'.")
   }
-  cutoff_scale <- .stack_resolve_scale(resolved_structure$name, cutoff_scale)
+  if (exact_structure && identical(partition_prior, "ordered_k") &&
+      cutoff_scale_supplied) {
+    stop("'cutoff_scale' is not defined for exact ordered-k structures.")
+  }
+  if (exact_structure && identical(partition_prior, "ordered_k")) {
+    cutoff_scale <- NULL
+  } else {
+    cutoff_scale <- .stack_resolve_scale(resolved_structure$name, cutoff_scale)
+  }
 
   if (is.null(margin_observed)) {
     margin_observed <- rep(TRUE, N)
@@ -434,15 +471,23 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   attr(stan_data, "cutoff_scale") <- cutoff_scale
   attr(stan_data, "partition_prior") <- partition_prior
   attr(stan_data, "k_scope") <- k_scope
-  if (resolved_structure$name == "stackelberg") {
-    stan_data <- c(stan_data, .stack_append_data(
+  attr(stan_data, "k_support") <- k_support
+  attr(stan_data, "k_prior") <- k_prior
+  if (resolved_structure$name == "stackelberg" ||
+      (exact_structure && identical(resolved_structure$name, "fringe") &&
+       identical(partition_prior, "ordered_k"))) {
+    stack_data <- .stack_append_data(
       stan_data = stan_data, mky_int = mky_int, market_int = market_int,
       group_int = group_int, group_levels = levels(group_f), shares = shares,
       revShare = shares, structure = resolved_structure,
       demand_model = "logit", partition_prior = partition_prior,
-      k_prior = k_prior, k_scope = k_scope, cutoff_scale = cutoff_scale
-    ))
-    stan_data$cutoff_scale <- cutoff_scale
+      k_support = k_support, k_prior = k_prior, k_scope = k_scope,
+      cutoff_scale = cutoff_scale
+    )
+    ranking_metadata <- attr(stack_data, "firm_market_ranking", exact = TRUE)
+    partition_metadata <- attr(stack_data, "partition_metadata", exact = TRUE)
+    stan_data <- c(stan_data, stack_data)
+    if (!is.null(cutoff_scale)) stan_data$cutoff_scale <- cutoff_scale
     attr(stan_data, "market_levels") <- levels(market_f)
     attr(stan_data, "year_levels") <- levels(year_f)
     attr(stan_data, "group_levels") <- levels(group_f)
@@ -456,6 +501,10 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     attr(stan_data, "cutoff_scale") <- cutoff_scale
     attr(stan_data, "partition_prior") <- partition_prior
     attr(stan_data, "k_scope") <- k_scope
+    attr(stan_data, "k_support") <- k_support
+    attr(stan_data, "k_prior") <- k_prior
+    attr(stan_data, "firm_market_ranking") <- ranking_metadata
+    attr(stan_data, "partition_metadata") <- partition_metadata
   }
 
   stan_data
@@ -491,6 +540,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   structure = NULL,
                                   cutoff_scale = NULL,
                                   partition_prior = "cutoff",
+                                  k_support = NULL,
                                   k_prior = NULL,
                                   k_scope = "market") {
   N <- length(prices)
@@ -504,13 +554,37 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     structure = structure, use_cutoff = use_cutoff,
     use_cutoff_supplied = FALSE
   )
-  partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
-  k_scope <- match.arg(k_scope, c("market", "period"))
-  if (resolved_structure$name != "stackelberg" && partition_prior != "cutoff") {
-    stop("partition_prior = 'ordered_k' is supported only for structure = 'stackelberg'.")
+  partition_prior_supplied <- !missing(partition_prior)
+  exact_structure <- resolved_structure$supplied &&
+    resolved_structure$name %in% c("fringe", "stackelberg")
+  if (exact_structure) {
+    if (!partition_prior_supplied) partition_prior <- "ordered_k"
+    partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
+    if (resolved_structure$name == "stackelberg" && partition_prior != "ordered_k") {
+      stop("Explicit Stackelberg requires partition_prior = 'ordered_k'.")
+    }
+    if (partition_prior == "ordered_k") {
+      if (is.null(k_support)) stop("Explicit ordered-k structures require 'k_support'.")
+      if (!identical(k_scope, "market")) {
+        stop("Exact ordered-k uses one partition per market; 'k_scope' must be 'market'.")
+      }
+      if (is.list(k_prior)) {
+        stop("Exact ordered-k requires a positional numeric 'k_prior' vector.")
+      }
+    } else if (!is.null(k_support) || !is.null(k_prior)) {
+      stop("'k_support' and 'k_prior' require partition_prior = 'ordered_k'.")
+    }
+  } else {
+    ## Omitted structure retains legacy simultaneous/smooth-fringe behavior.
+    partition_prior <- "cutoff"
+    k_support <- NULL
+    k_prior <- NULL
   }
-  if (resolved_structure$name == "stackelberg" && !(supply_model %in% c(1L, 3L))) {
-    stop("Bayesian Stackelberg supports only Bertrand (1) and Cournot (3) supply models.")
+  k_scope <- match.arg(k_scope, c("market", "period"))
+  .stack_validate_public_k(k_support, k_prior, resolved_structure$name)
+  if (resolved_structure$name %in% c("stackelberg", "fringe") &&
+      partition_prior == "ordered_k" && !(supply_model %in% c(1L, 3L))) {
+    stop("Exact ordered-k fringe/Stackelberg supports only Bertrand and Cournot supply models.")
   }
   cutoff_scale_supplied <- !missing(cutoff_scale) && !is.null(cutoff_scale)
   if (identical(resolved_structure$name, "simultaneous") && cutoff_scale_supplied) {
@@ -520,7 +594,15 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       identical(partition_prior, "ordered_k") && cutoff_scale_supplied) {
     stop("'cutoff_scale' is not defined for partition_prior = 'ordered_k'.")
   }
-  cutoff_scale <- .stack_resolve_scale(resolved_structure$name, cutoff_scale)
+  if (exact_structure && identical(partition_prior, "ordered_k") &&
+      cutoff_scale_supplied) {
+    stop("'cutoff_scale' is not defined for exact ordered-k structures.")
+  }
+  if (exact_structure && identical(partition_prior, "ordered_k")) {
+    cutoff_scale <- NULL
+  } else {
+    cutoff_scale <- .stack_resolve_scale(resolved_structure$name, cutoff_scale)
+  }
 
   if (is.null(margin_observed)) {
     margin_observed <- rep(TRUE, N)
@@ -737,15 +819,23 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   attr(stan_data, "cutoff_scale") <- cutoff_scale
   attr(stan_data, "partition_prior") <- partition_prior
   attr(stan_data, "k_scope") <- k_scope
-  if (resolved_structure$name == "stackelberg") {
-    stan_data <- c(stan_data, .stack_append_data(
+  attr(stan_data, "k_support") <- k_support
+  attr(stan_data, "k_prior") <- k_prior
+  if (resolved_structure$name == "stackelberg" ||
+      (exact_structure && identical(resolved_structure$name, "fringe") &&
+       identical(partition_prior, "ordered_k"))) {
+    stack_data <- .stack_append_data(
       stan_data = stan_data, mky_int = mky_int, market_int = market_int,
       group_int = group_int, group_levels = levels(group_f), shares = shareIn,
       revShare = revShare, structure = resolved_structure,
       demand_model = "ces", partition_prior = partition_prior,
-      k_prior = k_prior, k_scope = k_scope, cutoff_scale = cutoff_scale
-    ))
-    stan_data$cutoff_scale <- cutoff_scale
+      k_support = k_support, k_prior = k_prior, k_scope = k_scope,
+      cutoff_scale = cutoff_scale
+    )
+    ranking_metadata <- attr(stack_data, "firm_market_ranking", exact = TRUE)
+    partition_metadata <- attr(stack_data, "partition_metadata", exact = TRUE)
+    stan_data <- c(stan_data, stack_data)
+    if (!is.null(cutoff_scale)) stan_data$cutoff_scale <- cutoff_scale
     attr(stan_data, "market_levels") <- levels(market_f)
     attr(stan_data, "year_levels") <- levels(year_f)
     attr(stan_data, "group_levels") <- levels(group_f)
@@ -760,6 +850,10 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     attr(stan_data, "cutoff_scale") <- cutoff_scale
     attr(stan_data, "partition_prior") <- partition_prior
     attr(stan_data, "k_scope") <- k_scope
+    attr(stan_data, "k_support") <- k_support
+    attr(stan_data, "k_prior") <- k_prior
+    attr(stan_data, "firm_market_ranking") <- ranking_metadata
+    attr(stan_data, "partition_metadata") <- partition_metadata
   }
 
   stan_data
