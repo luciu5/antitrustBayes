@@ -55,6 +55,7 @@ Collate:
     'methods.R'
     'params.R'
     'priors.R'
+    'posterior_k.R'
     'simulate.R'
     'stackelberg_bayes.R'
     'stackelberg_bridge.R'
