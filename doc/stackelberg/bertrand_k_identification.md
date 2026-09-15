@@ -113,11 +113,15 @@ the expected consequence of exact-fit data rather than a conduct-equation
 scale error.
 
 The collapsed scale creates difficult posterior geometry and low effective
-sample size.  It does not determine k directly: the common share likelihood
-cancels from the conditional k odds when rho is fixed at zero.  A separately
-prespecified compositional-share-noise stress experiment is the appropriate
-way to test sampling away from this boundary.  It cannot replace or relabel
-the failed primary sampler gate.
+sample size.  The posterior remains proper and the log-scale parameter is not
+literally constrained at zero; it is sharply concentrated near the small
+positive scale implied by exact-fit data.  Across all 18 completed compact
+Logit-Bertrand fits, `sigma_share` or `log_sigma_share` controls the minimum ESS
+in 15 fits, and 12 fits have BFMI below .30.  It does not determine k directly:
+the common share likelihood cancels from the conditional k odds when rho is
+fixed at zero.  A separately prespecified compositional-share-noise stress
+experiment is the appropriate way to test sampling away from this geometry.
+It cannot replace or relabel the failed primary sampler gate.
 
 ## Still unresolved
 
