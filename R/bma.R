@@ -40,20 +40,13 @@ validate_comparison_contract <- function(fits) {
       names(reference@metadata$resolved_priors),
       grep("^bargaining_", names(reference@metadata$resolved_priors), value = TRUE)
     )
-    cutoff_active <- function(fit) {
-      if (.bayes_is_stackelberg(fit)) {
-        return(isTRUE(fit@stan_data$partition_prior_code == 0L))
-      }
-      isTRUE(fit@stan_data$use_cutoff == 1L)
-    }
-    fringe_active <- function(fit) {
-      !.bayes_is_stackelberg(fit) && isTRUE(fit@stan_data$use_cutoff == 1L)
-    }
-    if (!(cutoff_active(reference) && cutoff_active(candidate))) {
+    if (!(.bayes_uses_cutoff_partition(reference) &&
+          .bayes_uses_cutoff_partition(candidate))) {
       shared_prior_names <- setdiff(shared_prior_names,
         c("prior_cutoff_alpha", "prior_cutoff_beta"))
     }
-    if (!(fringe_active(reference) && fringe_active(candidate))) {
+    if (!(.bayes_is_smooth_fringe(reference) &&
+          .bayes_is_smooth_fringe(candidate))) {
       shared_prior_names <- setdiff(shared_prior_names, "prior_sigma_meanval_fringe")
     }
     if (!identical(candidate@metadata$prior_manifest,
@@ -68,13 +61,24 @@ validate_comparison_contract <- function(fits) {
   invisible(TRUE)
 }
 
-#' Compare Bayesian Models Using Information Criteria and Bridge Sampling
+#' Compare Bayesian Models or Exact Ordered-k Restrictions
 #'
 #' Computes LOO-IC, WAIC, and optionally log marginal likelihoods via bridge
 #' sampling for one or more fitted \code{\linkS4class{BayesLogit}} objects.
-#' Returns a comparison table with model weights.
+#' For one exact ordered-k fit, \code{restrictions} instead compares restrictions
+#' on k with the exact encompassing-prior identity. Returns a comparison table
+#' appropriate to the selected route.
 #'
 #' @param ... One or more \code{BayesLogit} objects, optionally named.
+#' @param restrictions Optional named restrictions on ordered-k states. When
+#'   supplied, \code{...} must contain exactly one exact ordered-k
+#'   \code{\linkS4class{BayesFit}}. See
+#'   \code{\link{bayes_restriction_compare}} for the one- and multimarket forms.
+#' @param reference Optional restriction name or row index used as the Bayes
+#'   factor reference. Only available when \code{restrictions} is supplied.
+#' @param restriction_draws Optional generated-quantity draws passed to
+#'   \code{\link{bayes_restriction_compare}}. This is mainly useful for testing
+#'   or recovering summaries from serialized draws.
 #' @param bridge Logical. If \code{TRUE} (default), compute log marginal
 #'   likelihoods via \code{\link[bridgesampling]{bridge_sampler}} for Bayes
 #'   factor model comparison. If \code{FALSE}, only LOO/WAIC are computed.
@@ -89,13 +93,15 @@ validate_comparison_contract <- function(fits) {
 #'   \code{NULL} (default), recorded \code{model_prior} values are used when
 #'   all are available; otherwise equal probabilities are used.
 #'
-#' @return A data frame with columns for model name, supply model, LOOIC,
-#'   WAIC, stacking weights, and (if \code{bridge = TRUE}) log marginal
-#'   likelihoods, Bayes factors (vs. best model), and posterior model
-#'   probabilities.
+#' @return With multiple fitted models, a data frame containing model name,
+#'   supply model, LOOIC, WAIC, stacking weights, and (if
+#'   \code{bridge = TRUE}) log marginal likelihoods, Bayes factors, and
+#'   posterior model probabilities. With \code{restrictions}, a
+#'   \code{bayes_restriction_comparison} table containing prior and posterior
+#'   restriction masses and encompassing-prior Bayes factors.
 #'
 #' @details
-#' Three model comparison approaches are provided:
+#' Four model comparison approaches are provided:
 #' \describe{
 #'   \item{LOO-IC}{Leave-one-out cross-validation via \pkg{loo}. Stacking
 #'     weights reflect predictive performance.}
@@ -105,6 +111,10 @@ validate_comparison_contract <- function(fits) {
 #'     Posterior model probabilities use \code{prior_weights}, or the
 #'     model-specific probabilities recorded by \code{bayes_est}.
 #'     Bayes factors are computed relative to the best model.}
+#'   \item{Exact ordered-k restrictions}{Computes
+#'     \eqn{BF_{A,F}=P(A\mid y)/P(A)} from the generated conditional
+#'     probabilities in one marginalized-k fit. This route does not use bridge
+#'     sampling or a Gelfand-Dey estimator.}
 #' }
 #'
 #' Requires that the Stan model includes a \code{log_lik} generated quantity
@@ -115,9 +125,9 @@ validate_comparison_contract <- function(fits) {
 #' The current Stan specification retains prior density constants and support
 #' normalizers directly. Earlier specification fits must be refitted. Evidence
 #' refers to the transformed-outcome working likelihood. Bridge comparison
-#' with an active, non-normalized HMT penalty is unsupported. Stackelberg LOO
-#' clusters must contain whole partition units; observation LOO and period LOO
-#' with a market-shared count are unsupported.
+#' with an active, non-normalized HMT penalty is unsupported. Exact ordered-k
+#' LOO clusters must contain whole partition units; observation LOO and period
+#' LOO with a market-shared count are unsupported for fringe and Stackelberg.
 #'
 #' @examples
 #' \donttest{
@@ -125,14 +135,39 @@ validate_comparison_contract <- function(fits) {
 #' # fit2 <- bayes_est(..., supply_model = "cournot")
 #' # bayes_compare(Bertrand = fit1, Cournot = fit2)
 #' # bayes_compare(Bertrand = fit1, Cournot = fit2, bridge = FALSE)
+#' # bayes_compare(fit_stack, restrictions = list(k1 = 1L, k2 = 2L,
+#' #                                                k3_to_5 = 3:5),
+#' #               reference = "k2")
 #' }
 #'
 #' @export
-bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
+bayes_compare <- function(..., restrictions = NULL, reference = NULL,
+                          restriction_draws = NULL,
+                          bridge = TRUE, bridge_maxiter = 5000L,
                           bridge_repetitions = 3L,
                           loo_unit = c("cluster", "period", "market", "observation"),
                           prior_weights = NULL) {
   args <- list(...)
+  if (!is.null(restrictions)) {
+    is_fit <- vapply(args, methods::is, logical(1), "BayesFit")
+    if (length(args) != 1L || sum(is_fit) != 1L) {
+      stop("Restriction comparison requires exactly one BayesFit object in '...'.",
+           call. = FALSE)
+    }
+    if (!is.null(prior_weights)) {
+      stop("'prior_weights' compares separate fitted models and is unavailable ",
+           "for ordered-k restrictions; the fit's recorded k prior is used.",
+           call. = FALSE)
+    }
+    return(bayes_restriction_compare(
+      args[[which(is_fit)]], restrictions = restrictions,
+      reference = reference, draws = restriction_draws
+    ))
+  }
+  if (!is.null(reference) || !is.null(restriction_draws)) {
+    stop("'reference' and 'restriction_draws' require 'restrictions'.",
+         call. = FALSE)
+  }
   loo_unit <- match.arg(loo_unit)
   if (length(bridge_repetitions) != 1L || !is.finite(bridge_repetitions) ||
       bridge_repetitions < 1 || bridge_repetitions != as.integer(bridge_repetitions)) {

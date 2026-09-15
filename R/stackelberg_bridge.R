@@ -44,6 +44,49 @@
   out[order(-out, names(out))]
 }
 
+## Ordered-k estimation fixes one ranking for the complete market panel.
+## Preserve that ranking during reconstruction while retaining the selected
+## period's shares as the size values used by diagnostics. Firms absent from
+## the selected period keep their market rank and receive size zero.
+.stack_bridge_ranked_sizes <- function(fit, unit, df, demand_model) {
+  local <- .stack_bridge_sizes(df, demand_model)
+  prior <- .stack_bridge_or(fit@metadata$partition_prior, "cutoff")
+  if (!identical(prior, "ordered_k")) return(local)
+
+  ranking <- fit@metadata$firm_market_ranking
+  required <- c(
+    "firm_market_market", "firm_market_group_label", "firm_market_rank"
+  )
+  if (!is.list(ranking) || !all(required %in% names(ranking))) {
+    stop("Exact ordered-k reconstruction requires the stored firm-market ranking.",
+         call. = FALSE)
+  }
+  market_index <- if (methods::is(fit, "BayesSpecifiedFit")) {
+    1L
+  } else {
+    as.integer(unit$market_index)
+  }
+  if (length(market_index) != 1L || is.na(market_index)) {
+    stop("Exact ordered-k reconstruction has no valid market index.",
+         call. = FALSE)
+  }
+  keep <- as.integer(ranking$firm_market_market) == market_index
+  ids <- as.character(ranking$firm_market_group_label[keep])
+  ranks <- as.integer(ranking$firm_market_rank[keep])
+  n <- length(ids)
+  if (!n || anyNA(ids) || any(!nzchar(ids)) || anyDuplicated(ids) ||
+      anyNA(ranks) || !identical(sort(ranks), seq_len(n))) {
+    stop("The stored firm-market ranking is malformed.", call. = FALSE)
+  }
+  if (any(!names(local) %in% ids)) {
+    stop("A simulation firm is absent from the stored firm-market ranking.",
+         call. = FALSE)
+  }
+  out <- stats::setNames(numeric(n), ids)
+  out[names(local)] <- local
+  out[order(ranks)]
+}
+
 .stack_bridge_params <- function(fit, unit, draw, draws = NULL) {
   if (methods::is(fit, "BayesSpecifiedFit")) {
     p <- fit@params
@@ -259,7 +302,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
   params <- .stack_bridge_params(fit, unit, as.integer(draw), draws = draws)
   df <- unit$data
   demand <- fit@demand_model
-  sizes <- .stack_bridge_sizes(df, demand)
+  sizes <- .stack_bridge_ranked_sizes(fit, unit, df, demand)
   comp <- .stack_bridge_component_prob(
     fit, unit, params, sizes, as.integer(draw), draws = draws
   )
@@ -268,8 +311,10 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     support_max = max(comp$k)
   )
   ranked <- names(sizes)
-  leaders <- ranked[seq_len(k)]
-  if (!k) leaders <- character()
+  core_ids <- if (k) ranked[seq_len(k)] else character()
+  ## A market-level core firm may be absent in one panel period. Its rank is
+  ## retained, but only active owners are passed to the deterministic game.
+  leaders <- intersect(core_ids, unique(as.character(df$group)))
   p <- as.numeric(df$prices)
   q <- as.numeric(df$quantities)
   t <- q / sum(q)
@@ -316,7 +361,8 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
   out@diagnostics$bayes_reconstruction <- list(
     draw = as.integer(draw), market = unit$market, year = unit$year,
     structure = structure_name, role_mapping = role_mapping, selected_k = k,
-    leaders = leaders, component_k = comp$k, component_probability = comp$probability,
+    leaders = leaders, market_core_ids = core_ids,
+    component_k = comp$k, component_probability = comp$probability,
     partition_prior = params$partition_prior, k_scope = params$k_scope,
     normalization = .stack_whole_or(fit@metadata$prior_normalization, list(
       mode = "native_stan_normalized", model_spec_version = 8L,
@@ -356,8 +402,10 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
   cells <- split(seq_len(nrow(df)),
                  interaction(df$market, df$year, drop = TRUE, lex.order = TRUE))
   stack <- identical(structure_name, "stackelberg")
-  direct <- stack && identical(.stack_bridge_or(fit@metadata$partition_prior, "cutoff"),
-                               "ordered_k")
+  direct <- identical(
+    .stack_bridge_or(fit@metadata$partition_prior, "cutoff"),
+    "ordered_k"
+  )
   estimated <- !methods::is(fit, "BayesSpecifiedFit")
 
   ## Extract each vector-valued generated quantity once.  rstan drops the
@@ -365,7 +413,7 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
   draws <- NULL
   ndraw <- NULL
   if (estimated) {
-    gq_pars <- if (stack) {
+    gq_pars <- if (direct || stack) {
       c("posterior_component_prob", "prior_component_prob",
         "firm_leader_prob", "prior_firm_leader_prob", "s0_prob")
     } else {
@@ -396,7 +444,7 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
   posterior <- prior <- leader <- cutoff_draws <- NULL
   if (estimated) {
     d <- fit@stan_data
-    if (stack) {
+    if (direct || stack) {
       ncomp <- as.integer(d$N_partition_component)
       nfirm <- as.integer(d$N_firm_mky)
       nmarket <- as.integer(d$N_market)
@@ -438,7 +486,7 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
     k[[which(cumsum(p) >= prob - 1e-12)[1L]]]
   }
   component_for_cell <- function(ii, sizes, market_label, year_label) {
-    if (!stack) return(NULL)
+    if (!direct && !stack) return(NULL)
     if (estimated) {
       ## mky indexes are the canonical mapping from original observations to
       ## unique firm-market-year rows and then to the flattened unit array.
@@ -494,7 +542,18 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
 
   rows <- lapply(cells, function(ii) {
     dcell <- df[ii, , drop = FALSE]
-    sizes <- .stack_bridge_sizes(dcell, fit@demand_model)
+    sizes <- if (direct) {
+      unit <- list(
+        market_index = if (estimated) {
+          as.integer(stan_data$market[ii[[1L]]])
+        } else {
+          1L
+        }
+      )
+      .stack_bridge_ranked_sizes(fit, unit, dcell, fit@demand_model)
+    } else {
+      .stack_bridge_sizes(dcell, fit@demand_model)
+    }
     firm_ids <- names(sizes)
     if (is.null(firm_ids)) firm_ids <- paste0("firm_", seq_along(sizes))
     base <- list(
@@ -527,7 +586,7 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
       smooth_role_probability = I(list(NULL)),
       smooth_core_share_conditional = NA_real_, smooth_core_share_unconditional = NA_real_
     )
-    if (stack) {
+    if (direct || stack) {
       comp <- component_for_cell(ii, sizes, as.character(dcell$market[[1L]]),
                                  as.character(dcell$year[[1L]]))
       k <- comp$k
@@ -540,7 +599,11 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
         sum(prior_p[k >= j])
       }, numeric(1))
       names(role) <- firm_ids; names(prior_role) <- firm_ids
-      base$firm_leader_probability <- I(list(role))
+      if (stack) {
+        base$firm_leader_probability <- I(list(role))
+      } else {
+        base$firm_strategic_probability <- I(list(role))
+      }
       base$firm_core_probability <- I(list(role))
       base$prior_firm_leader_probability <- I(list(prior_role))
       base$realized_k_posterior <- I(list(stats::setNames(post_p, as.character(k))))

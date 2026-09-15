@@ -2,41 +2,48 @@
 % Please edit documentation in R/restriction_comparison.R
 \name{bayes_restriction_compare}
 \alias{bayes_restriction_compare}
-\title{Compare exact ordered-k model restrictions}
+\title{Compare exact ordered-k model restrictions using encompassing-prior masses}
 \usage{
 bayes_restriction_compare(fit, restrictions, reference = NULL, draws = NULL)
 }
 \arguments{
-\item{fit}{An exact ordered-k \code{BayesFit} with
+\item{fit}{An exact ordered-k \code{\linkS4class{BayesFit}} with
 \code{structure = "fringe"} or \code{"stackelberg"}.}
 
-\item{restrictions}{A named list of restrictions. Each one-market value is
-an integer vector; multimarket values are named market-to-k lists.}
+\item{restrictions}{A named list of restrictions.  Each one-market value
+is an integer vector; multimarket values are named market-to-k lists.}
 
-\item{reference}{Optional restriction name or one-based row index. When
+\item{reference}{Optional restriction name or one-based row index.  When
 supplied, the result includes Bayes factors relative to that restriction.}
 
 \item{draws}{Optional generated-quantity draw list containing
-\code{posterior_component_prob} and \code{prior_component_prob}. If
-\code{NULL}, generated quantities are extracted from the fitted Stan object.}
+\code{posterior_component_prob} and \code{prior_component_prob}.  If
+\code{NULL}, generated quantities are extracted from the fitted Stan
+object.}
 }
 \value{
 A data frame with one row per restriction and columns
 \code{restriction}, \code{prior_mass}, \code{posterior_mass},
-\code{log_evidence_vs_full}, and \code{method}. If \code{reference} is
+\code{log_evidence_vs_full}, and \code{method}.  If \code{reference} is
 supplied, \code{log_bf_vs_reference} and \code{bf_vs_reference} are also
-included. The parsed restrictions and fit mapping are stored as attributes.
+included.  The parsed restrictions and fit mapping are stored as
+attributes.
 }
 \description{
-Computes Bayes factors for restrictions on the discrete ordered-k partition
-state using the encompassing-prior identity.
+This computes Bayes factors for restrictions on the discrete ordered-k
+partition state.  A restriction is represented by an integer vector of
+allowed k values for a one-market fit.  For a multimarket fit, each
+restriction is a named list mapping market labels to allowed values; any
+omitted market is unrestricted.  Composite, unsorted, and noncontiguous
+sets are supported.
 }
 \details{
 The calculation uses the exact encompassing-prior identity
-\eqn{BF_{A,F} = P(A \mid y) / P(A)}. For multiple markets, each draw's
+\eqn{BF_{A,F} = P(A \mid y) / P(A)}.  For multiple markets, each draw's
 market-conditional masses are multiplied first and then averaged with a
-log-mean-exp. This is an exact discrete-state identity, not a Gelfand-Dey
-estimate. It applies when the continuous-parameter prior is common across
-the k restrictions. A \code{BayesSpecifiedFit} has no likelihood draws and
-therefore returns evidence one for coherent restrictions.
+log-mean-exp.  This is an exact discrete-state identity, not a
+Gelfand-Dey estimate.  It applies when the continuous-parameter prior is
+common across the k restrictions.  A \code{BayesSpecifiedFit} has no
+likelihood draws and therefore returns evidence one for coherent
+restrictions.
 }

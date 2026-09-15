@@ -36,6 +36,7 @@ bayes_est(
   structure = NULL,
   cutoff_scale = NULL,
   partition_prior = "cutoff",
+  k_support = NULL,
   k_prior = NULL,
   k_scope = "market",
   ...
@@ -187,13 +188,20 @@ reconstruction and counterfactual routing.}
 \item{cutoff_scale}{Prespecified positive transition scale.  Legacy fringe
 defaults to \code{0.2}; Stackelberg defaults to \code{0.01}.}
 
-\item{partition_prior}{Stackelberg partition prior, \code{"cutoff"} or
+\item{partition_prior}{Explicit fringe may use \code{"cutoff"} for the
+smooth legacy robustness mode; exact fringe and Stackelberg use
 \code{"ordered_k"}.}
 
-\item{k_prior}{Optional named ordered-k prior, or named list by market.}
+\item{k_support}{Explicit vector of unique integer leader counts. Fringe
+supports may include zero; Stackelberg supports must be positive and
+feasible in every selected market.}
 
-\item{k_scope}{Whether one ordered partition is shared by all periods in a
-market (\code{"market"}, default) or independently selected per period.}
+\item{k_prior}{Positional probabilities corresponding to \code{k_support}.
+Values are finite, non-negative, and must sum to one. \code{NULL} gives
+a uniform prior.}
+
+\item{k_scope}{Legacy cutoff scope selector. Exact ordered-k uses one
+partition and one firm ranking for the complete market panel.}
 
 \item{...}{Additional arguments (currently unused).}
 }

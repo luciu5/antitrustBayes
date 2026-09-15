@@ -1,9 +1,11 @@
 .stack_comparison_fixture <- function() {
   methods::new("BayesLogit",stanfit=NULL,supply_model=1L,demand_model="logit",
     market_side="output",price_sd=1,call=call("bayes_est"),
-    metadata=list(structure="stackelberg", prior_normalization=list(
+    metadata=list(structure="stackelberg", partition_prior="ordered_k",
+      prior_normalization=list(
       mode="native_stan_normalized", model_spec_version=8L)),
-    stan_data=list(structure=2L,likelihood_mode=1L,use_hmt=0L,
+    stan_data=list(structure=2L,partition_prior_code=1L,
+      likelihood_mode=1L,use_hmt=0L,
       use_s0_market_pool=0L,use_s0_market_year_pool=0L,
       market_year_idx=c(1L,1L,2L,2L),mky_to_partition_unit=c(1L,1L),
       k_scope_code=1L,cluster=c(1L,1L,1L,1L)))
@@ -15,13 +17,26 @@ test_that("predictive units retain the marginalized equilibrium count", {
   expect_invisible(.bayes_comparison_units(list(fit),"market"))
   expect_invisible(.bayes_comparison_units(list(fit),"cluster"))
   fit@stan_data$cluster <- c(1L,1L,2L,2L)
-  expect_error(.bayes_comparison_units(list(fit),"cluster"),"whole Stackelberg")
+  expect_error(.bayes_comparison_units(list(fit),"cluster"),"whole ordered-k")
   fit@stan_data$k_scope_code <- 0L
   fit@stan_data$mky_to_partition_unit <- c(1L,2L)
   expect_invisible(.bayes_comparison_units(list(fit),"period"))
   expect_invisible(.bayes_comparison_units(list(fit),"cluster"))
   fit@stan_data$cluster <- c(1L,2L,3L,3L)
-  expect_error(.bayes_comparison_units(list(fit),"cluster"),"whole Stackelberg")
+  expect_error(.bayes_comparison_units(list(fit),"cluster"),"whole ordered-k")
+})
+
+test_that("exact fringe retains one k at the whole-market predictive unit", {
+  fit <- .stack_comparison_fixture()
+  fit@metadata$structure <- "fringe"
+  fit@stan_data$structure <- 1L
+  expect_false(.bayes_is_stackelberg(fit))
+  expect_true(.bayes_is_exact_ordered_k(fit))
+  expect_error(.bayes_comparison_units(list(fit), "observation"),
+               "whole-market ordered-k")
+  expect_error(.bayes_comparison_units(list(fit), "period"),
+               "one ordered k")
+  expect_invisible(.bayes_comparison_units(list(fit), "market"))
 })
 test_that("evidence rejects non-normalized factors and improper pools", {
   fit <- .stack_comparison_fixture()
@@ -66,7 +81,11 @@ test_that("comparison ignores hyperparameters of absent role priors", {
   direct@metadata$resolved_priors$prior_alpha_sd <- .7
   expect_error(validate_comparison_contract(list(reference, direct)), "same prior manifest")
   direct@metadata$resolved_priors$prior_alpha_sd <- reference@metadata$resolved_priors$prior_alpha_sd
+  direct@metadata$structure <- "fringe"
+  direct@metadata$partition_prior <- "cutoff"
+  direct@stan_data$structure <- 1L
   direct@stan_data$partition_prior_code <- 0L
+  direct@stan_data$use_cutoff <- 1L
   expect_error(validate_comparison_contract(list(reference, direct)), "same prior manifest")
 })
 

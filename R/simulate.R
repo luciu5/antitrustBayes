@@ -478,7 +478,9 @@ NULL
         params <- if (methods::is(object, "BayesSpecifiedFit")) {
           .stack_bridge_params(object, bridge_unit, draw)
         } else .estimated_draw_params(object, draws, draw, rep_unit)
-        sizes <- .stack_bridge_sizes(bridge_unit$data, object@demand_model)
+        sizes <- .stack_bridge_ranked_sizes(
+          object, bridge_unit, bridge_unit$data, object@demand_model
+        )
         comp <- .stack_bridge_component_prob(object, bridge_unit, params, sizes, draw,
                                              draws = draws)
         fk <- .stack_fixed_k_value(fixed_k, rep_unit, nrow(setup$data))

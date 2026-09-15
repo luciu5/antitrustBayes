@@ -2,10 +2,13 @@
 % Please edit documentation in R/bma.R
 \name{bayes_compare}
 \alias{bayes_compare}
-\title{Compare Bayesian Models Using Information Criteria and Bridge Sampling}
+\title{Compare Bayesian Models or Exact Ordered-k Restrictions}
 \usage{
 bayes_compare(
   ...,
+  restrictions = NULL,
+  reference = NULL,
+  restriction_draws = NULL,
   bridge = TRUE,
   bridge_maxiter = 5000L,
   bridge_repetitions = 3L,
@@ -15,6 +18,18 @@ bayes_compare(
 }
 \arguments{
 \item{...}{One or more \code{BayesLogit} objects, optionally named.}
+
+\item{restrictions}{Optional named restrictions on ordered-k states. When
+supplied, \code{...} must contain exactly one exact ordered-k
+\code{\linkS4class{BayesFit}}. See
+\code{\link{bayes_restriction_compare}} for the one- and multimarket forms.}
+
+\item{reference}{Optional restriction name or row index used as the Bayes
+factor reference. Only available when \code{restrictions} is supplied.}
+
+\item{restriction_draws}{Optional generated-quantity draws passed to
+\code{\link{bayes_restriction_compare}}. This is mainly useful for testing
+or recovering summaries from serialized draws.}
 
 \item{bridge}{Logical. If \code{TRUE} (default), compute log marginal
 likelihoods via \code{\link[bridgesampling]{bridge_sampler}} for Bayes
@@ -35,18 +50,22 @@ Must be the same length as the number of models and sum to 1. If
 all are available; otherwise equal probabilities are used.}
 }
 \value{
-A data frame with columns for model name, supply model, LOOIC,
-WAIC, stacking weights, and (if \code{bridge = TRUE}) log marginal
-likelihoods, Bayes factors (vs. best model), and posterior model
-probabilities.
+With multiple fitted models, a data frame containing model name,
+supply model, LOOIC, WAIC, stacking weights, and (if
+\code{bridge = TRUE}) log marginal likelihoods, Bayes factors, and
+posterior model probabilities. With \code{restrictions}, a
+\code{bayes_restriction_comparison} table containing prior and posterior
+restriction masses and encompassing-prior Bayes factors.
 }
 \description{
 Computes LOO-IC, WAIC, and optionally log marginal likelihoods via bridge
 sampling for one or more fitted \code{\linkS4class{BayesLogit}} objects.
-Returns a comparison table with model weights.
+For one exact ordered-k fit, \code{restrictions} instead compares restrictions
+on k with the exact encompassing-prior identity. Returns a comparison table
+appropriate to the selected route.
 }
 \details{
-Three model comparison approaches are provided:
+Four model comparison approaches are provided:
 \describe{
 \item{LOO-IC}{Leave-one-out cross-validation via \pkg{loo}. Stacking
 weights reflect predictive performance.}
@@ -56,6 +75,10 @@ weights reflect predictive performance.}
 Posterior model probabilities use \code{prior_weights}, or the
 model-specific probabilities recorded by \code{bayes_est}.
 Bayes factors are computed relative to the best model.}
+\item{Exact ordered-k restrictions}{Computes
+\eqn{BF_{A,F}=P(A\mid y)/P(A)} from the generated conditional
+probabilities in one marginalized-k fit. This route does not use bridge
+sampling or a Gelfand-Dey estimator.}
 }
 
 Requires that the Stan model includes a \code{log_lik} generated quantity
@@ -66,9 +89,9 @@ different observed outcomes.
 The current Stan specification retains prior density constants and support
 normalizers directly. Earlier specification fits must be refitted. Evidence
 refers to the transformed-outcome working likelihood. Bridge comparison
-with an active, non-normalized HMT penalty is unsupported. Stackelberg LOO
-clusters must contain whole partition units; observation LOO and period LOO
-with a market-shared count are unsupported.
+with an active, non-normalized HMT penalty is unsupported. Exact ordered-k
+LOO clusters must contain whole partition units; observation LOO and period
+LOO with a market-shared count are unsupported for fringe and Stackelberg.
 }
 \examples{
 \donttest{
@@ -76,6 +99,9 @@ with a market-shared count are unsupported.
 # fit2 <- bayes_est(..., supply_model = "cournot")
 # bayes_compare(Bertrand = fit1, Cournot = fit2)
 # bayes_compare(Bertrand = fit1, Cournot = fit2, bridge = FALSE)
+# bayes_compare(fit_stack, restrictions = list(k1 = 1L, k2 = 2L,
+#                                                k3_to_5 = 3:5),
+#               reference = "k2")
 }
 
 }

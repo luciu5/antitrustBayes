@@ -4,19 +4,70 @@
   isTRUE(fit@stan_data$structure == 2L) ||
     identical(fit@metadata$structure, "stackelberg")
 }
+
+.bayes_is_exact_ordered_k <- function(fit) {
+  structure <- .stack_bridge_or(
+    fit@metadata$structure,
+    if (isTRUE(fit@stan_data$structure == 2L)) {
+      "stackelberg"
+    } else if (isTRUE(fit@stan_data$structure == 1L)) {
+      "fringe"
+    } else {
+      "simultaneous"
+    }
+  )
+  prior <- .stack_bridge_or(
+    fit@metadata$partition_prior,
+    if (isTRUE(fit@stan_data$partition_prior_code == 1L)) {
+      "ordered_k"
+    } else {
+      "cutoff"
+    }
+  )
+  structure %in% c("fringe", "stackelberg") &&
+    identical(prior, "ordered_k")
+}
+
+.bayes_uses_cutoff_partition <- function(fit) {
+  structure <- .stack_bridge_or(
+    fit@metadata$structure,
+    if (isTRUE(fit@stan_data$structure == 2L)) {
+      "stackelberg"
+    } else if (isTRUE(fit@stan_data$use_cutoff == 1L)) {
+      "fringe"
+    } else {
+      "simultaneous"
+    }
+  )
+  structure %in% c("fringe", "stackelberg") &&
+    !.bayes_is_exact_ordered_k(fit) &&
+    isTRUE(fit@stan_data$use_cutoff == 1L)
+}
+
+.bayes_is_smooth_fringe <- function(fit) {
+  structure <- .stack_bridge_or(
+    fit@metadata$structure,
+    if (isTRUE(fit@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous"
+  )
+  identical(structure, "fringe") &&
+    .bayes_uses_cutoff_partition(fit)
+}
+
 .bayes_comparison_units <- function(fits, loo_unit) {
-  for (fit in fits) if (.bayes_is_stackelberg(fit)) {
+  for (fit in fits) if (.bayes_is_exact_ordered_k(fit)) {
     dat <- fit@stan_data
     if (loo_unit == "observation") {
-      stop("Observation LOO is unsupported for whole-equilibrium Stackelberg mixtures.")
+      stop("Observation LOO is unsupported for whole-market ordered-k mixtures.")
     }
     if (loo_unit == "period" && isTRUE(dat$k_scope_code == 1L)) {
-      stop("Period LOO is unsupported when one Stackelberg k is shared across the market's years.")
+      stop("Period LOO is unsupported when one ordered k is shared across the market's years.")
     }
     if (loo_unit == "cluster") {
       unit <- dat$mky_to_partition_unit[dat$market_year_idx]
       counts <- tapply(dat$cluster, unit, function(x) length(unique(x)))
-      if (any(counts != 1L)) stop("LOO clusters must contain whole Stackelberg partition units.")
+      if (any(counts != 1L)) {
+        stop("LOO clusters must contain whole ordered-k partition units.")
+      }
     }
   }
   invisible(TRUE)

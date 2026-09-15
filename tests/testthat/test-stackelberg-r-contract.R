@@ -205,6 +205,35 @@ test_that("bridge and canonical preparation agree on tied firm ranks", {
   expect_equal(as.integer(d$firm_mky_rank), c(1L, 2L))
 })
 
+test_that("ordered-k reconstruction preserves the stored market ranking", {
+  df <- data.frame(
+    prices = c(2, 2, 2, 2),
+    quantities = c(1, 7, 6, 2),
+    group = c("a", "b", "c", "d")
+  )
+  fit <- methods::new(
+    "BayesLogit", data = data.frame(), supply_model = 1L,
+    demand_model = "logit", market_side = "output", call = quote(fake()),
+    metadata = list(
+      partition_prior = "ordered_k",
+      firm_market_ranking = list(
+        firm_market_market = rep(1L, 5),
+        firm_market_group_label = c("a", "b", "c", "d", "e"),
+        firm_market_rank = 1:5
+      )
+    ),
+    stanfit = list(), stan_data = list(), price_sd = 1
+  )
+  unit <- list(market_index = 1L)
+  got <- .stack_bridge_ranked_sizes(fit, unit, df, "logit")
+  expect_identical(names(got), letters[1:5])
+  expect_equal(unname(got), c(1, 7, 6, 2, 0) / 16)
+  ## Period-specific size order is b, c, d, a, whereas the fixed market
+  ## ordering remains a, b, c, d, e.
+  expect_identical(names(.stack_bridge_sizes(df, "logit")),
+                   c("b", "c", "d", "a"))
+})
+
 test_that("estimated Stack bridge fails closed when component GQ is absent", {
   skip_if_not_installed("rstan")
   fake <- methods::new(
@@ -247,8 +276,15 @@ test_that("shared-market cache uses full component support for selected years", 
   fit <- methods::new(
     "BayesLogit", data = df, supply_model = 1L, demand_model = "logit",
     market_side = "input", call = quote(fake()),
-    metadata = list(structure = "stackelberg", partition_prior = "ordered_k",
-                    k_scope = "market", k_prior = NULL, cutoff_scale = NULL),
+    metadata = list(
+      structure = "stackelberg", partition_prior = "ordered_k",
+      k_scope = "market", k_prior = NULL, cutoff_scale = NULL,
+      firm_market_ranking = list(
+        firm_market_market = rep(1L, 4),
+        firm_market_group_label = c("a", "b", "c", "d"),
+        firm_market_rank = 1:4
+      )
+    ),
     stanfit = list(), stan_data = stan_data, price_sd = 1
   )
   setup <- list(
@@ -296,4 +332,30 @@ test_that("specified Stackelberg simulation uses the native one-step route", {
   expect_identical(out@metadata$simulation_route,
                    "coordination::stackelberg_simulate")
   expect_equal(out@n_valid[[1L]], 1L)
+})
+
+test_that("exact fringe cutoff summary reports ordered strategic-core states", {
+  market <- bayes_market(
+    prices = c(2, 2.2, 2.4), quantities = c(10, 8, 6),
+    margins = c(.3, .28, .25), group = c("a", "b", "c"),
+    outside_price = 1, market_side = "output", insideSize = 100
+  )
+  fit <- bayes_specify(
+    bayes_params(
+      alpha = 1, s0 = .2, supply_model = 1L, structure = "fringe",
+      k_support = 0:2, k_prior = c(.2, .3, .5)
+    ),
+    market
+  )
+  got <- bayes_cutoff_summary(fit)$by_market_year
+  expect_null(got$firm_leader_probability[[1L]])
+  expect_equal(
+    unname(got$firm_strategic_probability[[1L]]),
+    c(.8, .5, 0)
+  )
+  expect_equal(
+    unname(got$realized_k_posterior[[1L]]),
+    c(.2, .3, .5)
+  )
+  expect_true(is.na(got$cutoff_mean))
 })

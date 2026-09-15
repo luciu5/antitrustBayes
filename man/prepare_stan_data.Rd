@@ -34,6 +34,7 @@ prepare_stan_data(
   structure = NULL,
   cutoff_scale = NULL,
   partition_prior = "cutoff",
+  k_support = NULL,
   k_prior = NULL,
   k_scope = "market"
 )
@@ -94,6 +95,12 @@ for either outside-share pooling mode.}
 
 \item{resid_df_fixed}{Fixed Student-t degrees of freedom when
 \code{estimate_df = FALSE}.}
+
+\item{k_support}{Explicit unique integer leader counts. Fringe supports may
+include zero; Stackelberg supports must be positive.}
+
+\item{k_prior}{Positional probabilities corresponding to \code{k_support};
+\code{NULL} gives a uniform prior.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.

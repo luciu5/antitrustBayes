@@ -118,6 +118,48 @@ test_that("comparison contract rejects different observations", {
   )
 })
 
+test_that("bayes_compare dispatches exact-k restrictions through one fit", {
+  stan_data <- list(
+    N_partition_unit = 1L,
+    partition_unit_market = 1L,
+    partition_unit_start = 1L,
+    partition_unit_count = 2L,
+    partition_component_unit = c(1L, 1L),
+    partition_component_k = c(1L, 2L)
+  )
+  attr(stan_data, "market_levels") <- "m1"
+  fit <- new(
+    "BayesLogit", stanfit = NULL, data = data.frame(market = "m1"),
+    stan_data = stan_data, price_sd = 1, supply_model = 1L,
+    demand_model = "logit", market_side = "output", call = call("fake"),
+    metadata = list(structure = "stackelberg", partition_prior = "ordered_k",
+                    posterior_draws = 2L)
+  )
+  draws <- list(
+    posterior_component_prob = rbind(c(.8, .2), c(.6, .4)),
+    prior_component_prob = matrix(.5, nrow = 2L, ncol = 2L)
+  )
+  got <- bayes_compare(
+    fit, restrictions = list(k1 = 1L, k2 = 2L), reference = "k2",
+    restriction_draws = draws
+  )
+  expect_s3_class(got, "bayes_restriction_comparison")
+  expect_identical(got$method, rep("encompassing_prior", 2L))
+  expect_equal(got$posterior_mass, c(.7, .3))
+  expect_equal(got$bf_vs_reference, c(7 / 3, 1))
+  expect_error(
+    bayes_compare(fit, fit, restrictions = list(k1 = 1L),
+                  restriction_draws = draws),
+    "exactly one BayesFit"
+  )
+  expect_error(bayes_compare(fit, reference = "k1"), "require 'restrictions'")
+  expect_error(
+    bayes_compare(fit, restrictions = list(k1 = 1L),
+                  restriction_draws = draws, prior_weights = 1),
+    "fit's recorded k prior"
+  )
+})
+
 test_that("evidence decomposition accepts common or model-specific share evidence", {
   comparison <- data.frame(model = c("a", "b"), logml = c(4, 6))
   common <- bayes_evidence_decomposition(comparison, 2)

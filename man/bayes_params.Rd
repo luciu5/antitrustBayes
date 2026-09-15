@@ -15,6 +15,7 @@ bayes_params(
   supply_model,
   structure = NULL,
   partition_prior = "cutoff",
+  k_support = NULL,
   k_prior = NULL,
   k_scope = "market"
 )
@@ -47,15 +48,20 @@ to activate it.}
 \item{structure}{Supply structure: \code{"simultaneous"},
 \code{"fringe"}, or \code{"stackelberg"}.}
 
-\item{partition_prior}{For Stackelberg, \code{"cutoff"} selects the
-conditioned common-boundary lottery; \code{"ordered_k"} selects a
-prespecified positive-count prior.}
+\item{partition_prior}{For explicit fringe, \code{"cutoff"} retains the
+smooth legacy robustness mode; \code{"ordered_k"} selects the exact
+finite support. Explicit Stackelberg uses \code{"ordered_k"}.}
 
-\item{k_prior}{Ordered-count probabilities supplied in a supported
-package format; \code{NULL} gives a uniform prior over positive support.}
+\item{k_support}{Ordered integer counts. Fringe supports may include zero;
+Stackelberg supports must be positive. The vector must be feasible in
+every selected market.}
 
-\item{k_scope}{Whether direct ordered-k is common across a
-\code{"market"} or specific to each \code{"period"}.}
+\item{k_prior}{Positional probabilities corresponding to \code{k_support};
+\code{NULL} gives a uniform prior. Values must be finite, non-negative,
+and sum to one.}
+
+\item{k_scope}{Retained for legacy cutoff preparation; exact ordered-k is
+always common across the complete market panel.}
 }
 \value{
 A list of class \code{bayes_params} with one element per draw
