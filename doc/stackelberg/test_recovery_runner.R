@@ -27,6 +27,21 @@ stopifnot(nrow(plan) == 72L, all(plan$truth_structure %in% c("stackelberg", "fri
           all(plan$layout[plan$seed == 3301L] == "multi_follower"),
           all(c("stackelberg", "fringe") %in% plan$truth_structure))
 
+cli_default_layout <- env$recovery_parse_cli(c(
+  "--demand=logit", "--conduct=bertrand"
+))
+stopifnot(is.null(cli_default_layout$layout))
+cli_plan <- env$recovery_make_plan(
+  cli_default_layout$demand, cli_default_layout$conduct,
+  cli_default_layout$structure, c(1103L, 2207L, 3301L),
+  cli_default_layout$layout,
+  truth_structure = cli_default_layout$truth_structure
+)
+stopifnot(nrow(cli_plan) == 18L,
+          identical(unique(cli_plan$layout[cli_plan$seed == 1103L]), "single"),
+          identical(unique(cli_plan$layout[cli_plan$seed == 2207L]), "multi_leader"),
+          identical(unique(cli_plan$layout[cli_plan$seed == 3301L]), "multi_follower"))
+
 one <- env$recovery_make_plan("logit", "cournot", "fringe", 2207L,
                               "multi_leader", truth_structure = "stackelberg",
                               single_case = TRUE)
@@ -81,7 +96,9 @@ stopifnot(grepl("--run", source_text, fixed = TRUE),
           !grepl("saveRDS\\(.*stanfit.*\\.rds", source_text, perl = TRUE),
           grepl("energy__", source_text, fixed = TRUE),
           grepl("true_k_probability", source_text, fixed = TRUE),
-          grepl("margin_mae_core", source_text, fixed = TRUE))
+          grepl("margin_mae_core", source_text, fixed = TRUE),
+          !grepl("fit <<-", source_text, fixed = TRUE),
+          grepl("paste(\"ERROR:\", err)", source_text, fixed = TRUE))
 
 cat("PASS: primary settings, selectors, exact BF/CF/BS/CS supports, and DGP round-trip\n")
 cat("PASS: no-fit source checks; HMC/Stan sampling is unreachable without explicit --run\n")

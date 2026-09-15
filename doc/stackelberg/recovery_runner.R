@@ -96,8 +96,12 @@ recovery_parse_cli <- function(args = commandArgs(trailingOnly = TRUE)) {
     truth_structure = recovery_values(recovery_option(args, "truth-structure"),
                                       c("stackelberg", "fringe"), "truth-structure"),
     seed = recovery_integer_values(recovery_option(args, "seed"), "seed"),
-    layout = recovery_values(recovery_option(args, "layout"),
-                             c("single", "multi_leader", "multi_follower"), "layout"),
+    layout = {
+      value <- recovery_option(args, "layout")
+      if (is.null(value)) NULL else recovery_values(
+        value, c("single", "multi_leader", "multi_follower"), "layout"
+      )
+    },
     single_case = FALSE
   )
 }
@@ -420,11 +424,15 @@ recovery_run_one <- function(panel, case, out_dir, settings) {
           warning = function(w) { warns <<- c(warns, conditionMessage(w)); invokeRestart("muffleWarning") })
         list(value = value, error = NULL)
       }, error = function(e) list(value = NULL, error = conditionMessage(e)))
-      fit <<- captured$value
-      if (!is.null(captured$error)) err <<- captured$error
+      fit <- captured$value
+      if (!is.null(captured$error)) err <- captured$error
     }, type = "output")
   }
-  writeLines(c(output, if (length(warns)) paste("WARNING:", warns) else character()), log_path)
+  writeLines(c(
+    output,
+    if (length(warns)) paste("WARNING:", warns) else character(),
+    if (nzchar(err)) paste("ERROR:", err) else character()
+  ), log_path)
   elapsed <- proc.time()[["elapsed"]] - started
   if (!is.null(fit) && !nzchar(err)) saveRDS(fit, file.path(fit_dir, paste0(id, ".rds")))
   diag <- recovery_fit_diagnostics(fit, case, panel, elapsed, err, paste(warns, collapse = " | "))
