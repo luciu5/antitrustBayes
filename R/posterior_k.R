@@ -184,9 +184,21 @@
 
 .posterior_k_metadata_maps <- function(fit, structure_name) {
   md <- fit@metadata
-  supports <- md$k_support_resolved %||% md$prior_normalization$k_support_resolved %||%
-    md$prior_normalization$partition_support
-  priors <- md$k_prior_resolved %||% md$prior_normalization$k_prior_resolved
+  ## `%||%` is intentionally a scalar extractor in coordination.  Preserve
+  ## these list-valued metadata fields while selecting the first available
+  ## source, otherwise a one-market support list is reduced to its vector.
+  normalization <- md$prior_normalization
+  supports <- md$k_support_resolved
+  if (is.null(supports) || !length(supports)) {
+    supports <- if (is.list(normalization)) normalization$k_support_resolved else NULL
+  }
+  if (is.null(supports) || !length(supports)) {
+    supports <- if (is.list(normalization)) normalization$partition_support else NULL
+  }
+  priors <- md$k_prior_resolved
+  if (is.null(priors) || !length(priors)) {
+    priors <- if (is.list(normalization)) normalization$k_prior_resolved else NULL
+  }
   if (is.null(supports) || is.null(priors) || !is.list(supports) ||
       !is.list(priors) || length(supports) != length(priors) ||
       !length(supports)) {
@@ -194,7 +206,6 @@
          call. = FALSE)
   }
   n_unit <- length(supports)
-  component_indices <- lapply(seq_len(n_unit), seq_along)
   k <- lapply(supports, function(x) {
     if (!is.numeric(x) || !length(x) || any(!is.finite(x)) ||
         any(x != as.integer(x)) || anyDuplicated(x) ||
@@ -204,6 +215,7 @@
     }
     as.integer(x)
   })
+  component_indices <- lapply(k, seq_along)
   p <- lapply(priors, function(x) {
     if (!is.numeric(x) || !length(x) || any(!is.finite(x)) || any(x < 0)) {
       stop("Exact ordered-k metadata contains a malformed k prior.", call. = FALSE)
