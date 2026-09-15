@@ -33,6 +33,11 @@ bayes_est(
   stan_options = list(),
   margin_observed = NULL,
   outside_price = 1,
+  structure = NULL,
+  cutoff_scale = NULL,
+  partition_prior = "cutoff",
+  k_prior = NULL,
+  k_scope = "market",
   ...
 )
 }
@@ -175,6 +180,21 @@ quantity and revenue shares on a common scale. Supply a scalar (default
 fitted likelihood, but is retained for posterior structural-model
 reconstruction and counterfactual routing.}
 
+\item{structure}{Bayesian timing structure.  One of \code{"simultaneous"},
+\code{"fringe"}, or \code{"stackelberg"}; when omitted, the legacy
+\code{use_cutoff} flag selects simultaneous or fringe.}
+
+\item{cutoff_scale}{Prespecified positive transition scale.  Legacy fringe
+defaults to \code{0.2}; Stackelberg defaults to \code{0.01}.}
+
+\item{partition_prior}{Stackelberg partition prior, \code{"cutoff"} or
+\code{"ordered_k"}.}
+
+\item{k_prior}{Optional named ordered-k prior, or named list by market.}
+
+\item{k_scope}{Whether one ordered partition is shared by all periods in a
+market (\code{"market"}, default) or independently selected per period.}
+
 \item{...}{Additional arguments (currently unused).}
 }
 \value{
@@ -219,8 +239,9 @@ The \code{priors} argument accepts a named list with any of:
 (default 0.5).}
 \item{\code{prior_sigma_margin}}{Lognormal center for log inverse-margin
 error SD (default 0.75).}
-\item{\code{prior_sigma_meanval_strat}}{Half-normal scale for strategic
-group mean-value SD (default 1.0).}
+\item{\code{prior_sigma_meanval_strat}}{Scale parameter for the
+positive-truncated Normal strategic group mean-value SD, centered at
+1 (default 1.0).}
 \item{\code{prior_alpha_mean}}{Prior mean for the log standardized
 price coefficient (default 0).}
 \item{\code{prior_alpha_sd}}{Prior SD for the log standardized price

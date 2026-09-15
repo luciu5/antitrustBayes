@@ -24,6 +24,7 @@ Depends:
     methods
 Imports:
     antitrust (>= 0.99.38),
+    coordination (>= 0.0.0.9003),
     bridgesampling (>= 1.1.0),
     digest,
     loo (>= 2.5.0),
@@ -55,6 +56,9 @@ Collate:
     'params.R'
     'priors.R'
     'simulate.R'
+    'stackelberg_bayes.R'
+    'stackelberg_bridge.R'
+    'stackelberg_comparison.R'
     'stanmodels.R'
     'theory.R'
     'validation.R'

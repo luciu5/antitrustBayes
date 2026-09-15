@@ -210,12 +210,13 @@ test_that("CES market-level s0 pooling keeps quantity s0 fixed but transforms R0
     mky_levels <- attr(fit@stan_data, "mky_levels")
     market_of_mky <- sub("_.*$", "", mky_levels)
 
-    # Check the implemented bounded version of
-    # logit(R0) = logit(s0) + log(p0) - log(pbar_inside).
+    # Independently recover outside revenue share by expenditure accounting:
+    # R0 = s0*p0 / (s0*p0 + (1-s0)*pbar_inside).
     for (j in seq_len(fit@stan_data$N_market_year)) {
-      eta <- qlogis(s0_prob[, j]) + log(fit@stan_data$outside_price[j]) -
-        log(fit@stan_data$inside_price_index[j])
-      expected_R0 <- 1e-6 + (1 - 2e-6) * plogis(eta)
+      outside_revenue <- s0_prob[, j] * fit@stan_data$outside_price[j]
+      inside_revenue <- (1 - s0_prob[, j]) *
+        fit@stan_data$inside_price_index[j]
+      expected_R0 <- outside_revenue / (outside_revenue + inside_revenue)
       expect_equal(R0_prob[, j], expected_R0, tolerance = 1e-10)
     }
 

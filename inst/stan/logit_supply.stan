@@ -1,3 +1,4 @@
+// Specification 8: centered orthonormal firm-quality coordinates.
 // Bayesian Logit demand and supply model.
 // Conditional inside shares and inverse normalized margins are coupled
 // per observation through a free cross-equation correlation rho, using a
@@ -26,19 +27,17 @@ functions {
     return 0.0;
   }
 
-  real conduct_weight_logit(real firm_share_inside, real cutoff, int use_cutoff) {
+  real conduct_weight_logit(real firm_share_inside, real cutoff, int use_cutoff, real cutoff_scale) {
     real x;
     if (use_cutoff == 0) return 0.0;
-    x = -(firm_share_inside - cutoff) / 0.2;
-    if (x > 10) return 1.0;
-    if (x < -10) return 0.0;
+    x = -(firm_share_inside - cutoff) / cutoff_scale;
     return inv_logit(x);
   }
 
   real logit_inv_markup(real firm_share_inside, real s0, real alpha,
                          real fringe_weight, int supply_model,
                          real bargaining_power) {
-    real firm_share = fmin(0.999999, firm_share_inside * (1.0 - s0));
+    real firm_share = firm_share_inside * (1.0 - s0);
     real conduct;
     if (supply_model == 1) {
       conduct = 1.0 - firm_share;
@@ -81,6 +80,7 @@ data {
   array[N] int<lower=1, upper=N_year> year;
   int<lower=1, upper=5> supply_model;
   int<lower=0, upper=1> use_cutoff;
+  real<lower=0> cutoff_scale;
   int<lower=1> N_market_year;
   array[N] int<lower=1, upper=N_market_year> market_year_idx;
   array[N_market_year] int<lower=1> mky_n;
@@ -140,11 +140,18 @@ transformed data {
   array[N_market] int n_mky_per_market = rep_array(0, N_market);
   int any_paired = 0;
   int rho_active;
+  matrix[N_group, N_group - 1] Q = rep_matrix(0.0, N_group, N_group - 1);
   for (mky in 1:N_market_year) {
     n_mky_per_market[mky_to_market[mky]] += 1;
   }
   for (i in 1:N) {
     if (margin_obs[i] == 1) any_paired = 1;
+  }
+  if (N_group > 1) {
+    for (k in 1:(N_group - 1)) {
+      for (j in 1:k) Q[j, k] = 1.0 / sqrt(k * (k + 1.0));
+      Q[k + 1, k] = -k / sqrt(k * (k + 1.0));
+    }
   }
   rho_active = (use_rho == 1 && likelihood_mode == 1 && any_paired == 1) ? 1 : 0;
 }
@@ -153,7 +160,7 @@ parameters {
   vector[is_single_market == 0 ? 1 : 0] mu_b_market_vec;
   vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;
   vector[is_single_market == 0 ? N_market : 0] b_market_raw;
-  vector[N_group] b_group_raw;
+  vector[N_group - 1] b_group_centered;
   real<lower=0> sigma_b_strat;
   vector[use_cutoff == 1 ? 1 : 0] mu_b_fringe_vec;
   vector[(is_cournot == 1 && pool_alpha_by_market == 0) ? 0 : 1] mu_log_a_free;
@@ -197,7 +204,7 @@ transformed parameters {
   vector[N_market] log_a_market_derived = rep_vector(0.0, N_market);
   vector[N_market] b_market;
   vector[N_market] gamma_market;
-  vector[N_group] b_quality_all = sigma_b_strat * (b_group_raw - mean(b_group_raw));
+  vector[N_group] b_quality_all = Q * b_group_centered;
   real mu_b_fringe = 0.0;
   vector[N_market_year] s0;
   vector[N_market_year] s0_prob;
@@ -297,60 +304,61 @@ transformed parameters {
 
 model {
   if (is_cournot == 1 && pool_alpha_by_market == 0) {
-    mu_log_a ~ normal(prior_alpha_mean, prior_alpha_sd);
+    target += normal_lpdf(mu_log_a | prior_alpha_mean, prior_alpha_sd);
   } else {
-    mu_log_a_free[1] ~ normal(prior_alpha_mean, prior_alpha_sd);
+    target += normal_lpdf(mu_log_a_free[1] | prior_alpha_mean, prior_alpha_sd);
   }
-  if (pool_alpha_by_market == 1) sigma_log_a_vec ~ normal(0, prior_sigma_alpha);
+  if (pool_alpha_by_market == 1) target += normal_lpdf(sigma_log_a_vec | 0, prior_sigma_alpha) - num_elements(sigma_log_a_vec) * normal_lccdf(0 | 0, prior_sigma_alpha);
   if (is_cournot == 0 && pool_alpha_by_market == 1) {
-    if (use_centered_alpha == 1) log_a_market_pool ~ normal(mu_log_a, sigma_log_a);
-    else r_market_a_raw ~ std_normal();
+    if (use_centered_alpha == 1) target += normal_lpdf(log_a_market_pool | mu_log_a, sigma_log_a);
+    else target += std_normal_lpdf(r_market_a_raw);
   }
   if (is_cournot == 1 && pool_alpha_by_market == 1) {
-    log_a_market_derived ~ normal(mu_log_a, sigma_log_a);
+    target += normal_lpdf(log_a_market_derived | mu_log_a, sigma_log_a);
   }
   if (is_single_market == 0) {
-    mu_b_market_vec ~ normal(0, 1);
-    sigma_b_market_vec ~ normal(0, 0.5);
-    b_market_raw ~ std_normal();
+    target += normal_lpdf(mu_b_market_vec | 0, 1);
+    target += normal_lpdf(sigma_b_market_vec | 0, 0.5) - num_elements(sigma_b_market_vec) * normal_lccdf(0 | 0, 0.5);
+    target += std_normal_lpdf(b_market_raw);
   }
-  b_group_raw ~ std_normal();
-  sigma_b_strat ~ normal(1, prior_sigma_meanval_strat);
+  target += normal_lpdf(b_group_centered | 0, sigma_b_strat);
+  target += normal_lpdf(sigma_b_strat | 1, prior_sigma_meanval_strat) - 1 * normal_lccdf(0 | 1, prior_sigma_meanval_strat);
   if (use_cutoff == 1) {
-    cutoff_share ~ beta(prior_cutoff_alpha, prior_cutoff_beta);
-    mu_b_fringe_vec ~ normal(0, prior_sigma_meanval_fringe);
+    target += beta_lpdf(cutoff_share | prior_cutoff_alpha, prior_cutoff_beta);
+    target += normal_lpdf(mu_b_fringe_vec | 0, prior_sigma_meanval_fringe);
   }
   if (use_s0_market_pool == 1) {
-    mu_s0_pool_vec ~ normal(s0_prior_mean, s0_prior_sd);
-    sigma_s0_pool_vec ~ normal(0, prior_sigma_s0_pool);
+    target += normal_lpdf(mu_s0_pool_vec | s0_prior_mean, s0_prior_sd);
+    target += normal_lpdf(sigma_s0_pool_vec | 0, prior_sigma_s0_pool) - num_elements(sigma_s0_pool_vec) * normal_lccdf(0 | 0, prior_sigma_s0_pool);
     if (use_centered_s0_pool == 1) {
-      eta_s0_market ~ normal(mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
-    } else s0_market_raw ~ std_normal();
+      target += normal_lpdf(eta_s0_market | mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
+    } else target += std_normal_lpdf(s0_market_raw);
   } else if (use_s0_market_year_pool == 1) {
-    mu_s0_pool_vec ~ normal(s0_prior_mean, s0_prior_sd);
-    sigma_s0_pool_vec ~ normal(0, prior_sigma_s0_pool);
+    target += normal_lpdf(mu_s0_pool_vec | s0_prior_mean, s0_prior_sd);
+    target += normal_lpdf(sigma_s0_pool_vec | 0, prior_sigma_s0_pool) - num_elements(sigma_s0_pool_vec) * normal_lccdf(0 | 0, prior_sigma_s0_pool);
     if (use_centered_s0_pool == 1) {
-      eta_s0_pool ~ normal(mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
-    } else s0_pool_raw ~ std_normal();
-  } else s0_logit ~ normal(s0_prior_mean, s0_prior_sd);
-  beta_s0 ~ normal(0, prior_sigma_beta_s0);
+      target += normal_lpdf(eta_s0_pool | mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
+    } else target += std_normal_lpdf(s0_pool_raw);
+  } else target += normal_lpdf(s0_logit | s0_prior_mean, s0_prior_sd);
+  target += normal_lpdf(beta_s0 | 0, prior_sigma_beta_s0);
   if (is_bargaining == 1) {
-    bargaining_unit ~ beta(bargaining_prior_alpha, bargaining_prior_beta);
+    target += beta_lpdf(bargaining_unit | bargaining_prior_alpha, bargaining_prior_beta);
   }
-  log_sigma_share ~ normal(log(prior_sigma_share), prior_log_sigma_share_sd);
-  log_sigma_margin ~ normal(log(prior_sigma_margin), prior_log_sigma_margin_sd);
+  target += normal_lpdf(log_sigma_share | log(prior_sigma_share), prior_log_sigma_share_sd);
+  target += normal_lpdf(log_sigma_margin | log(prior_sigma_margin), prior_log_sigma_margin_sd);
   if (use_market_resid_scale == 1) {
-    log_sigma_share_market_raw ~ std_normal();
-    log_sigma_margin_market_raw ~ std_normal();
-    sigma_log_sigma_share_market ~ normal(0, prior_sigma_resid_market);
-    sigma_log_sigma_margin_market ~ normal(0, prior_sigma_resid_market);
+    target += std_normal_lpdf(log_sigma_share_market_raw);
+    target += std_normal_lpdf(log_sigma_margin_market_raw);
+    target += normal_lpdf(sigma_log_sigma_share_market | 0, prior_sigma_resid_market) - num_elements(sigma_log_sigma_share_market) * normal_lccdf(0 | 0, prior_sigma_resid_market);
+    target += normal_lpdf(sigma_log_sigma_margin_market | 0, prior_sigma_resid_market) - num_elements(sigma_log_sigma_margin_market) * normal_lccdf(0 | 0, prior_sigma_resid_market);
   }
-  if (estimate_df == 1) nu_minus_2 ~ gamma(prior_nu_shape, prior_nu_rate);
+  if (estimate_df == 1) target += gamma_lpdf(nu_minus_2 | prior_nu_shape, prior_nu_rate);
   if (rho_active == 1) {
     // Two-dimensional LKJ-style prior, with the Jacobian for the bounded
     // rho = 0.95*tanh(rho_raw) parameterization.
     target += (prior_lkj - 1.0) * log1m(square(rho))
-      + log1m(square(tanh(rho_raw[1])));
+      + log1m(square(tanh(rho_raw[1])))
+      - (lbeta(0.5, prior_lkj) + beta_lcdf(square(0.95) | 0.5, prior_lkj) - log(0.95));
   }
 
   if (use_hmt == 1 && likelihood_mode != 2) {
@@ -365,7 +373,7 @@ model {
     int m = market[i];
     int mky = market_year_idx[i];
     real cutoff = use_cutoff == 1 ? cutoff_share[m] : 0.0;
-    real w = conduct_weight_logit(firm_shareIn[i], cutoff, use_cutoff);
+    real w = conduct_weight_logit(firm_shareIn[i], cutoff, use_cutoff, cutoff_scale);
     real b_quality = b_quality_all[group[i]] + w * mu_b_fringe;
     real delta = b_market[m] + b_quality
       + market_sign * a_market[m] * price_std[i];
@@ -415,7 +423,7 @@ generated quantities {
     int m = market[i];
     int mky = market_year_idx[i];
     real cutoff = use_cutoff == 1 ? cutoff_share[m] : 0.0;
-    real w = conduct_weight_logit(firm_shareIn[i], cutoff, use_cutoff);
+    real w = conduct_weight_logit(firm_shareIn[i], cutoff, use_cutoff, cutoff_scale);
     real b_quality = b_quality_all[group[i]] + w * mu_b_fringe;
     real delta = b_market[m] + b_quality
       + market_sign * a_market[m] * price_std[i];

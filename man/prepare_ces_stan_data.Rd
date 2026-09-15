@@ -30,7 +30,12 @@ prepare_ces_stan_data(
   likelihood_mode = 1L,
   loo_cluster = market,
   estimate_df = FALSE,
-  resid_df_fixed = NULL
+  resid_df_fixed = NULL,
+  structure = NULL,
+  cutoff_scale = NULL,
+  partition_prior = "cutoff",
+  k_prior = NULL,
+  k_scope = "market"
 )
 }
 \arguments{

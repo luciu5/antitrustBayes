@@ -13,3 +13,5 @@
 ^data-raw$
 ^antitrustBayes\.Rcheck$
 ^antitrustBayes_.*\.tar\.gz$
+^doc$
+^synthetic_dgp_validation\.csv$

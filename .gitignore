@@ -12,3 +12,30 @@ src/symbols.rds
 .codex
 .claude/
 tmp_lib/
+
+# Research evidence and large delivery artifacts stay local.
+/doc/stackelberg/*
+*.bundle
+
+# Only reviewed small audit sources, contracts and tables are versioned.
+!/doc/stackelberg/boundary_check.R
+!/doc/stackelberg/boundary_validation.csv
+!/doc/stackelberg/ces_negative_response_validation.R
+!/doc/stackelberg/ces_negative_response_validation.csv
+!/doc/stackelberg/derivative_validation.csv
+!/doc/stackelberg/independent_ces_check.R
+!/doc/stackelberg/independent_review.md
+!/doc/stackelberg/math_check.R
+!/doc/stackelberg/nonempty_core_addendum.md
+!/doc/stackelberg/optimization_validation.csv
+!/doc/stackelberg/ordered_k_addendum.md
+!/doc/stackelberg/recovery_spec.md
+!/doc/stackelberg/scale_check.R
+!/doc/stackelberg/scale_geometry.csv
+!/doc/stackelberg/scale_prior_sensitivity.csv
+!/doc/stackelberg/derivative_validation_summary.csv
+!/doc/stackelberg/ces_contract.md
+!/doc/stackelberg/quality_coordinates.md
+!/doc/stackelberg/native8_gate_summary.csv
+!/doc/stackelberg/exact_share_scale.md
+!/doc/stackelberg/package_validation.md

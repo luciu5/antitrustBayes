@@ -118,9 +118,8 @@ NULL
 #' }
 #'
 #' @export
-setGeneric("wtp_convert", function(object, to_gamma = TRUE) {
-  standardGeneric("wtp_convert")
-})
+setGeneric("wtp_convert", function(object, to_gamma = TRUE)
+  standardGeneric("wtp_convert"))
 
 #' @rdname wtp_convert
 #' @exportMethod wtp_convert

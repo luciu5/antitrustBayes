@@ -1,11 +1,10 @@
 #' Simulate counterfactuals over Bayesian structural draws
 #'
 #' Applies an \pkg{antitrust} counterfactual to draws stored in a
-#' \code{BayesFit}. For every draw and simulation unit, the method constructs
-#' the pre-counterfactual structural realization, wraps it as an
-#' \code{antitrust::AntitrustFit}, and delegates the scenario solve to
-#' \code{antitrust::simulate()}. The result therefore uses the same ownership,
-#' cost, entry, exit, quality, and multi-step machinery as \pkg{antitrust}.
+#' \code{BayesFit}. Legacy structures delegate to \code{antitrust::simulate()}.
+#' New Stackelberg structures reconstruct the native coordination model and
+#' route supported one-step ownership, cost, leader, and exit changes through
+#' \code{coordination::stackelberg_simulate()}.
 #'
 #' \code{bayes_sim()} is retained as a convenience wrapper around this S4
 #' method. New code may call \code{simulate()} directly.
@@ -15,7 +14,8 @@
 #'   \code{bayes_specify()}.
 #' @param ownerPost A post-counterfactual ownership vector or matrix, an
 #'   \code{antitrust::Counterfactual}, or a named list of either, one per
-#'   simulation unit.
+#'   simulation unit. It may be omitted for a Stackelberg cost-only
+#'   counterfactual supplied through \code{mcDelta}.
 #' @param n_draws Number of posterior draws to simulate. By default, uses at
 #'   most 200 draws.
 #' @param mcDelta Optional vector of proportional marginal-cost changes for
@@ -34,6 +34,12 @@
 #'   \code{"unit_1"}.
 #' @param year Which years to simulate. Panel fits require an explicit year;
 #'   the specified-fit year is \code{"1"}.
+#' @param role_mapping Stackelberg role realization: posterior mixture draw,
+#'   posterior MAP, or cutoff threshold. The default is \code{"mixture"}.
+#' @param fixed_k Optional explicit positive leader count (scalar or named by
+#'   simulation unit), used by native Stackelberg reconstruction.
+#' @param role_offset Integer adjacent-partition sensitivity offset.
+#' @param leadersPost Optional exact post-counterfactual firm-role override.
 #' @param mc.cores Number of parallel fork workers. The default is the number
 #'   of detected cores capped at four; Windows always uses one.
 #' @param ... Additional arguments passed to \code{antitrust::simulate()}.
@@ -230,8 +236,13 @@ NULL
   } else {
     stats::plogis(.indexed_draw(draws$s0_logit, draw, mky))
   }
-  use_cutoff <- isTRUE(object@stan_data$use_cutoff == 1L)
-  cutoff <- if (use_cutoff) {
+  structure <- object@metadata$structure %||%
+    attr(object@stan_data, "structure", exact = TRUE) %||%
+    if (isTRUE(object@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous"
+  use_cutoff <- identical(structure, "fringe") || identical(structure, "stackelberg")
+  cutoff_mode <- identical(object@metadata$partition_prior %||%
+    attr(object@stan_data, "partition_prior", exact = TRUE) %||% "cutoff", "cutoff")
+  cutoff <- if (use_cutoff && cutoff_mode) {
     .indexed_draw(draws$cutoff_share, draw, unit$market_index)
   } else {
     0
@@ -252,10 +263,376 @@ NULL
     s0 = as.numeric(s0),
     bargaining_power = bargaining,
     cutoff_share = as.numeric(cutoff),
-    cutoff_scale = 0.2,
+    cutoff_scale = object@metadata$cutoff_scale %||%
+      attr(object@stan_data, "cutoff_scale", exact = TRUE) %||%
+      if (identical(structure, "stackelberg")) 0.01 else 0.2,
     use_cutoff = use_cutoff,
-    supply_model = object@supply_model
+    supply_model = object@supply_model,
+    structure = structure,
+    partition_prior = object@metadata$partition_prior %||%
+      attr(object@stan_data, "partition_prior", exact = TRUE) %||% "cutoff",
+    k_prior = .stack_whole_or(object@metadata$k_prior, NULL),
+    k_scope = object@metadata$k_scope %||%
+      attr(object@stan_data, "k_scope", exact = TRUE) %||% "market"
   )
+}
+
+## Translate the one-step antitrust counterfactual contract into the native
+## coordination Stackelberg simulator.  The native API works with firm IDs,
+## product-level proportional cost changes, and an active-product mask.
+.stack_native_owner <- function(value, default, n) {
+  if (is.null(value)) return(as.character(default))
+  if (is.matrix(value)) {
+    stop("Stackelberg counterfactual ownership must be a firm-ID vector.",
+         call. = FALSE)
+  }
+  value <- as.character(value)
+  if (length(value) != n || anyNA(value) || any(!nzchar(value))) {
+    stop("Stackelberg ownership must contain one non-empty firm ID per product.",
+         call. = FALSE)
+  }
+  value
+}
+
+.stack_native_subset <- function(value, labels, n) {
+  if (is.null(value)) return(rep(TRUE, n))
+  if (is.logical(value)) {
+    if (length(value) != n || anyNA(value)) {
+      stop("'exit' must be a logical vector matching the product count.",
+           call. = FALSE)
+    }
+    return(as.logical(value))
+  }
+  if (is.character(value)) {
+    if (anyNA(value) || any(!value %in% labels)) {
+      stop("Character 'exit' values must match product labels.", call. = FALSE)
+    }
+    value <- match(value, labels)
+  }
+  if (!is.numeric(value) || anyNA(value) || any(value != as.integer(value)) ||
+      any(value < 1L) || any(value > n)) {
+    stop("'exit' must contain valid product indices or labels.", call. = FALSE)
+  }
+  out <- rep(TRUE, n)
+  out[as.integer(value)] <- FALSE
+  out
+}
+
+.stack_native_cost_delta <- function(value, labels, n) {
+  if (is.null(value)) return(rep(0, n))
+  if (!is.numeric(value) || anyNA(value) || any(!is.finite(value))) {
+    stop("Stackelberg costs must be finite numeric proportional changes.",
+         call. = FALSE)
+  }
+  if (!is.null(names(value))) {
+    if (any(!nzchar(names(value))) || anyDuplicated(names(value)) ||
+        any(!names(value) %in% labels)) {
+      stop("Named Stackelberg costs must use unique product labels.",
+           call. = FALSE)
+    }
+    out <- stats::setNames(rep(0, n), labels)
+    out[names(value)] <- as.numeric(value)
+    return(unname(out))
+  }
+  if (length(value) != n) {
+    stop("Un-named Stackelberg costs must match the product count.",
+         call. = FALSE)
+  }
+  as.numeric(value)
+}
+
+.stack_native_leaders <- function(value, owner_post, labels, default, active = NULL) {
+  n <- length(owner_post)
+  if (is.null(value)) return(unique(as.character(default)))
+  if (is.logical(value)) {
+    if (!is.null(names(value))) {
+      if (any(!names(value) %in% labels) || anyDuplicated(names(value))) {
+        stop("Named post-leader indicators must use product labels.", call. = FALSE)
+      }
+      mark <- rep(FALSE, n); names(mark) <- labels
+      mark[names(value)] <- value
+      value <- mark
+    }
+    if (length(value) != n || anyNA(value)) {
+      stop("Logical post-leader indicators must match the product count.",
+           call. = FALSE)
+    }
+    return(unique(owner_post[which(value)]))
+  }
+  if (is.numeric(value)) {
+    if (anyNA(value) || any(value != as.integer(value)) ||
+        any(value < 1L) || any(value > n)) {
+      stop("Numeric post-leader roles must be valid product indices.",
+           call. = FALSE)
+    }
+    return(unique(owner_post[as.integer(value)]))
+  }
+  value <- as.character(value)
+  if (!length(value) || anyNA(value) || any(!nzchar(value))) {
+    stop("Post-leader roles must identify at least one firm.", call. = FALSE)
+  }
+  if (all(value %in% unique(owner_post))) return(unique(value))
+  if (all(value %in% labels)) return(unique(owner_post[match(value, labels)]))
+  stop("Post-leader roles must be firm IDs or product labels.", call. = FALSE)
+}
+
+.stack_native_scenario <- function(native, scenario = NULL, owner_post = NULL,
+                                   mc_delta = NULL, subset = NULL,
+                                   leaders_post = NULL) {
+  pre_owner <- as.character(native@firmOwnerPre)
+  labels <- as.character(native@labels)
+  n <- length(pre_owner)
+  if (length(labels) != n || anyNA(labels) || any(!nzchar(labels)) ||
+      anyDuplicated(labels)) {
+    stop("Native Stackelberg counterfactuals require unique product labels.",
+         call. = FALSE)
+  }
+  if (methods::is(scenario, "Counterfactual")) {
+    if (length(scenario@steps) != 1L) {
+      stop("Bayesian Stackelberg simulation supports exactly one counterfactual step.",
+           call. = FALSE)
+    }
+    changes <- scenario@steps[[1L]]@changes
+    supported <- c("ownership", "costs", "exit", "leader")
+    unsupported <- setdiff(names(changes), supported)
+    if (length(unsupported)) {
+      stop("Native Stackelberg simulation does not support counterfactual field(s): ",
+           paste(unsupported, collapse = ", "), call. = FALSE)
+    }
+    if (!is.null(mc_delta) || !is.null(subset) || !is.null(leaders_post)) {
+      stop("A Counterfactual cannot be combined with legacy scenario arguments.",
+           call. = FALSE)
+    }
+    owner_value <- changes$ownership
+    cost_value <- changes$costs
+    exit_value <- changes$exit
+    leader_value <- changes$leader
+  } else {
+    owner_value <- scenario
+    cost_value <- mc_delta
+    exit_value <- NULL
+    leader_value <- leaders_post
+  }
+  owner_changed <- !is.null(owner_value)
+  owner <- .stack_native_owner(owner_value, pre_owner, n)
+  active <- if (is.null(exit_value)) {
+    if (is.null(subset)) rep(TRUE, n) else .stack_native_subset(subset, labels, n)
+  } else .stack_native_subset(exit_value, labels, n)
+  costs <- .stack_native_cost_delta(cost_value, labels, n)
+  if (is.null(leader_value)) {
+    if (owner_changed && !identical(owner, pre_owner)) {
+      pre_leaders <- as.character(native@leadersPre)
+      ## A merged post-merger owner leads whenever it contains a pre-merger
+      ## leader product.  This preserves all constituent leader roles.
+      leaders <- unique(owner[pre_owner %in% pre_leaders & active])
+    } else {
+      leaders <- as.character(native@leadersPre)
+    }
+  } else {
+    leaders <- .stack_native_leaders(leader_value, owner, labels,
+                                     native@leadersPre, active)
+  }
+  if (any(!leaders %in% unique(owner[active]))) {
+    stop("Post-leader roles must identify active post-counterfactual firms.",
+         call. = FALSE)
+  }
+  if (!any(active)) stop("The counterfactual must retain at least one product.", call. = FALSE)
+  list(ownerPost = owner, leadersPost = leaders, mcDelta = costs, subset = active)
+}
+
+.stack_fixed_k_value <- function(fixed_k, unit, n_rows) {
+  if (is.null(fixed_k)) return(NULL)
+  if (length(fixed_k) == 1L) return(fixed_k)
+  if (!is.null(names(fixed_k))) {
+    keys <- c(unit$unit_id, unit$market_id)
+    hit <- keys[keys %in% names(fixed_k)]
+    if (length(hit)) return(fixed_k[[hit[[1L]]]])
+  }
+  stop("'fixed_k' must be scalar or named by simulation market/unit.", call. = FALSE)
+}
+
+.stack_k_cache <- function(object, draws, setup, draw_indices,
+                           role_mapping, fixed_k, role_offset) {
+  info <- setup$info
+  structure_name <- .stack_bridge_or(object@metadata$structure, "simultaneous")
+  if (!identical(structure_name, "stackelberg")) return(NULL)
+  cache <- vector("list", length(draw_indices)); names(cache) <- as.character(draw_indices)
+  for (di in seq_along(draw_indices)) {
+    draw <- draw_indices[[di]]
+    by_market <- split(seq_along(info), vapply(info, `[[`, character(1), "market_id"))
+    one_draw <- integer(length(info)); names(one_draw) <- vapply(info, `[[`, character(1), "unit_id")
+    for (market_units in by_market) {
+      pscope <- .stack_bridge_or(object@metadata$partition_prior, "cutoff")
+      kscope <- .stack_bridge_or(object@metadata$k_scope, "market")
+      shared <- identical(pscope, "ordered_k") && identical(kscope, "market")
+      groups <- if (shared) list(market_units) else lapply(market_units, identity)
+      for (which_units in groups) {
+        rep_unit <- info[[which_units[[1L]]]]
+        bridge_unit <- list(
+          data = setup$data[rep_unit$idx, , drop = FALSE],
+          idx = rep_unit$idx, market = rep_unit$market_id,
+          year = rep_unit$year_id, market_index = rep_unit$market_index,
+          market_year_index = rep_unit$market_year_index
+        )
+        params <- if (methods::is(object, "BayesSpecifiedFit")) {
+          .stack_bridge_params(object, bridge_unit, draw)
+        } else .estimated_draw_params(object, draws, draw, rep_unit)
+        sizes <- .stack_bridge_sizes(bridge_unit$data, object@demand_model)
+        comp <- .stack_bridge_component_prob(object, bridge_unit, params, sizes, draw,
+                                             draws = draws)
+        fk <- .stack_fixed_k_value(fixed_k, rep_unit, nrow(setup$data))
+        ## The flattened component support is authoritative.  For a
+        ## shared-market ordered-k unit it already reflects the minimum firm
+        ## count across every market-year, including years omitted by the
+        ## simulation selector.
+        max_k <- max(comp$k)
+        if (!is.null(fk) && (length(fk) != 1L || !is.finite(fk) ||
+                             fk != as.integer(fk) || fk < 1L || fk > max_k)) {
+          stop("'fixed_k' must lie in the shared market support 1:", max_k,
+               " for simulation unit '", rep_unit$unit_id, "'.")
+        }
+        selected <- .stack_bridge_select_k(comp, params, sizes, role_mapping,
+                                            fk, role_offset,
+                                            support_max = max_k)
+        if (selected > max_k) {
+          stop("Selected leader count ", selected,
+               " exceeds the shared market support 1:", max_k,
+               " for simulation unit '", rep_unit$unit_id, "'.")
+        }
+        one_draw[which_units] <- selected
+      }
+    }
+    cache[[di]] <- one_draw
+  }
+  cache
+}
+
+.simulate_stackelberg_fit <- function(object, ownerPost, n_draws, mcDelta, subset,
+                                      insideSize, priceOutside, labels, market,
+                                      year, mc.cores, role_mapping, fixed_k,
+                                      role_offset, leadersPost, dots, .call, setup, draws,
+                                      draw_indices) {
+  if (!requireNamespace("coordination", quietly = TRUE) ||
+      utils::packageVersion("coordination") < "0.0.0.9003") {
+    stop("native Bayesian reconstruction requires coordination >= 0.0.0.9003.")
+  }
+  if (length(dots)) {
+    stop("Unsupported native Stackelberg simulation argument(s): ",
+         paste(names(dots), collapse = ", "), call. = FALSE)
+  }
+  role_mapping <- match.arg(role_mapping, c("mixture", "map", "threshold"))
+  if (length(role_offset) != 1L || !is.finite(role_offset) ||
+      role_offset != as.integer(role_offset)) {
+    stop("'role_offset' must be an integer scalar.", call. = FALSE)
+  }
+  cache <- .stack_k_cache(object, draws, setup, draw_indices, role_mapping,
+                          fixed_k, role_offset)
+  all_sims <- price_pre <- price_post <- price_change <- list()
+  shares_pre <- shares_post <- product_labels <- failures <- list()
+  n_valid <- integer(length(setup$info)); names(n_valid) <- setup$units$unit_id
+  for (u in seq_along(setup$info)) {
+    unit <- setup$info[[u]]; idx <- unit$idx; unit_id <- unit$unit_id
+    unit_data <- setup$data[idx, , drop = FALSE]
+    owner_pre <- as.character(unit_data$group)
+    labels_unit <- if (is.null(labels)) {
+      if (methods::is(object, "BayesSpecifiedFit")) {
+        object@market$labels
+      } else {
+        label_col <- intersect(c("labels", "product", "product_id"), names(unit_data))
+        candidate <- if (length(label_col)) as.character(unit_data[[label_col[[1L]]]]) else {
+          paste0("product_", seq_along(unit_data$group))
+        }
+        if (anyNA(candidate) || any(!nzchar(candidate)) || anyDuplicated(candidate)) {
+          paste0("product_", seq_along(candidate))
+        } else candidate
+      }
+    } else {
+      .select_unit_arg(labels, idx, unit_id, unit$market_id, nrow(setup$data), arg = "labels")
+    }
+    if (length(labels_unit) != length(idx)) stop("labels must match the simulation unit.", call. = FALSE)
+    p0 <- if (is.null(priceOutside)) unique(unit_data$outside_price) else {
+      .select_unit_arg(priceOutside, idx, unit_id, unit$market_id, nrow(setup$data),
+                       scalar = TRUE, arg = "priceOutside")
+    }
+    inside <- if (is.null(insideSize)) {
+      if (methods::is(object, "BayesSpecifiedFit")) object@market$insideSize else 1
+    } else .select_unit_arg(insideSize, idx, unit_id, unit$market_id, nrow(setup$data),
+                            scalar = TRUE, arg = "insideSize")
+    market_object <- bayes_market(
+      prices = as.numeric(unit_data$prices), quantities = as.numeric(unit_data$quantities),
+      margins = as.numeric(unit_data$margins), group = owner_pre,
+      outside_price = p0, market_side = object@market_side,
+      insideSize = inside, labels = labels_unit
+    )
+    bridge_unit <- list(
+      data = unit_data, idx = idx, market = unit$market_id,
+      year = unit$year_id, market_index = unit$market_index,
+      market_year_index = unit$market_year_index
+    )
+    scenario <- .select_unit_arg(ownerPost, idx, unit_id, unit$market_id,
+                                 nrow(setup$data), arg = "ownerPost")
+    mc_delta_unit <- if (is.null(mcDelta)) NULL else .select_unit_arg(
+      mcDelta, idx, unit_id, unit$market_id, nrow(setup$data), arg = "mcDelta")
+    subset_unit <- if (is.null(subset)) NULL else .select_unit_arg(
+      subset, idx, unit_id, unit$market_id, nrow(setup$data), arg = "subset")
+    leaders_unit <- if (is.null(leadersPost)) NULL else .select_unit_arg(
+      leadersPost, idx, unit_id, unit$market_id, nrow(setup$data), arg = "leadersPost")
+    run_one <- function(draw_index, draw_pos) {
+      k <- cache[[draw_pos]][[unit_id]]
+      native <- .stack_bridge_model_draw(
+        object, unit = bridge_unit, draw = draw_index,
+        fixed_k = k, role_mapping = "map", role_offset = 0L,
+        insideSize = inside, priceOutside = p0, labels = labels_unit,
+        draws = draws, dots = list()
+      )
+      sc <- .stack_native_scenario(native, scenario = scenario,
+                                   owner_post = if (methods::is(scenario, "Counterfactual")) NULL else scenario,
+                                   mc_delta = mc_delta_unit, subset = subset_unit,
+                                   leaders_post = leaders_unit)
+      coordination::stackelberg_simulate(
+        native, ownerPost = sc$ownerPost, leadersPost = sc$leadersPost,
+        mcDelta = sc$mcDelta, subset = sc$subset
+      )
+    }
+    run_safe <- function(draw_pos) {
+      draw_index <- draw_indices[[draw_pos]]
+      tryCatch(list(result = run_one(draw_index, draw_pos), error = NA_character_),
+               error = function(e) list(result = NULL, error = conditionMessage(e)))
+    }
+    raw <- if (length(draw_indices) == 1L || mc.cores == 1L) {
+      lapply(seq_along(draw_indices), run_safe)
+    } else {
+      parallel::mclapply(seq_along(draw_indices), run_safe, mc.cores = mc.cores)
+    }
+    assembled <- .assemble_unit(raw, market_object)
+    all_sims[[unit_id]] <- assembled$results
+    price_pre[[unit_id]] <- assembled$price_pre
+    price_post[[unit_id]] <- assembled$price_post
+    price_change[[unit_id]] <- assembled$price_change
+    shares_pre[[unit_id]] <- assembled$shares_pre
+    shares_post[[unit_id]] <- assembled$shares_post
+    product_labels[[unit_id]] <- assembled$labels
+    failures[[unit_id]] <- assembled$failures
+    n_valid[[unit_id]] <- assembled$n_valid
+  }
+  n_failed <- sum(vapply(failures, function(x) sum(!is.na(x)), integer(1)))
+  if (n_failed) warning(n_failed, " of ", length(draw_indices) * length(setup$info),
+                        " native Stackelberg simulations failed. Inspect result@failures.", call. = FALSE)
+  metadata <- object@metadata
+  metadata$simulation_route <- "coordination::stackelberg_simulate"
+  metadata$role_mapping <- role_mapping
+  metadata$role_offset <- as.integer(role_offset)
+  metadata$k_cache <- cache
+  metadata$posterior_draws_available <- .posterior_draw_count(object, draws)
+  metadata$posterior_draws_requested <- length(draw_indices)
+  metadata$draw_indices <- as.integer(draw_indices)
+  methods::new("BayesSim", sims = all_sims, price_pre = price_pre,
+               price_post = price_post, price_change = price_change,
+               shares_pre = shares_pre, shares_post = shares_post,
+               market_ids = as.character(setup$units$unit_id),
+               product_labels = product_labels, n_draws = as.integer(length(draw_indices)),
+               n_valid = n_valid, failures = failures, call = .call,
+               metadata = metadata)
 }
 
 .terminal_model <- function(result) {
@@ -345,11 +722,14 @@ NULL
   )
 }
 
-.simulate_bayes_fit <- function(object, ownerPost, n_draws = NULL,
+.simulate_bayes_fit <- function(object, ownerPost = NULL, n_draws = NULL,
                                 mcDelta = NULL, subset = NULL,
                                 insideSize = NULL, priceOutside = NULL,
                                 labels = NULL, market = NULL, year = NULL,
-                                mc.cores = .default_mc_cores(), ..., .call) {
+                                mc.cores = .default_mc_cores(),
+                                role_mapping = c("mixture", "map", "threshold"),
+                                fixed_k = NULL, role_offset = 0L,
+                                leadersPost = NULL, ..., .call) {
   mc.cores <- .validate_mc_cores(mc.cores)
   specified <- methods::is(object, "BayesSpecifiedFit")
   draws <- if (specified) NULL else rstan::extract(object@stanfit)
@@ -369,6 +749,20 @@ NULL
     1L
   } else {
     sample.int(n_total, n_draws)
+  }
+
+  structure_name <- .stack_bridge_or(object@metadata$structure,
+    if (isTRUE(object@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous")
+  if (identical(structure_name, "stackelberg")) {
+    return(.simulate_stackelberg_fit(
+      object = object, ownerPost = ownerPost, n_draws = n_draws,
+      mcDelta = mcDelta, subset = subset, insideSize = insideSize,
+      priceOutside = priceOutside, labels = labels, market = market,
+      year = year, mc.cores = mc.cores, role_mapping = role_mapping,
+      fixed_k = fixed_k, role_offset = role_offset, leadersPost = leadersPost,
+      dots = list(...), .call = .call, setup = setup, draws = draws,
+      draw_indices = draw_indices
+    ))
   }
 
   all_sims <- price_pre <- price_post <- price_change <- list()
@@ -589,33 +983,49 @@ NULL
 #' @exportMethod simulate
 setMethod(
   "simulate", "BayesFit",
-  function(object, ownerPost, n_draws = NULL, mcDelta = NULL, subset = NULL,
+  function(object, ownerPost = NULL, n_draws = NULL, mcDelta = NULL, subset = NULL,
            insideSize = NULL, priceOutside = NULL, labels = NULL,
            market = NULL, year = NULL,
-           mc.cores = .default_mc_cores(), ...) {
-    if (missing(ownerPost)) stop("'ownerPost' must be supplied for simulate().")
+           mc.cores = .default_mc_cores(),
+           role_mapping = c("mixture", "map", "threshold"), fixed_k = NULL,
+           role_offset = 0L, leadersPost = NULL, ...) {
+    structure_name <- .stack_bridge_or(object@metadata$structure,
+      if (isTRUE(object@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous")
+    if (missing(ownerPost) && !identical(structure_name, "stackelberg")) {
+      stop("'ownerPost' must be supplied for simulate().")
+    }
     .simulate_bayes_fit(
       object = object, ownerPost = ownerPost, n_draws = n_draws,
       mcDelta = mcDelta, subset = subset, insideSize = insideSize,
       priceOutside = priceOutside, labels = labels, market = market,
-      year = year, mc.cores = mc.cores, ..., .call = match.call()
+      year = year, mc.cores = mc.cores, role_mapping = role_mapping,
+      fixed_k = fixed_k, role_offset = role_offset, leadersPost = leadersPost,
+      ..., .call = match.call()
     )
   }
 )
 
 #' @rdname simulate-BayesFit
 #' @export
-bayes_sim <- function(fit, ownerPost, n_draws = NULL, mcDelta = NULL,
+bayes_sim <- function(fit, ownerPost = NULL, n_draws = NULL, mcDelta = NULL,
                       subset = NULL, insideSize = NULL,
                       priceOutside = NULL, labels = NULL,
                       market = NULL, year = NULL,
-                      mc.cores = .default_mc_cores(), ...) {
-  if (missing(ownerPost)) stop("'ownerPost' must be supplied for bayes_sim().")
+                      mc.cores = .default_mc_cores(),
+                      role_mapping = c("mixture", "map", "threshold"),
+                      fixed_k = NULL, role_offset = 0L, leadersPost = NULL, ...) {
+  structure_name <- .stack_bridge_or(fit@metadata$structure,
+    if (isTRUE(fit@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous")
+  if (missing(ownerPost) && !identical(structure_name, "stackelberg")) {
+    stop("'ownerPost' must be supplied for bayes_sim().")
+  }
   result <- simulate(
     fit, ownerPost = ownerPost, n_draws = n_draws,
     mcDelta = mcDelta, subset = subset, insideSize = insideSize,
     priceOutside = priceOutside, labels = labels,
-    market = market, year = year, mc.cores = mc.cores, ...
+    market = market, year = year, mc.cores = mc.cores,
+    role_mapping = role_mapping, fixed_k = fixed_k,
+    role_offset = role_offset, leadersPost = leadersPost, ...
   )
   result@call <- match.call()
   result

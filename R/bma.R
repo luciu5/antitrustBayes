@@ -40,6 +40,22 @@ validate_comparison_contract <- function(fits) {
       names(reference@metadata$resolved_priors),
       grep("^bargaining_", names(reference@metadata$resolved_priors), value = TRUE)
     )
+    cutoff_active <- function(fit) {
+      if (.bayes_is_stackelberg(fit)) {
+        return(isTRUE(fit@stan_data$partition_prior_code == 0L))
+      }
+      isTRUE(fit@stan_data$use_cutoff == 1L)
+    }
+    fringe_active <- function(fit) {
+      !.bayes_is_stackelberg(fit) && isTRUE(fit@stan_data$use_cutoff == 1L)
+    }
+    if (!(cutoff_active(reference) && cutoff_active(candidate))) {
+      shared_prior_names <- setdiff(shared_prior_names,
+        c("prior_cutoff_alpha", "prior_cutoff_beta"))
+    }
+    if (!(fringe_active(reference) && fringe_active(candidate))) {
+      shared_prior_names <- setdiff(shared_prior_names, "prior_sigma_meanval_fringe")
+    }
     if (!identical(candidate@metadata$prior_manifest,
                    reference@metadata$prior_manifest) ||
         !isTRUE(all.equal(
@@ -96,6 +112,12 @@ validate_comparison_contract <- function(fits) {
 #' side, outside prices, margin mask, and current quantity-space likelihood.
 #' This permits Logit/CES comparison without comparing likelihoods defined on
 #' different observed outcomes.
+#' The current Stan specification retains prior density constants and support
+#' normalizers directly. Earlier specification fits must be refitted. Evidence
+#' refers to the transformed-outcome working likelihood. Bridge comparison
+#' with an active, non-normalized HMT penalty is unsupported. Stackelberg LOO
+#' clusters must contain whole partition units; observation LOO and period LOO
+#' with a market-shared count are unsupported.
 #'
 #' @examples
 #' \donttest{
@@ -125,6 +147,8 @@ bayes_compare <- function(..., bridge = TRUE, bridge_maxiter = 5000L,
   }
   invisible(lapply(fits, validate_fit_spec))
   validate_comparison_contract(fits)
+  .bayes_comparison_units(fits, loo_unit)
+  if (bridge) .bayes_validate_bridge(fits)
 
   # Handle named and unnamed arguments
   nms <- names(fits)

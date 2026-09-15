@@ -63,6 +63,12 @@ Requires that the Stan model includes a \code{log_lik} generated quantity
 side, outside prices, margin mask, and current quantity-space likelihood.
 This permits Logit/CES comparison without comparing likelihoods defined on
 different observed outcomes.
+The current Stan specification retains prior density constants and support
+normalizers directly. Earlier specification fits must be refitted. Evidence
+refers to the transformed-outcome working likelihood. Bridge comparison
+with an active, non-normalized HMT penalty is unsupported. Stackelberg LOO
+clusters must contain whole partition units; observation LOO and period LOO
+with a market-shared count are unsupported.
 }
 \examples{
 \donttest{

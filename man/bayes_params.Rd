@@ -12,7 +12,11 @@ bayes_params(
   cutoff_share = 0,
   cutoff_scale = 0.2,
   use_cutoff = FALSE,
-  supply_model
+  supply_model,
+  structure = NULL,
+  partition_prior = "cutoff",
+  k_prior = NULL,
+  k_scope = "market"
 )
 }
 \arguments{
@@ -39,6 +43,19 @@ to activate it.}
 
 \item{supply_model}{Integer 1-5 identifying the conduct model (see
 \code{\link{bayes_sim}}).}
+
+\item{structure}{Supply structure: \code{"simultaneous"},
+\code{"fringe"}, or \code{"stackelberg"}.}
+
+\item{partition_prior}{For Stackelberg, \code{"cutoff"} selects the
+conditioned common-boundary lottery; \code{"ordered_k"} selects a
+prespecified positive-count prior.}
+
+\item{k_prior}{Ordered-count probabilities supplied in a supported
+package format; \code{NULL} gives a uniform prior over positive support.}
+
+\item{k_scope}{Whether direct ordered-k is common across a
+\code{"market"} or specific to each \code{"period"}.}
 }
 \value{
 A list of class \code{bayes_params} with one element per draw

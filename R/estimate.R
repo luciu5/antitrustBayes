@@ -92,6 +92,16 @@
 #'   \code{1}) or one value per market-year. For Logit it does not enter the
 #'   fitted likelihood, but is retained for posterior structural-model
 #'   reconstruction and counterfactual routing.
+#' @param structure Bayesian timing structure.  One of \code{"simultaneous"},
+#'   \code{"fringe"}, or \code{"stackelberg"}; when omitted, the legacy
+#'   \code{use_cutoff} flag selects simultaneous or fringe.
+#' @param cutoff_scale Prespecified positive transition scale.  Legacy fringe
+#'   defaults to \code{0.2}; Stackelberg defaults to \code{0.01}.
+#' @param partition_prior Stackelberg partition prior, \code{"cutoff"} or
+#'   \code{"ordered_k"}.
+#' @param k_prior Optional named ordered-k prior, or named list by market.
+#' @param k_scope Whether one ordered partition is shared by all periods in a
+#'   market (\code{"market"}, default) or independently selected per period.
 #' @param prior_manifest Prespecified proper prior manifest: \code{"baseline"},
 #'   \code{"tight"}, or \code{"diffuse"}. User-supplied \code{priors}
 #'   override individual entries in the selected manifest.
@@ -150,8 +160,9 @@
 #'     (default 0.5).}
 #'   \item{\code{prior_sigma_margin}}{Lognormal center for log inverse-margin
 #'     error SD (default 0.75).}
-#'   \item{\code{prior_sigma_meanval_strat}}{Half-normal scale for strategic
-#'     group mean-value SD (default 1.0).}
+#'   \item{\code{prior_sigma_meanval_strat}}{Scale parameter for the
+#'     positive-truncated Normal strategic group mean-value SD, centered at
+#'     1 (default 1.0).}
 #'   \item{\code{prior_alpha_mean}}{Prior mean for the log standardized
 #'     price coefficient (default 0).}
 #'   \item{\code{prior_alpha_sd}}{Prior SD for the log standardized price
@@ -242,8 +253,25 @@ bayes_est <- function(prices, quantities, margins,
                       stan_options = list(),
                       margin_observed = NULL,
                       outside_price = 1,
+                      structure = NULL,
+                      cutoff_scale = NULL,
+                      partition_prior = "cutoff",
+                      k_prior = NULL,
+                      k_scope = "market",
                       ...) {
   cl <- match.call()
+  use_cutoff_supplied <- !missing(use_cutoff)
+  resolved_structure <- .stack_resolve_structure(
+    structure = structure, use_cutoff = use_cutoff,
+    use_cutoff_supplied = use_cutoff_supplied
+  )
+  structure <- resolved_structure$name
+  use_cutoff <- resolved_structure$cutoff
+  cutoff_scale_supplied <- !missing(cutoff_scale) && !is.null(cutoff_scale)
+  if (identical(structure, "simultaneous") && cutoff_scale_supplied) {
+    stop("'cutoff_scale' is only defined for fringe and Stackelberg structures.")
+  }
+  cutoff_scale <- .stack_resolve_scale(structure, cutoff_scale)
   demand_model <- match.arg(demand_model)
   prior_manifest <- match.arg(prior_manifest)
   likelihood <- match.arg(likelihood)
@@ -263,6 +291,18 @@ bayes_est <- function(prices, quantities, margins,
     margin_observed <- as.logical(margin_observed) & !is.na(margin_observed)
   }
   supply_model <- match.arg(supply_model)
+  if (structure == "stackelberg" && !(supply_model %in% c("bertrand", "cournot"))) {
+    stop("Bayesian Stackelberg supports only Bertrand and Cournot supply models.")
+  }
+  partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
+  k_scope <- match.arg(k_scope, c("market", "period"))
+  if (identical(structure, "stackelberg") && identical(partition_prior, "ordered_k") &&
+      cutoff_scale_supplied) {
+    stop("'cutoff_scale' is not defined for partition_prior = 'ordered_k'.")
+  }
+  if (structure != "stackelberg" && partition_prior != "cutoff") {
+    stop("partition_prior = 'ordered_k' is supported only for structure = 'stackelberg'.")
+  }
   supply_int <- switch(supply_model,
     bertrand      = 1L,
     monopolistic  = 2L,
@@ -416,9 +456,18 @@ bayes_est <- function(prices, quantities, margins,
       grainsize    = grainsize,
       margin_observed = margin_observed,
       estimate_df  = estimate_df,
-      resid_df_fixed = resid_df_fixed
+      resid_df_fixed = resid_df_fixed,
+      structure = structure,
+      cutoff_scale = if (identical(structure, "simultaneous") ||
+                         (identical(structure, "stackelberg") &&
+                          identical(partition_prior, "ordered_k"))) NULL else cutoff_scale,
+      partition_prior = partition_prior,
+      k_prior = k_prior,
+      k_scope = k_scope
     )
-    stan_mod <- stanmodels[["logit_supply"]]
+    stan_mod <- stanmodels[[if (structure == "stackelberg") {
+      "logit_stackelberg"
+    } else "logit_supply"]]
     price_sd_val <- stan_data$price_sd
   } else {
     stan_data <- prepare_ces_stan_data(
@@ -447,9 +496,18 @@ bayes_est <- function(prices, quantities, margins,
       use_centered_s0_pool = use_centered_s0_pool,
       margin_observed = margin_observed,
       estimate_df  = estimate_df,
-      resid_df_fixed = resid_df_fixed
+      resid_df_fixed = resid_df_fixed,
+      structure = structure,
+      cutoff_scale = if (identical(structure, "simultaneous") ||
+                         (identical(structure, "stackelberg") &&
+                          identical(partition_prior, "ordered_k"))) NULL else cutoff_scale,
+      partition_prior = partition_prior,
+      k_prior = k_prior,
+      k_scope = k_scope
     )
-    stan_mod <- stanmodels[["ces_supply"]]
+    stan_mod <- stanmodels[[if (structure == "stackelberg") {
+      "ces_stackelberg"
+    } else "ces_supply"]]
     price_sd_val <- stan_data$log_price_sd
   }
 
@@ -469,12 +527,23 @@ bayes_est <- function(prices, quantities, margins,
   metadata$likelihood <- likelihood
   metadata$supply_model <- supply_model
   metadata$demand_model <- demand_model
+  metadata$structure <- structure
+  metadata$structure_code <- as.integer(.stack_structure_code[[structure]])
+  metadata$cutoff_scale <- cutoff_scale
+  metadata$partition_prior <- partition_prior
+  metadata$k_scope <- k_scope
+  metadata$k_prior <- k_prior
   metadata$resolved_priors <- priors
   metadata$df_mode <- if (estimate_df) "estimated" else "fixed"
   metadata$resid_df_fixed <- if (estimate_df) NA_real_ else resid_df_fixed
   metadata$nu_prior <- list(
     shape = priors$prior_nu_shape,
     rate = priors$prior_nu_rate
+  )
+  metadata$prior_normalization <- list(
+    mode = "native_stan_normalized",
+    model_spec_version = 8L,
+    partition_support = if (identical(structure, "stackelberg")) "1:N" else NULL
   )
 
   spec <- .bayes_model_spec(list(

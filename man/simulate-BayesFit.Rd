@@ -8,7 +8,7 @@
 \usage{
 \S4method{simulate}{BayesFit}(
   object,
-  ownerPost,
+  ownerPost = NULL,
   n_draws = NULL,
   mcDelta = NULL,
   subset = NULL,
@@ -18,12 +18,16 @@
   market = NULL,
   year = NULL,
   mc.cores = .default_mc_cores(),
+  role_mapping = c("mixture", "map", "threshold"),
+  fixed_k = NULL,
+  role_offset = 0L,
+  leadersPost = NULL,
   ...
 )
 
 bayes_sim(
   fit,
-  ownerPost,
+  ownerPost = NULL,
   n_draws = NULL,
   mcDelta = NULL,
   subset = NULL,
@@ -33,6 +37,10 @@ bayes_sim(
   market = NULL,
   year = NULL,
   mc.cores = .default_mc_cores(),
+  role_mapping = c("mixture", "map", "threshold"),
+  fixed_k = NULL,
+  role_offset = 0L,
+  leadersPost = NULL,
   ...
 )
 }
@@ -43,7 +51,8 @@ bayes_sim(
 
 \item{ownerPost}{A post-counterfactual ownership vector or matrix, an
 \code{antitrust::Counterfactual}, or a named list of either, one per
-simulation unit.}
+simulation unit. It may be omitted for a Stackelberg cost-only
+counterfactual supplied through \code{mcDelta}.}
 
 \item{n_draws}{Number of posterior draws to simulate. By default, uses at
 most 200 draws.}
@@ -74,6 +83,16 @@ the specified-fit year is \code{"1"}.}
 \item{mc.cores}{Number of parallel fork workers. The default is the number
 of detected cores capped at four; Windows always uses one.}
 
+\item{role_mapping}{Stackelberg role realization: posterior mixture draw,
+posterior MAP, or cutoff threshold. The default is \code{"mixture"}.}
+
+\item{fixed_k}{Optional explicit positive leader count (scalar or named by
+simulation unit), used by native Stackelberg reconstruction.}
+
+\item{role_offset}{Integer adjacent-partition sensitivity offset.}
+
+\item{leadersPost}{Optional exact post-counterfactual firm-role override.}
+
 \item{...}{Additional arguments passed to \code{antitrust::simulate()}.}
 }
 \value{
@@ -82,11 +101,10 @@ A \code{BayesSim} containing one \pkg{antitrust} result (or
 }
 \description{
 Applies an \pkg{antitrust} counterfactual to draws stored in a
-\code{BayesFit}. For every draw and simulation unit, the method constructs
-the pre-counterfactual structural realization, wraps it as an
-\code{antitrust::AntitrustFit}, and delegates the scenario solve to
-\code{antitrust::simulate()}. The result therefore uses the same ownership,
-cost, entry, exit, quality, and multi-step machinery as \pkg{antitrust}.
+\code{BayesFit}. Legacy structures delegate to \code{antitrust::simulate()}.
+New Stackelberg structures reconstruct the native coordination model and
+route supported one-step ownership, cost, leader, and exit changes through
+\code{coordination::stackelberg_simulate()}.
 }
 \details{
 \code{bayes_sim()} is retained as a convenience wrapper around this S4

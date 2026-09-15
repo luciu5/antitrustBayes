@@ -1,0 +1,13 @@
+"demand","conduct","side","prior","N_firm","N_component","finite_density","role_error"
+"logit",1,"output","cutoff",1,1,TRUE,0
+"logit",1,"output","ordered_k",1,1,TRUE,0
+"logit",1,"input","cutoff",1,1,TRUE,0
+"logit",1,"input","ordered_k",1,1,TRUE,0
+"logit",3,"output","cutoff",1,1,TRUE,0
+"logit",3,"output","ordered_k",1,1,TRUE,0
+"logit",3,"input","cutoff",1,1,TRUE,0
+"logit",3,"input","ordered_k",1,1,TRUE,0
+"ces",1,"output","cutoff",1,1,TRUE,0
+"ces",1,"output","ordered_k",1,1,TRUE,0
+"ces",3,"output","cutoff",1,1,TRUE,0
+"ces",3,"output","ordered_k",1,1,TRUE,0

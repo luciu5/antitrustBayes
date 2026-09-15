@@ -207,10 +207,36 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               likelihood_mode = 1L,
                               loo_cluster = market,
                               estimate_df = FALSE,
-                              resid_df_fixed = NULL) {
+                              resid_df_fixed = NULL,
+                              structure = NULL,
+                              cutoff_scale = NULL,
+                              partition_prior = "cutoff",
+                              k_prior = NULL,
+                              k_scope = "market") {
   N <- length(prices)
   market_side <- match.arg(market_side, c("input", "output"))
   market_sign <- if (market_side == "input") 1L else -1L
+  resolved_structure <- .stack_resolve_structure(
+    structure = structure, use_cutoff = use_cutoff,
+    use_cutoff_supplied = FALSE
+  )
+  partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
+  k_scope <- match.arg(k_scope, c("market", "period"))
+  if (resolved_structure$name != "stackelberg" && partition_prior != "cutoff") {
+    stop("partition_prior = 'ordered_k' is supported only for structure = 'stackelberg'.")
+  }
+  if (resolved_structure$name == "stackelberg" && !(supply_model %in% c(1L, 3L))) {
+    stop("Bayesian Stackelberg supports only Bertrand (1) and Cournot (3) supply models.")
+  }
+  cutoff_scale_supplied <- !missing(cutoff_scale) && !is.null(cutoff_scale)
+  if (identical(resolved_structure$name, "simultaneous") && cutoff_scale_supplied) {
+    stop("'cutoff_scale' is only defined for fringe and Stackelberg structures.")
+  }
+  if (identical(resolved_structure$name, "stackelberg") &&
+      identical(partition_prior, "ordered_k") && cutoff_scale_supplied) {
+    stop("'cutoff_scale' is not defined for partition_prior = 'ordered_k'.")
+  }
+  cutoff_scale <- .stack_resolve_scale(resolved_structure$name, cutoff_scale)
 
   if (is.null(margin_observed)) {
     margin_observed <- rep(TRUE, N)
@@ -343,14 +369,14 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   stan_data <- c(
     list(
       N = N,
-      shareIn = shares,
-      firm_shareIn = firm_shareIn,
-      marginNormInv = marginNormInv,
-      log_shareIn = log_shareIn,
-      clr_shareIn = clr_shareIn,
-      log_marginNormInv = log_marginNormInv,
-      price = as.numeric(prices),
-      price_std = price_std,
+      shareIn = array(shares, dim = N),
+      firm_shareIn = array(firm_shareIn, dim = N),
+      marginNormInv = array(marginNormInv, dim = N),
+      log_shareIn = array(log_shareIn, dim = N),
+      clr_shareIn = array(clr_shareIn, dim = N),
+      log_marginNormInv = array(log_marginNormInv, dim = N),
+      price = array(as.numeric(prices), dim = N),
+      price_std = array(price_std, dim = N),
       price_sd = price_sd,
       outside_price = array(outside_price, dim = N_market_year),
       market_sign = market_sign,
@@ -362,6 +388,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       year = array(year_int, dim = N),
       supply_model = supply_model,
       use_cutoff = as.integer(use_cutoff),
+      cutoff_scale = cutoff_scale,
       grainsize = as.integer(max(1L, grainsize)),
       N_market_year = N_market_year,
       market_year_idx = array(mky_int, dim = N),
@@ -402,6 +429,34 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   attr(stan_data, "market_year_idx") <- mky_int
   attr(stan_data, "model_spec_version") <- .antitrust_bayes_model_spec_version
   attr(stan_data, "s0_prior_reference") <- s0_prior_reference
+  attr(stan_data, "structure") <- resolved_structure$name
+  attr(stan_data, "structure_code") <- resolved_structure$code
+  attr(stan_data, "cutoff_scale") <- cutoff_scale
+  attr(stan_data, "partition_prior") <- partition_prior
+  attr(stan_data, "k_scope") <- k_scope
+  if (resolved_structure$name == "stackelberg") {
+    stan_data <- c(stan_data, .stack_append_data(
+      stan_data = stan_data, mky_int = mky_int, market_int = market_int,
+      group_int = group_int, group_levels = levels(group_f), shares = shares,
+      revShare = shares, structure = resolved_structure,
+      demand_model = "logit", partition_prior = partition_prior,
+      k_prior = k_prior, k_scope = k_scope, cutoff_scale = cutoff_scale
+    ))
+    stan_data$cutoff_scale <- cutoff_scale
+    attr(stan_data, "market_levels") <- levels(market_f)
+    attr(stan_data, "year_levels") <- levels(year_f)
+    attr(stan_data, "group_levels") <- levels(group_f)
+    attr(stan_data, "mky_levels") <- levels(mky_f)
+    attr(stan_data, "cluster_levels") <- levels(cluster_f)
+    attr(stan_data, "market_year_idx") <- mky_int
+    attr(stan_data, "model_spec_version") <- .antitrust_bayes_model_spec_version
+    attr(stan_data, "s0_prior_reference") <- s0_prior_reference
+    attr(stan_data, "structure") <- resolved_structure$name
+    attr(stan_data, "structure_code") <- resolved_structure$code
+    attr(stan_data, "cutoff_scale") <- cutoff_scale
+    attr(stan_data, "partition_prior") <- partition_prior
+    attr(stan_data, "k_scope") <- k_scope
+  }
 
   stan_data
 }
@@ -432,7 +487,12 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   likelihood_mode = 1L,
                                   loo_cluster = market,
                                   estimate_df = FALSE,
-                                  resid_df_fixed = NULL) {
+                                  resid_df_fixed = NULL,
+                                  structure = NULL,
+                                  cutoff_scale = NULL,
+                                  partition_prior = "cutoff",
+                                  k_prior = NULL,
+                                  k_scope = "market") {
   N <- length(prices)
   market_side <- match.arg(market_side, c("input", "output"))
   if (market_side != "output") {
@@ -440,6 +500,27 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
          "demand_model = \"logit\" for input markets.")
   }
   market_sign <- -1L
+  resolved_structure <- .stack_resolve_structure(
+    structure = structure, use_cutoff = use_cutoff,
+    use_cutoff_supplied = FALSE
+  )
+  partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
+  k_scope <- match.arg(k_scope, c("market", "period"))
+  if (resolved_structure$name != "stackelberg" && partition_prior != "cutoff") {
+    stop("partition_prior = 'ordered_k' is supported only for structure = 'stackelberg'.")
+  }
+  if (resolved_structure$name == "stackelberg" && !(supply_model %in% c(1L, 3L))) {
+    stop("Bayesian Stackelberg supports only Bertrand (1) and Cournot (3) supply models.")
+  }
+  cutoff_scale_supplied <- !missing(cutoff_scale) && !is.null(cutoff_scale)
+  if (identical(resolved_structure$name, "simultaneous") && cutoff_scale_supplied) {
+    stop("'cutoff_scale' is only defined for fringe and Stackelberg structures.")
+  }
+  if (identical(resolved_structure$name, "stackelberg") &&
+      identical(partition_prior, "ordered_k") && cutoff_scale_supplied) {
+    stop("'cutoff_scale' is not defined for partition_prior = 'ordered_k'.")
+  }
+  cutoff_scale <- .stack_resolve_scale(resolved_structure$name, cutoff_scale)
 
   if (is.null(margin_observed)) {
     margin_observed <- rep(TRUE, N)
@@ -588,15 +669,15 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   stan_data <- c(
     list(
       N = N,
-      shareIn = shareIn,
-      revShare = revShare,
-      firm_revShare = firm_revShare,
-      marginNormInv = marginNormInv,
-      log_shareIn = log_shareIn,
-      clr_shareIn = clr_shareIn,
-      log_marginNormInv = log_marginNormInv,
-      price = as.numeric(prices),
-      log_price_std = log_price_std,
+      shareIn = array(shareIn, dim = N),
+      revShare = array(revShare, dim = N),
+      firm_revShare = array(firm_revShare, dim = N),
+      marginNormInv = array(marginNormInv, dim = N),
+      log_shareIn = array(log_shareIn, dim = N),
+      clr_shareIn = array(clr_shareIn, dim = N),
+      log_marginNormInv = array(log_marginNormInv, dim = N),
+      price = array(as.numeric(prices), dim = N),
+      log_price_std = array(log_price_std, dim = N),
       log_price_sd = log_price_sd,
       outside_price = array(outside_price, dim = N_market_year),
       inside_price_index = array(inside_price_index, dim = N_market_year),
@@ -609,6 +690,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       year = array(year_int, dim = N),
       supply_model = supply_model,
       use_cutoff = as.integer(use_cutoff),
+      cutoff_scale = cutoff_scale,
       grainsize = as.integer(max(1L, grainsize)),
       N_market_year = N_market_year,
       market_year_idx = array(mky_int, dim = N),
@@ -649,6 +731,36 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   attr(stan_data, "market_year_idx") <- mky_int
   attr(stan_data, "model_spec_version") <- .antitrust_bayes_model_spec_version
   attr(stan_data, "s0_prior_reference") <- s0_prior_reference
+  attr(stan_data, "R0_prior_reference") <- R0_prior_reference
+  attr(stan_data, "structure") <- resolved_structure$name
+  attr(stan_data, "structure_code") <- resolved_structure$code
+  attr(stan_data, "cutoff_scale") <- cutoff_scale
+  attr(stan_data, "partition_prior") <- partition_prior
+  attr(stan_data, "k_scope") <- k_scope
+  if (resolved_structure$name == "stackelberg") {
+    stan_data <- c(stan_data, .stack_append_data(
+      stan_data = stan_data, mky_int = mky_int, market_int = market_int,
+      group_int = group_int, group_levels = levels(group_f), shares = shareIn,
+      revShare = revShare, structure = resolved_structure,
+      demand_model = "ces", partition_prior = partition_prior,
+      k_prior = k_prior, k_scope = k_scope, cutoff_scale = cutoff_scale
+    ))
+    stan_data$cutoff_scale <- cutoff_scale
+    attr(stan_data, "market_levels") <- levels(market_f)
+    attr(stan_data, "year_levels") <- levels(year_f)
+    attr(stan_data, "group_levels") <- levels(group_f)
+    attr(stan_data, "mky_levels") <- levels(mky_f)
+    attr(stan_data, "cluster_levels") <- levels(cluster_f)
+    attr(stan_data, "market_year_idx") <- mky_int
+    attr(stan_data, "model_spec_version") <- .antitrust_bayes_model_spec_version
+    attr(stan_data, "s0_prior_reference") <- s0_prior_reference
+    attr(stan_data, "R0_prior_reference") <- R0_prior_reference
+    attr(stan_data, "structure") <- resolved_structure$name
+    attr(stan_data, "structure_code") <- resolved_structure$code
+    attr(stan_data, "cutoff_scale") <- cutoff_scale
+    attr(stan_data, "partition_prior") <- partition_prior
+    attr(stan_data, "k_scope") <- k_scope
+  }
 
   stan_data
 }
@@ -818,7 +930,7 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
 # Current fitted-object/model contract. Increment whenever the Stan likelihood
 # changes in a way that makes serialized fits unsuitable for comparison or
 # simulation under the current package.
-.antitrust_bayes_model_spec_version <- 6L
+.antitrust_bayes_model_spec_version <- 8L
 
 # Arithmetic mean of a logistic-normal random variable. The outside-share
 # prior is parameterized on the logit scale in Stan, while FOC prior

@@ -33,6 +33,15 @@
 #'   to activate it.
 #' @param supply_model Integer 1-5 identifying the conduct model (see
 #'   \code{\link{bayes_sim}}).
+#' @param structure Supply structure: \code{"simultaneous"},
+#'   \code{"fringe"}, or \code{"stackelberg"}.
+#' @param partition_prior For Stackelberg, \code{"cutoff"} selects the
+#'   conditioned common-boundary lottery; \code{"ordered_k"} selects a
+#'   prespecified positive-count prior.
+#' @param k_prior Ordered-count probabilities supplied in a supported
+#'   package format; \code{NULL} gives a uniform prior over positive support.
+#' @param k_scope Whether direct ordered-k is common across a
+#'   \code{"market"} or specific to each \code{"period"}.
 #'
 #' @return A list of class \code{bayes_params} with one element per draw
 #'   (length 1 for a point estimate).
@@ -40,7 +49,9 @@
 bayes_params <- function(alpha = NULL, gamma = NULL, s0,
                           bargaining_power = 0, cutoff_share = 0,
                           cutoff_scale = 0.2, use_cutoff = FALSE,
-                          supply_model) {
+                          supply_model, structure = NULL,
+                          partition_prior = "cutoff", k_prior = NULL,
+                          k_scope = "market") {
   if (is.null(alpha) == is.null(gamma)) {
     stop("Supply exactly one of 'alpha' (logit) or 'gamma' (ces).")
   }
@@ -58,6 +69,24 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
   if (missing(supply_model) || length(supply_model) != 1L ||
       !supply_model %in% 1:5) {
     stop("'supply_model' must be a single integer in 1:5.")
+  }
+
+  resolved_structure <- .stack_resolve_structure(
+    structure = structure, use_cutoff = use_cutoff,
+    use_cutoff_supplied = !missing(use_cutoff)
+  )
+  if (resolved_structure$name == "stackelberg" && !(supply_model %in% c(1L, 3L))) {
+    stop("Bayesian Stackelberg supports only Bertrand (1) and Cournot (3) supply models.")
+  }
+  partition_prior <- match.arg(partition_prior, c("cutoff", "ordered_k"))
+  k_scope <- match.arg(k_scope, c("market", "period"))
+  if (resolved_structure$name != "stackelberg" && partition_prior != "cutoff") {
+    stop("partition_prior = 'ordered_k' is supported only for structure = 'stackelberg'.")
+  }
+  cutoff_scale_supplied <- !missing(cutoff_scale) && !is.null(cutoff_scale)
+  if (identical(resolved_structure$name, "stackelberg") &&
+      identical(partition_prior, "ordered_k") && cutoff_scale_supplied) {
+    stop("'cutoff_scale' is not defined for partition_prior = 'ordered_k'.")
   }
 
   n <- length(slope)
@@ -80,7 +109,13 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
     stop("'bargaining_power' must lie in [0, 1) for every draw.")
   }
   cutoff_share <- recycle(cutoff_share, "cutoff_share")
+  if (is.null(cutoff_scale) || missing(cutoff_scale)) {
+    cutoff_scale <- if (resolved_structure$name == "stackelberg") 0.01 else 0.2
+  }
   cutoff_scale <- recycle(cutoff_scale, "cutoff_scale")
+  if (any(!is.finite(cutoff_scale)) || any(cutoff_scale <= 0)) {
+    stop("'cutoff_scale' must be positive and finite for every draw.")
+  }
 
   .bayes_params_raw(
     alpha = if (is_ces) NULL else slope,
@@ -90,7 +125,12 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
     cutoff_share = cutoff_share,
     cutoff_scale = cutoff_scale,
     use_cutoff = isTRUE(use_cutoff),
-    supply_model = as.integer(supply_model)
+    supply_model = as.integer(supply_model),
+    structure = resolved_structure$name,
+    structure_code = as.integer(resolved_structure$code),
+    partition_prior = partition_prior,
+    k_prior = k_prior,
+    k_scope = k_scope
   )
 }
 
@@ -100,8 +140,15 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
 ## isolate a single bad draw.
 .bayes_params_raw <- function(alpha = NULL, gamma = NULL, s0,
                                bargaining_power, cutoff_share,
-                               cutoff_scale, use_cutoff, supply_model) {
+                               cutoff_scale, use_cutoff, supply_model,
+                               structure = NULL, structure_code = NULL,
+                               partition_prior = "cutoff", k_prior = NULL,
+                               k_scope = "market") {
   is_ces <- !is.null(gamma)
+  resolved_structure <- .stack_resolve_structure(
+    structure = structure, use_cutoff = use_cutoff,
+    use_cutoff_supplied = FALSE
+  )
   structure(
     list(
       alpha = alpha,
@@ -112,6 +159,11 @@ bayes_params <- function(alpha = NULL, gamma = NULL, s0,
       cutoff_scale = cutoff_scale,
       use_cutoff = use_cutoff,
       supply_model = as.integer(supply_model),
+      structure = resolved_structure$name,
+      structure_code = as.integer(if (is.null(structure_code)) resolved_structure$code else structure_code),
+      partition_prior = partition_prior,
+      k_prior = k_prior,
+      k_scope = k_scope,
       demand_model = if (is_ces) "ces" else "logit",
       n_draws = length(if (is_ces) gamma else alpha)
     ),
@@ -242,7 +294,19 @@ bayes_specify <- function(params, market) {
     source = "bayes_specify",
     demand_model = params$demand_model,
     supply_model = params$supply_model,
-    posterior_draws = params$n_draws
+    posterior_draws = params$n_draws,
+    structure = params$structure %||% if (isTRUE(params$use_cutoff)) "fringe" else "simultaneous",
+    structure_code = params$structure_code %||% if (isTRUE(params$use_cutoff)) 1L else 0L,
+    cutoff_scale = params$cutoff_scale,
+    partition_prior = params$partition_prior %||% "cutoff",
+    k_prior = .stack_whole_or(params$k_prior, NULL),
+    k_scope = params$k_scope %||% "market",
+    prior_normalization = list(
+      mode = "supplied_draws",
+      model_spec_version = 8L,
+      partition_support = if (identical(params$structure, "stackelberg")) "1:N" else NULL,
+      source = "bayes_specify"
+    )
   )
 
   methods::new(

@@ -171,7 +171,7 @@ test_that("log_lik matches an independent Student-t computation for share/margin
     stan_options = fast_opts
   ))
   draws <- rstan::extract(fit_share@stanfit)
-  log_shareIn <- fit_share@stan_data$log_shareIn
+  log_shareIn <- as.numeric(fit_share@stan_data$log_shareIn)
   sigma_share <- draws$sigma_share[draw_idx]
   nu <- draws$nu[draw_idx]
   pred_shareIn <- draws$pred_shareIn[draw_idx, ]
@@ -189,7 +189,7 @@ test_that("log_lik matches an independent Student-t computation for share/margin
     stan_options = fast_opts
   ))
   draws_m <- rstan::extract(fit_margin@stanfit)
-  log_marginNormInv <- fit_margin@stan_data$log_marginNormInv
+  log_marginNormInv <- as.numeric(fit_margin@stan_data$log_marginNormInv)
   sigma_margin <- draws_m$sigma_margin[draw_idx]
   nu_m <- draws_m$nu[draw_idx]
   pred_marginNormInv <- draws_m$pred_marginNormInv[draw_idx, ]
@@ -284,7 +284,7 @@ test_that("predicted shares distinguish conditional and unconditional identities
   mky <- fit@stan_data$market_year_idx
   a_market <- draws$a_market[draw_idx, ]
   b_market <- draws$b_market[draw_idx, ]
-  price_std <- fit@stan_data$price_std
+  price_std <- as.numeric(fit@stan_data$price_std)
   market_sign <- fit@stan_data$market_sign
   m <- fit@stan_data$market
 

@@ -55,8 +55,8 @@ test_that("logit preparation allows input markdown ratios above one", {
     priors       = list()
   )
 
-  expect_equal(sd$marginNormInv, 1 / margins)
-  expect_equal(sd$log_marginNormInv, log(sd$marginNormInv))
+  expect_equal(as.numeric(sd$marginNormInv), 1 / margins)
+  expect_equal(as.numeric(sd$log_marginNormInv), log(as.numeric(sd$marginNormInv)))
 })
 
 test_that("validate_inputs catches bad quantities", {
@@ -101,7 +101,7 @@ test_that("prepare_stan_data returns correct structure", {
   expect_equal(length(sd$price_std), N)
   expect_true(sd$price_sd > 0)
   expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 6L)
+  expect_equal(attr(sd, "model_spec_version"), 8L)
   expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
 })
 
@@ -186,8 +186,8 @@ test_that("prepare_stan_data computes quantity shares correctly", {
   )
 
   expected_shares <- quantities / sum(quantities)
-  expect_equal(sd$shareIn, expected_shares)
-  expect_equal(sum(sd$clr_shareIn), 0, tolerance = 1e-12)
+  expect_equal(as.numeric(sd$shareIn), expected_shares)
+  expect_equal(sum(as.numeric(sd$clr_shareIn)), 0, tolerance = 1e-12)
 })
 
 test_that("compositional share outcomes are scale invariant", {
@@ -232,7 +232,7 @@ test_that("strategic FOCs receive firm shares and market direction", {
   )
 
   expect_equal(sd$market_sign, -1L)
-  expect_equal(sd$firm_shareIn, c(0.5, 0.5, 0.5))
+  expect_equal(as.numeric(sd$firm_shareIn), c(0.5, 0.5, 0.5))
 })
 
 test_that("Logit alpha prior follows the standardized price scale", {
@@ -458,7 +458,7 @@ test_that("prepare_ces_stan_data returns correct structure", {
   expect_equal(length(sd$log_price_std), N)
   expect_true(sd$log_price_sd > 0)
   expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 6L)
+  expect_equal(attr(sd, "model_spec_version"), 8L)
   expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
   # Revenue shares should sum to ~1 within each market
   for (m in 1:sd$N_market_year) {
@@ -487,9 +487,9 @@ test_that("prepare_ces_stan_data computes revenue shares correctly", {
 
   revenue <- prices * quantities
   expected_rev_shares <- revenue / sum(revenue)
-  expect_equal(sd$revShare, expected_rev_shares)
-  expect_equal(sd$shareIn, quantities / sum(quantities))
-  expect_equal(sd$marginNormInv, rep(1 / 0.3, N))
+  expect_equal(as.numeric(sd$revShare), expected_rev_shares)
+  expect_equal(as.numeric(sd$shareIn), quantities / sum(quantities))
+  expect_equal(as.numeric(sd$marginNormInv), rep(1 / 0.3, N))
 })
 
 test_that("CES uses the data-independent standardized prior", {
