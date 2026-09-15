@@ -1,130 +1,146 @@
-# Prespecified synthetic recovery and PNB diagnostic protocol
+# Prespecified exact ordered-k recovery and PNB diagnostic protocol
 
-This protocol is written before new-model posterior fitting. Results will be
-reported as recovery evidence or failures, not used to retune package priors.
+Status: pre-fit protocol, 2026-09-15. This protocol supersedes the cutoff-based
+recovery design previously stored at this path. No result from an ordered-k
+posterior fit was used to choose the design, priors, support, or diagnostics.
+The legacy smooth-cutoff fringe remains a separate robustness model and is not
+the data-generating process in this experiment.
 
-Synthetic configurations: Logit/CES crossed with Bertrand/Cournot; five firms,
-eight periods; include a six-product version with one multiproduct firm in
-each role. Seeds 1103, 2207 and 3301. Demand truth |alpha|=3 or gamma=3.5;
-fixed firm demand quality across periods. The general economic DGP has outside
-quantity share .30. Before fitting, a Bayes-compatible mode derives outside
-truth from the existing single-market share normalization (see the addendum
-below), keeping observed prices/shares and all other truths unchanged. Construct
-varying conditional quantity shares that move the second/third firm's size
-across a market cutoff c=.20, infer price paths from the fixed normalized
-demand system, and invert the independently audited hard-role FOCs for costs.
-This gives a coherent constant-demand, varying-cost DGP without requiring
-a production equilibrium solver to generate the baseline oracle.
+## Estimand and finite-state prior
 
-Timing is generated with the audited common logistic boundary at prespecified
-tau=.005. Roles use conditional firm quantity size for Logit and conditional
-firm revenue size for CES. Draw a publicly realized hard partition per period;
-keep truth identities, effective k and costs. Margin measurements have
-Student-t noise with five degrees of freedom and standard deviation .04 in
-log inverse margin. Invalid margins cause the DGP to fail; they are never
-clipped or selectively dropped.
-Shares can first be exact, with a separately labeled measurement-noise stress
-scenario. Do not incorrectly call independent noisy log shares a normalized
-multinomial DGP.
+Each synthetic market has five firms and one fixed strategic-core count across
+all eight periods. Firms are ranked once, before estimation, by the observable
+rule used by the package: equal-period mean firm conditional quantity share for
+Logit and equal-period mean firm conditional revenue share for CES, with an
+ascending firm-label tie break. Every product and period of a firm inherits
+that rank. The true core size is k=2.
 
-The exact-share experiment sets use_rho=FALSE in every candidate fit, retaining
-the independent marginal Student-t margin equation that generated its noise.
-Zero correlation in a bivariate Student-t is not independence, so the default
-conditional df+1 equation would otherwise change this DGP's error law. PNB
-retains its existing default joint correlation setting.
+The candidate supports and priors are fixed before fitting:
 
-Synthetic application priors are fixed across all replications and candidate
-structures: cutoff beta(2,8), other prior manifest entries baseline, with any
-noise-scale overrides listed before the first fit. This prior is chosen for
-the simulated cutoff domain, not supplied as a package default. Core-count
-truth can vary by period; do not attempt to point-identify a hard cutoff inside
-one fixed share gap using a single cross section. Panel crossings provide
-information that a single realized role partition does not.
+* BF and CF use k_support=0:5 and k_prior=rep(1/6,6). State zero is exact
+  monopolistic competition.
+* BS and CS use k_support=1:5 and k_prior=rep(1/5,5). Stackelberg has no empty
+  leader state.
+* BF and CF therefore share one prior, and BS and CS share the corresponding
+  positive-core prior. These are application choices, not package defaults.
 
-The synthetic single-market panel uses one true price coefficient and one true
-outside quantity share across periods. It fits one global price coefficient
-and the existing independent-period outside-share hierarchy:
-use_alpha_market_pool=FALSE,
-use_s0_market_pool=FALSE, use_s0_market_year_pool=FALSE, and
-use_market_resid_scale=FALSE in every candidate. PNB keeps the package's
-existing default pooling settings. The coordination truth constructor takes
-observed inside quantity for Logit and observed inside expenditure for CES.
-The public Bayesian simulation API retains its existing inside-quantity
-insideSize convention for both demands and converts CES quantity to expenditure
-using observed conditional quantity shares and prices. Supply observed inside
-quantity to Bayes in both families; welfare comparisons then use identical
-physical quantity/expenditure units after the conversion.
+One k applies to the complete market likelihood. Stan evaluates the sum of all
+period/product margin log densities conditional on k before `log_sum_exp`.
+There is no period-level or observation-level mixture and no sampled discrete
+parameter.
 
-Fit each synthetic dataset under matching Stackelberg, simultaneous and fringe
-structures, using the same demand family and base conduct. Initial sampling:
-two chains, 1000 iterations, 500 warmup, adapt_delta=.95, max_treedepth=13;
-record all diagnostics. If diagnostics fail, any longer rerun is explicitly
-labeled and does not replace the failed run in the record. Model discrimination
-uses bridge marginal likelihood when its diagnostics are usable and otherwise
-reports the failure alongside joint predictive fit. Do not infer successful
-discrimination from the visually closest margin curve.
+## Synthetic configurations
 
-For every seed/configuration report demand-parameter posterior median/interval,
-truth coverage, cutoff median/interval, hard and realized k PMFs, role
-probabilities, core-share posterior, margin fit, model odds, sampling diagnostics
-and simulation success/error rates. For both a no-cost-change merger of two
-specified firms and a +10% cost shock, compare true intervention effects with
-posterior intervals for prices, shares and welfare. Include combined shocks.
-Use identical post-role rules in truth and posterior simulations and record
-them. Compare mixture, posterior-cutoff threshold and adjacent-role mappings.
+Cross Logit/CES demand with Bertrand/Cournot base conduct and seeds 1103, 2207,
+and 3301. Use the single-product layout for seed 1103, a multiproduct leader for
+2207, and a multiproduct follower for 3301. This gives twelve primary DGPs and
+covers each required ownership layout without treating several layouts from
+one random seed as independent replications.
 
-Recovery is not declared successful from a single seed. Report coverage and
-errors across seeds with the individual rows retained. Wide/confounded cutoff
-or demand posteriors, low probability for true k, wrong model odds or failed
-counterfactual coverage are unresolved research outcomes, not test tolerances
-to relax. This small experiment is a diagnostic, not a Monte Carlo precision
-study of frequentist coverage rates.
+Truth is |alpha|=3 for Logit, gamma=3.5 for CES, and outside price 1.3. The
+Bayes-compatible outside quantity share is derived algebraically from the
+single-market normalization used by the fitted model. Firm demand quality is
+fixed across periods. Conditional shares vary over time, including changes in
+the second/third firms' period-specific ordering, while the predetermined
+whole-panel ordering and top-two core remain fixed. Product costs are obtained
+by inverting the independently audited hard-role FOCs at the generated prices.
 
-PNB smoke fitting starts only after package suites and derivative/aggregation
-tests pass. Eight models: Logit Bertrand simultaneous/fringe/Stackelberg,
-Logit Cournot simultaneous/fringe/Stackelberg, auction and MonCom. Use the
-existing input-market data, baseline proper prior manifest and identical
-sampling settings across candidates. Keep the legacy fringe scale .2; new
-Stackelberg tau=.01, plus prespecified .0025/.005/.02 sensitivity runs. No
-Court-informed prior is added to this smoke diagnostic. Report cutoff, hard
-and realized k, core share, margins, bridge diagnostics, sampling diagnostics,
-merger effects and near-cutoff mapping sensitivity. Record computational or
-identification failures explicitly; do not rewrite a paper or mergerBayes.
+Margin measurements use Student-t noise with five degrees of freedom and
+standard deviation .04 in log inverse margin. The primary experiment retains
+exact demand shares and labels that choice explicitly. Because exact shares can
+drive the share-residual scale toward zero, the sampler gate records this
+geometry rather than hiding it. A prespecified normalized compositional-noise
+stress experiment may follow, but it is reported separately and cannot replace
+the primary result.
 
-## Pre-fit single-market normalization repair
+The generator must pass structural checks before fitting: normalized demand,
+constant within-firm demand quality, firm-level roles, no product double
+counting, positive costs, valid margins, fixed market ranking, and correct
+Logit/CES BF/CF/BS/CS FOC predictions. `synthetic_dgp.R` is the independent
+oracle and may not call the production Stan likelihood or deterministic solver.
 
-This repair is algebraic and precedes every new fit. Existing Stan code fixes
-b_market=0 in a single market and centers b_quality over unique firm IDs.
-The general structural DGP with arbitrary outside .30 therefore violates the
-statistical share normalization. It remains a labeled misspecification stress
-case. Production legacy equations and all priors remain unchanged.
+## Candidate fits and priors
 
-For fixed base conditional quantity shares qbar and prices pbar, Logit uses
-deltaNorm=log(qbar)+alpha*(pbar-p0). The compatible outside truth is
+For each DGP, fit three candidates with the same demand family and base
+conduct: exact Stackelberg, exact fringe, and simultaneous conduct. The
+matching structure is the recovery candidate; the other two test model
+discrimination. A separate exact-fringe DGP experiment reverses Stackelberg
+and fringe roles so BF/CF recovery is not judged only as a misspecified
+alternative to BS/CS.
 
-    logit(s0)=mean_unique_firms(deltaNorm)+alpha*(p0-mean_all_prices).
+Use the package baseline proper prior manifest for every candidate, with no
+post-result changes. Use `use_rho=FALSE`, fixed df=5,
+`use_market_resid_scale=FALSE`, `use_alpha_market_pool=FALSE`,
+`use_s0_market_pool=FALSE`, and `use_s0_market_year_pool=FALSE`. The latter
+settings fit one demand coefficient and one outside share for the synthetic
+single-market panel. CES uses the same observed inside quantities as Logit;
+the package converts them to revenue shares using price and outside price.
 
-CES uses logQNorm=log(qbar)+gamma*log(pbar/p0) and
+The primary HMC run uses two chains, 1000 iterations per chain, 500 warmup,
+adapt_delta=.95, and max_treedepth=13. A short fixed-parameter or small-HMC run
+is only a compilation/sampler smoke test and is never reported as recovery.
+If the primary run fails diagnostics, any longer or differently parameterized
+rerun is labeled as sensitivity evidence and does not replace the failure.
 
-    logit(s0)=mean_unique_firms(logQNorm)-gamma*mean_all_log_prices.
+## Required recovery output
 
-Both means over prices include all observed product-period rows, matching
-existing data standardization; quality means count each firm once. Observed
-price paths do not depend on the chosen constant outside share. Rebuild the
-physical normalized qualities, shares, costs and margins with the derived s0.
-The resulting true firm-quality coordinates have mean zero and exactly match
-the existing role-free Stan share predictions. Run synthetic_dgp.R with its
-second argument 'bayes' to reproduce the 72 checks for cutoff and fixed-k modes.
-Derived Logit s0 is .15345070/.13756237/.13123608 for single/multiproduct-leader/
-multiproduct-follower layouts; CES is .06747971/.05721621/.05553923.
-No posterior result motivated this adjustment. Single-market CES share
-normalization with nonunit outside prices has a remaining dependence on price
-units through this restriction; it is reported rather than silently repaired
-in legacy models.
+Retain one compact row per DGP/candidate with the seed and layout. Report:
 
-Direct-k implementation and its additional bounded recovery experiment are
-prespecified in ordered_k_addendum.md. They marginalize exact games under a
-direct count prior; cutoff-induced exact mixtures remain the baseline recovery
-experiment. No cutoff recovery claim applies to direct-k fits.
+* demand-parameter median, 95 percent interval, error, and truth coverage;
+* outside-share median, interval, error, and coverage;
+* P(k=r|D), posterior mean/median k, true-k probability, modal k, and posterior
+  strategic-core share for exact structures;
+* predicted-margin error by role and overall;
+* divergences, maximum R-hat, minimum effective sample size, BFMI, and
+  maximum-treedepth hits;
+* elapsed time and any sampling or bridge-sampling failure;
+* bridge marginal likelihood when its numerical diagnostics are usable, plus
+  joint predictive fit without substituting one for the other.
 
-The later [nonempty-core addendum](nonempty_core_addendum.md) governs positive-k support, conditional cutoff probabilities, and cutoff-center summaries. It supersedes any earlier zero-leader Bayesian-support examples.
+Recovery is assessed across all three seeds. One visually favorable
+replication, a diffuse posterior that happens to cover truth, or a sampler run
+with unresolved diagnostics is not called successful. All failed outcomes are
+kept in the table.
+
+## Counterfactual recovery
+
+After parameter and k recovery pass, evaluate a no-cost-change merger, a 10
+percent marginal-cost shock, and their combination with the same deterministic
+truth and posterior scenario definitions. Stackelberg uses the coordination
+solver. Exact fringe uses a hard top-k strategic-core/MonCom-fringe solver;
+smooth cutoff weights are not a substitute.
+
+The main posterior simulation maps each continuous draw to one market-wide k
+drawn from P(k|D,theta), cached across periods and pre/post scenarios. This is
+an unbiased Monte Carlo representation of the finite mixture. Also report
+fixed modal k, every supported fixed-k sensitivity, and, once implemented,
+the exactly probability-weighted conditional outcome mean across k. The last
+quantity is a Rao-Blackwell summary and must retain component failure rates;
+it does not define a fractional-role game.
+
+Compare true and posterior changes in product prices, shares, and welfare, plus
+solver success and leader/follower or strategic/fringe FOC residuals. Do not
+impose unproved price rankings as test expectations.
+
+## PNB smoke diagnostic
+
+PNB fitting begins only after package suites, compiled likelihood checks,
+synthetic recovery, and exact-fringe simulation pass. Estimate the eight
+prespecified models: simultaneous Bertrand, BF, BS, simultaneous Cournot, CF,
+CS, auction, and MonCom. Use k_support=0:5 with a uniform prior for BF/CF and
+k_support=1:5 with a uniform prior for BS/CS. These are explicit application
+arguments. No Court-informed prior enters the smoke run.
+
+Use the same proper prior manifest and sampling settings across candidates.
+Report posterior k, core share, predicted margins, bridge and sampling
+diagnostics, merger effects, fixed-k sensitivity, and simulation failure rates.
+Do not change priors after inspecting results and do not modify the paper or
+mergerBayes in this phase.
+
+## Artifact and evidence policy
+
+Compiled objects, stanfit objects, chain CSV files, and verbose logs remain in
+temporary local storage and are deleted after compact summaries are extracted.
+Only small source files and CSV summaries belong in Git. Each final result is
+labeled analytically established, numerically verified, empirically estimated,
+or unresolved.

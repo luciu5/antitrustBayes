@@ -5,9 +5,10 @@ synthetic_stackelberg_panel <- function(demand=c("logit","ces"),
                                        conduct=c("bertrand","cournot"),
                                        seed=1103L, layout=c("single","multi_leader","multi_follower"),
                                        normalize_bayes=FALSE,
-                                       partition=c("cutoff","ordered_k"),k=2L) {
+                                       partition=c("cutoff","ordered_k"),k=2L,
+                                       structure=c("stackelberg","fringe")) {
   demand<-match.arg(demand); conduct<-match.arg(conduct); layout<-match.arg(layout)
-  partition<-match.arg(partition)
+  partition<-match.arg(partition); structure<-match.arg(structure)
   set.seed(seed)
   firms<-LETTERS[1:5]
   owner<-switch(layout,single=firms,multi_leader=c("A","A",firms[-1]),multi_follower=c("A","B","B","C","D","E"))
@@ -38,8 +39,23 @@ synthetic_stackelberg_panel <- function(demand=c("logit","ces"),
     }
     s0<-plogis(eta)
   }
-  stopifnot(length(k)==1,is.finite(k),k==as.integer(k),k>=0,k<=length(firms))
+  kmin<-if(structure=="stackelberg")1L else 0L
+  stopifnot(length(k)==1,is.finite(k),k==as.integer(k),k>=kmin,k<=length(firms))
   quality<-if(demand=="logit") log((1-s0)*base_q/s0)+alpha*(base_p-p0) else ((1-s0)*base_q/s0)*(base_p/p0)^gamma
+  # Exact ordered-k estimation fixes one firm ranking before HMC and shares it
+  # across the complete market panel. Reproduce that observable rule here:
+  # equal-period mean firm conditional quantity share for Logit and conditional
+  # revenue share for CES, followed by a firm-label tie break.
+  size_paths<-matrix(NA_real_,8,length(firms),dimnames=list(NULL,firms))
+  for(tt in 1:8) {
+    fs<-c(.34,.22+.07*sin(2*pi*tt/8),.18+.025*cos(2*pi*tt/8),.14,NA_real_)
+    fs[5]<-1-sum(fs[1:4]); qc<-fs[fi]*split; p<-pricepaths[tt,]
+    rc<-qc*p/sum(qc*p)
+    size_paths[tt,]<-if(demand=="logit") fs else
+      as.numeric(tapply(rc,factor(owner,levels=firms),sum))
+  }
+  fixed_order<-order(-colMeans(size_paths),firms)
+  fixed_core<-seq_along(firms)%in%head(fixed_order,k)
   records<-list(); truth<-list()
   for(tt in 1:8) {
     fs<-c(.34,.22+.07*sin(2*pi*tt/8),.18+.025*cos(2*pi*tt/8),.14,NA_real_)
@@ -47,27 +63,33 @@ synthetic_stackelberg_panel <- function(demand=c("logit","ces"),
     p<-pricepaths[tt,]
     expenditure_index<-s0*p0+(1-s0)*sum(qc*p)
     r0<-s0*p0/expenditure_index; rc<-qc*p/sum(qc*p)
-    size<-if(demand=="logit") fs else as.numeric(tapply(rc,factor(owner,levels=firms),sum))
+    size<-size_paths[tt,]
     # Public hard-boundary lottery, conditioned on a nonempty leader sector.
     # The positive-k support revision precedes every new posterior fit.
     boundary<-cutoff+tau*qlogis(runif(1)*plogis((max(size)-cutoff)/tau))
-    lf<-if(partition=="cutoff")size>boundary else seq_along(firms)%in%head(order(-size,firms),k)
+    lf<-if(partition=="cutoff")size>boundary else fixed_core
     followers<-!lf
     R<-if(demand=="logit") fs*(1-s0) else size*(1-r0)
     if(demand=="logit") {
-      if(conduct=="bertrand") {
+      if(structure=="fringe") {
+        if(conduct=="bertrand")h<-ifelse(lf,1/(1-R),1)
+        else h<-ifelse(lf,1+R/s0,1)
+      } else if(conduct=="bertrand") {
         phi<-1/(1-sum(R[followers]^2/(1-R[followers]+R[followers]^2)))
         h<-ifelse(lf,1/(1-phi*R),1/(1-R))
       } else h<-ifelse(lf,1+R/(s0+sum(R[followers])),1+R/s0)
       m<-h[fi]/(alpha*p)
     } else {
       h<-gamma-1
-      if(conduct=="bertrand") {
+      H<-1+h*r0; b<-h/(gamma*H)
+      if(structure=="fringe") {
+        if(conduct=="bertrand")mf<-ifelse(lf,1/(gamma-h*R),1/gamma)
+        else mf<-ifelse(lf,1/gamma+b*R,1/gamma)
+      } else if(conduct=="bertrand") {
         t<-1+h*(1-R); af<-h*R/(1-R+h*(1-R+R^2))
         phi<-1/(1-sum(R[followers]*af[followers]))
         mf<-ifelse(lf,1/(gamma-h*phi*R),1/t)
       } else {
-        H<-1+h*r0; b<-h/(gamma*H)
         af<-h*(H-2*R+gamma*h*r0*R/H)/(H*(H+(gamma-2)*R))
         C<-sum(R[followers]*af[followers])
         mf<-ifelse(lf,1/gamma+b*R/(1+C),1/gamma+b*R)
@@ -79,7 +101,7 @@ synthetic_stackelberg_panel <- function(demand=c("logit","ces"),
     stopifnot(all(p>0),all(qc>0),all(m>0&m<1),all(measured_margin>0&measured_margin<1),abs(sum(qc)-1)<1e-14)
     costs<-p*(1-m)
     records[[tt]]<-data.frame(prices=p,quantities=1000*qc,margins=measured_margin,market="synthetic",year=as.character(tt),group=owner,product=paste0("p",seq_len(n)),stringsAsFactors=FALSE)
-    truth[[tt]]<-list(prices=p,quantity_share=qc*(1-s0),revenue_share=rc*(1-r0),outside_quantity=s0,outside_revenue=r0,size=size,firm_ids=firms,leaders=firms[lf],boundary=if(partition=="cutoff")boundary else NA_real_,cutoff=if(partition=="cutoff")cutoff else NA_real_,k_hard=if(partition=="cutoff")sum(size>cutoff) else NA_integer_,k_realized=sum(lf),margins=m,costs=costs,quality=quality)
+    truth[[tt]]<-list(prices=p,quantity_share=qc*(1-s0),revenue_share=rc*(1-r0),outside_quantity=s0,outside_revenue=r0,size=size,firm_ids=firms,core=firms[lf],leaders=if(structure=="stackelberg")firms[lf] else character(),boundary=if(partition=="cutoff")boundary else NA_real_,cutoff=if(partition=="cutoff")cutoff else NA_real_,k_hard=if(partition=="cutoff")sum(size>cutoff) else as.integer(k),k_realized=sum(lf),margins=m,costs=costs,quality=quality,fixed_rank=firms[fixed_order])
   }
   dat<-do.call(rbind,records)
   bq<-if(demand=="logit")quality+alpha*(p0-mean(dat$prices)) else log(quality)-gamma*mean(log(dat$prices))
@@ -89,7 +111,7 @@ synthetic_stackelberg_panel <- function(demand=c("logit","ces"),
     rep(bq_centered,8)-gamma*(log(dat$prices)-mean(log(dat$prices)))+gamma*log(p0)
   share_error<-max(abs(share_pred-log(as.vector(t(qpaths)))))
   if(normalize_bayes)stopifnot(share_error<1e-13,centered_error<1e-13)
-  list(data=dat,truth=truth,demand=demand,conduct=conduct,seed=seed,layout=layout,
+  list(data=dat,truth=truth,demand=demand,conduct=conduct,structure=structure,seed=seed,layout=layout,
     parameters=list(alpha=alpha,gamma=gamma,s0=s0,outside_price=p0,
       cutoff=if(partition=="cutoff")cutoff else NA_real_,cutoff_scale=tau,
       k=if(partition=="ordered_k")as.integer(k) else NA_integer_,partition=partition,
