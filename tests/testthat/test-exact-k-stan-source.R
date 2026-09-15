@@ -21,6 +21,7 @@ test_that("exact ordered-k Stan sources use one market mixture", {
     expect_match(src, "current - previous", fixed = TRUE)
     expect_false(grepl("mu_b_fringe", src, fixed = TRUE))
     expect_false(grepl("cutoff_share", src, fixed = TRUE))
+    expect_false(grepl("real<lower=0> cutoff_scale;", src, fixed = TRUE))
     expect_false(grepl("conduct_weight", src, fixed = TRUE))
   }
 

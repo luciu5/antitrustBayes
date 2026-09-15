@@ -88,7 +88,6 @@ data {
   int<lower=1> N_year;
   array[N] int<lower=1, upper=N_year> year;
   int<lower=1, upper=5> supply_model;
-  int<lower=0, upper=1> use_cutoff;
   int<lower=1> N_market_year;
   array[N] int<lower=1, upper=N_market_year> market_year_idx;
   array[N_market_year] int<lower=1> mky_n;
@@ -128,8 +127,6 @@ data {
   real<lower=0> prior_sigma_s0_pool;
   real<lower=0> prior_sigma_beta_s0;
   real<lower=0> prior_sigma_resid_market;
-  real<lower=0> prior_cutoff_alpha;
-  real<lower=0> prior_cutoff_beta;
   int<lower=0, upper=1> estimate_df;
   real<lower=2> resid_df_fixed;
   real<lower=0> prior_nu_shape;
@@ -142,7 +139,6 @@ data {
   int<lower=1, upper=2> structure;
   int<lower=0, upper=1> partition_prior_code;
   int<lower=0, upper=1> k_scope_code;
-  real<lower=0> cutoff_scale;
   int<lower=1> N_firm_mky;
   vector<lower=0>[N_firm_mky] firm_mky_shareIn;
   vector<lower=0>[N_firm_mky] firm_mky_revShare;
