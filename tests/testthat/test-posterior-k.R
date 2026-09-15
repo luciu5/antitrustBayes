@@ -100,3 +100,29 @@ test_that("posterior_k fails clearly on missing or malformed generated draws", {
     "contains invalid probabilities"
   )
 })
+
+test_that("posterior_k validates each market distribution separately", {
+  stan_data <- list(
+    N_partition_unit = 2L, partition_unit_market = c(1L, 2L),
+    partition_unit_start = c(1L, 3L), partition_unit_count = c(2L, 2L),
+    partition_component_unit = c(1L, 1L, 2L, 2L),
+    partition_component_k = c(1L, 2L, 1L, 2L)
+  )
+  attr(stan_data, "market_levels") <- c("m1", "m2")
+  fit <- methods::new(
+    "BayesLogit", stanfit = NULL,
+    data = data.frame(market = c("m1", "m2")),
+    stan_data = stan_data, price_sd = 1,
+    supply_model = 1L, demand_model = "logit", market_side = "input",
+    call = quote(fake()),
+    metadata = list(structure = "stackelberg", partition_prior = "ordered_k",
+                    posterior_draws = 1L)
+  )
+  expect_error(
+    posterior_k(fit, draws = list(
+      posterior_component_prob = matrix(c(.5, .5, 0, 0), nrow = 1L),
+      prior_component_prob = matrix(c(.5, .5, .5, .5), nrow = 1L)
+    )),
+    "no positive probability mass in partition unit 2"
+  )
+})

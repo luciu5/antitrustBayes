@@ -60,20 +60,27 @@
   matrix(as.numeric(x), nrow = n_draw, ncol = n_component, byrow = TRUE)
 }
 
-.posterior_k_validate_prob_matrix <- function(x, name, tol = 1e-8) {
+.posterior_k_validate_prob_matrix <- function(x, name, component_indices,
+                                               tol = 1e-8) {
   if (any(!is.finite(x)) || any(x < -tol) || any(x > 1 + tol)) {
     stop("Generated quantity '", name,
          "' contains invalid probabilities.", call. = FALSE)
   }
-  rs <- rowSums(x)
-  if (any(!is.finite(rs)) || any(rs <= tol)) {
-    stop("Generated quantity '", name,
-         "' has a draw with no positive probability mass.", call. = FALSE)
-  }
-  ## Stan's probabilities sum to one up to floating point error.  Normalize
-  ## here so the helper remains stable when a serialized draw has been rounded.
+  ## Each market has a separate categorical distribution. Validate and
+  ## normalize each unit separately; summing the flattened row would conceal
+  ## a malformed all-zero market whenever another market has positive mass.
   x[x < 0] <- 0
-  x / rowSums(x)
+  for (u in seq_along(component_indices)) {
+    ii <- component_indices[[u]]
+    rs <- rowSums(x[, ii, drop = FALSE])
+    if (any(!is.finite(rs)) || any(rs <= tol)) {
+      stop("Generated quantity '", name,
+           "' has a draw with no positive probability mass in partition unit ",
+           u, ".", call. = FALSE)
+    }
+    x[, ii] <- x[, ii, drop = FALSE] / rs
+  }
+  x
 }
 
 .posterior_k_stan_maps <- function(stan_data, structure_name, fit_data = NULL) {
@@ -156,7 +163,7 @@
   }
   market_levels <- attr(stan_data, "market_levels", exact = TRUE)
   if (is.null(market_levels) && !is.null(fit_data) && "market" %in% names(fit_data)) {
-    market_levels <- unique(as.character(fit_data$market))
+    market_levels <- levels(as.factor(fit_data$market))
   }
   if (!is.null(market_levels) &&
       any(unit_market > length(market_levels))) {
@@ -227,7 +234,7 @@
 #' Stackelberg fit, k is the number of simultaneous leaders.
 #'
 #' @param fit A \code{BayesFit} produced with \code{partition_prior =
-#'   "ordered_k"}. A code{BayesSpecifiedFit} reports its supplied prior as
+#'   "ordered_k"}. A \code{BayesSpecifiedFit} reports its supplied prior as
 #'   the posterior because it has no likelihood draws.
 #' @param level Credible interval level for the discrete posterior summary.
 #' @param draws Optional generated-quantity draw list. This is primarily for
@@ -284,10 +291,12 @@ posterior_k <- function(fit, level = 0.95, draws = NULL) {
       draws$prior_component_prob, n_component,
       "prior_component_prob", n_draw
     )
-    posterior <- .posterior_k_validate_prob_matrix(posterior,
-                                                   "posterior_component_prob")
-    prior <- .posterior_k_validate_prob_matrix(prior,
-                                               "prior_component_prob")
+    posterior <- .posterior_k_validate_prob_matrix(
+      posterior, "posterior_component_prob", maps$component_indices
+    )
+    prior <- .posterior_k_validate_prob_matrix(
+      prior, "prior_component_prob", maps$component_indices
+    )
     if (nrow(posterior) != nrow(prior)) {
       stop("Generated ordered-k posterior and prior draws have different counts.",
            call. = FALSE)
