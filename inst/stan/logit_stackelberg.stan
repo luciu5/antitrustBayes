@@ -27,102 +27,31 @@ functions {
     return 0.0;
   }
 
-  real conduct_weight_logit(real firm_share_inside, real cutoff, int use_cutoff) {
-    real x;
-    if (use_cutoff == 0) return 0.0;
-    x = -(firm_share_inside - cutoff) / 0.2;
-    if (x > 10) return 1.0;
-    if (x < -10) return 0.0;
-    return inv_logit(x);
-  }
-
-  real logit_inv_markup(real firm_share_inside, real s0, real alpha,
-                         real fringe_weight, int supply_model,
-                         real bargaining_power) {
-    real firm_share = fmin(0.999999, firm_share_inside * (1.0 - s0));
-    real conduct;
-    if (supply_model == 1) {
-      conduct = 1.0 - firm_share;
-    } else if (supply_model == 2) {
-      conduct = 1.0;
-    } else if (supply_model == 3) {
-      conduct = s0 / (s0 + firm_share);
-    } else if (supply_model == 4) {
-      if (firm_share < 1e-10) conduct = 1.0;
-      else conduct = firm_share / -log1m(firm_share);
-    } else {
-      if (firm_share < 1e-10) {
-        conduct = 1.0;
-      } else {
-        real kappa = bargaining_power / (1.0 - bargaining_power);
-        conduct = (kappa * firm_share
-          - (1.0 - firm_share) * log1m(firm_share)) / -log1m(firm_share);
-      }
-    }
-    return alpha * (fringe_weight + (1.0 - fringe_weight) * conduct);
-  }
-
-  real stack_log_inv_logit(real x) {
-    if (x >= 0) return -log1p(exp(-x));
-    return x - log1p(exp(x));
-  }
-  real stack_log1m_inv_logit(real x) {
-    if (x >= 0) return -x - log1p(exp(-x));
-    return -log1p(exp(x));
-  }
-  real stack_log1m_exp(real x) {
-    if (x == 0) return negative_infinity();
-    if (x < -0.6931471805599453) return log1p(-exp(x));
-    return log(-expm1(x));
-  }
-  real stack_cutoff_logprob(int k, int mky, real cutoff, real tau,
-                            array[] int fm_start, array[] int fm_n,
-                            vector fm_size) {
-    int st = fm_start[mky];
-    int nf = fm_n[mky];
-    if (k == 0) return negative_infinity();
-    {
-      real norm = stack_log_inv_logit((fm_size[st] - cutoff) / tau);
-      if (k == nf) return stack_log_inv_logit((fm_size[st + nf - 1] - cutoff) / tau) - norm;
-      {
-        real left = fm_size[st + k - 1];
-        real right = fm_size[st + k];
-        if (left == right) return negative_infinity();
-        return stack_log_inv_logit((left - cutoff) / tau)
-          + stack_log1m_inv_logit((right - cutoff) / tau)
-          + stack_log1m_exp((right - left) / tau) - norm;
-      }
-    }
-  }
+  // The exact programs use one supplied finite-state prior per market.  The
+  // response statistic is phi for Stackelberg Bertrand and S_F for
+  // Stackelberg Cournot; it is ignored for exact fringe states.
   real stack_logit_inv_margin(int i, int mky, int k, real s0, real alpha,
-                              int conduct, array[] int fm_start,
-                              array[] int fm_n, vector fm_size,
-                              array[] int fm_rank, array[] int obs_fm,
-                              vector price) {
-    int me = obs_fm[i];
-    int st = fm_start[mky];
-    int nf = fm_n[mky];
-    real S = fm_size[me] * (1 - s0);
+                              int conduct, int structure, real response,
+                              array[] int firm_mky_start,
+                              array[] int firm_mky_n, vector firm_mky_share,
+                              array[] int firm_mky_rank,
+                              array[] int obs_to_firm_mky, vector price) {
+    int me = obs_to_firm_mky[i];
+    real S = firm_mky_share[me] * (1 - s0);
     real h;
-    if (conduct == 1) {
-      real B = 0;
-      real phi;
-      for (j in 1:nf) {
-        int fj = st + j - 1;
-        real sf = fm_size[fj] * (1 - s0);
-        if (j > k) B += square(sf) / (1 - sf + square(sf));
-      }
-      phi = 1 / (1 - B);
-      h = fm_rank[me] > k ? 1 / (1 - S) : 1 / (1 - phi * S);
+    if (structure == 1) {
+      // BF/CF: k=0 is exact product-level MonCom (h=1).
+      if (firm_mky_rank[me] > k) h = 1.0;
+      else if (conduct == 1) h = 1 / (1 - S);
+      else h = 1 + S / s0;
+    } else if (conduct == 1) {
+      if (firm_mky_rank[me] > k) h = 1 / (1 - S);
+      else h = 1 / (1 - response * S);
     } else {
-      real sfollow = 0;
-      for (j in 1:nf) {
-        int fj = st + j - 1;
-        if (j > k) sfollow += fm_size[fj] * (1 - s0);
-      }
-      h = fm_rank[me] > k ? 1 + S / s0 : 1 + S / (s0 + sfollow);
+      if (firm_mky_rank[me] > k) h = 1 + S / s0;
+      else h = 1 + S / (s0 + response);
     }
-    // Return the inverse Lerner in price units: m = h / (alpha * p).
+    // Return inverse Lerner in price units: alpha * p / h.
     return price[i] * alpha / h;
   }
   real stack_margin_density(real y, real pred_log, real log_share,
@@ -210,7 +139,7 @@ data {
   real<lower=0, upper=1> bargaining_prior_upper;
   real<lower=0> bargaining_prior_alpha;
   real<lower=0> bargaining_prior_beta;
-  int<lower=2, upper=2> structure;
+  int<lower=1, upper=2> structure;
   int<lower=0, upper=1> partition_prior_code;
   int<lower=0, upper=1> k_scope_code;
   real<lower=0> cutoff_scale;
@@ -229,14 +158,29 @@ data {
   array[N_partition_unit] int<lower=1, upper=N_market_year> partition_unit_market_year;
   array[N_partition_unit] int<lower=1> partition_unit_start;
   array[N_partition_unit] int<lower=1> partition_unit_count;
-  array[N_partition_unit] int<lower=1> partition_unit_k_min;
-  array[N_partition_unit] int<lower=1> partition_unit_k_max;
+  array[N_partition_unit] int<lower=0> partition_unit_k_min;
+  array[N_partition_unit] int<lower=0> partition_unit_k_max;
   array[N_market_year] int<lower=1, upper=N_partition_unit> mky_to_partition_unit;
   int<lower=1> N_partition_component;
   array[N_partition_component] int<lower=1, upper=N_partition_unit> partition_component_unit;
-  array[N_partition_component] int<lower=1> partition_component_k;
+  array[N_partition_component] int<lower=0> partition_component_k;
   vector[N_partition_component] partition_prior_logprob;
   vector<lower=0>[N_partition_component] partition_prior_probability;
+  int<lower=1> N_firm_market;
+  vector<lower=0>[N_firm_market] firm_market_shareIn;
+  vector<lower=0>[N_firm_market] firm_market_revShare;
+  array[N_firm_market] int<lower=1, upper=N_market> firm_market_market;
+  array[N_firm_market] int<lower=1, upper=N_group> firm_market_group;
+  array[N_firm_market] int<lower=1> firm_market_rank;
+  array[N_market] int<lower=1> firm_market_start;
+  array[N_market] int<lower=1> firm_market_n;
+  array[N] int<lower=1, upper=N_firm_market> obs_to_firm_market;
+  array[N] int<lower=1, upper=N> market_obs_order;
+  array[N_market] int<lower=1> market_obs_start;
+  array[N_market] int<lower=1> market_obs_n;
+  array[N_market_year] int<lower=1, upper=N> market_mky_order;
+  array[N_market] int<lower=1> market_mky_start;
+  array[N_market] int<lower=1> market_mky_n;
 }
 
 transformed data {
@@ -244,12 +188,25 @@ transformed data {
   int is_bargaining = supply_model == 5;
   int pool_alpha_by_market = is_single_market == 0 && use_alpha_market_pool == 1;
   array[N_market] int n_mky_per_market = rep_array(0, N_market);
+  array[N_market_year] int mky_pos_in_market = rep_array(0, N_market_year);
   int any_paired = 0;
   int rho_active;
   matrix[N_group, N_group - 1] Q = rep_matrix(0.0, N_group, N_group - 1);
   for (mky in 1:N_market_year) {
     n_mky_per_market[mky_to_market[mky]] += 1;
   }
+  for (m in 1:N_market)
+    for (pos in 1:market_mky_n[m])
+      mky_pos_in_market[market_mky_order[market_mky_start[m] + pos - 1]] = pos;
+  if (structure < 1 || structure > 2)
+    reject("exact ordered-k models require structure = 1 (fringe) or 2 (Stack)");
+  if (supply_model != 1 && supply_model != 3)
+    reject("exact ordered-k Logit model supports only Bertrand or Cournot");
+  if (partition_prior_code != 1 || k_scope_code != 1)
+    reject("exact ordered-k models require supplied market priors and market scope");
+  if (structure == 2) for (cc in 1:N_partition_component)
+    if (partition_component_k[cc] < 1)
+      reject("Stackelberg ordered-k support must be strictly positive");
   for (i in 1:N) {
     if (margin_obs[i] == 1) any_paired = 1;
   }
@@ -268,7 +225,6 @@ parameters {
   vector[is_single_market == 0 ? N_market : 0] b_market_raw;
   vector[N_group - 1] b_group_centered;
   real<lower=0> sigma_b_strat;
-  vector[structure == 1 ? 1 : 0] mu_b_fringe_vec;
   vector[(is_cournot == 1 && pool_alpha_by_market == 0) ? 0 : 1] mu_log_a_free;
   vector<lower=0>[pool_alpha_by_market == 1 ? 1 : 0] sigma_log_a_vec;
   vector[(is_cournot == 0 && pool_alpha_by_market == 1 && use_centered_alpha == 0) ? N_market : 0] r_market_a_raw;
@@ -286,7 +242,6 @@ parameters {
   // is far better identified than the market-year pool's N_market_year effects.
   vector[(use_s0_market_pool == 1 && use_centered_s0_pool == 0) ? N_market : 0] s0_market_raw;
   vector[(use_s0_market_pool == 1 && use_centered_s0_pool == 1) ? N_market : 0] eta_s0_market;
-  vector<lower=0, upper=1>[partition_prior_code == 0 ? N_market : 0] cutoff_share;
   vector[rho_active == 1 ? 1 : 0] rho_raw;
   real log_sigma_share;
   real log_sigma_margin;
@@ -311,7 +266,6 @@ transformed parameters {
   vector[N_market] b_market;
   vector[N_market] gamma_market;
   vector[N_group] b_quality_all = Q * b_group_centered;
-  real mu_b_fringe = 0.0;
   vector[N_market_year] s0;
   vector[N_market_year] s0_prob;
   vector[N_market] mean_log_s0_market = rep_vector(0.0, N_market);
@@ -428,9 +382,6 @@ model {
   }
   target += normal_lpdf(b_group_centered | 0, sigma_b_strat);
   target += normal_lpdf(sigma_b_strat | 1, prior_sigma_meanval_strat) - 1 * normal_lccdf(0 | 1, prior_sigma_meanval_strat);
-  if (partition_prior_code == 0) {
-    target += beta_lpdf(cutoff_share | prior_cutoff_alpha, prior_cutoff_beta);
-  }
   if (use_s0_market_pool == 1) {
     target += normal_lpdf(mu_s0_pool_vec | s0_prior_mean, s0_prior_sd);
     target += normal_lpdf(sigma_s0_pool_vec | 0, prior_sigma_s0_pool) - num_elements(sigma_s0_pool_vec) * normal_lccdf(0 | 0, prior_sigma_s0_pool);
@@ -473,52 +424,68 @@ model {
     target += soft_hmt_penalty(agg_elasticity, max_elasticity, 0.1);
   }
 
-  for (i in 1:N) {
+  // The share likelihood is common across all ordered-k states.
+  if (likelihood_mode != 3) for (i in 1:N) {
     int m = market[i];
     int mky = market_year_idx[i];
-    real b_quality = b_quality_all[group[i]];
-    real delta = b_market[m] + b_quality
-      + market_sign * a_market[m] * price_std[i];
-    real pred_log_s = logit(s0_prob[mky]) + delta;
-    real sigma_share_eff = sigma_share_market[m];
-    real sigma_margin_eff = sigma_margin_market[m];
-
-    if (likelihood_mode != 3) {
-      real scale_share_marginal = sigma_share_eff * sqrt((nu - 2) / nu);
-      target += student_t_lpdf(log_shareIn[i] | nu, pred_log_s, scale_share_marginal);
-    }
-
+    real pred_log_s = logit(s0_prob[mky]) + b_market[m]
+      + b_quality_all[group[i]] + market_sign * a_market[m] * price_std[i];
+    target += student_t_lpdf(log_shareIn[i] | nu, pred_log_s,
+      sigma_share_market[m] * sqrt((nu - 2) / nu));
   }
-  if (likelihood_mode != 2) {
-    for (u in 1:N_partition_unit) {
-      int cstart = partition_unit_start[u];
-      int cend = cstart + partition_unit_count[u] - 1;
-      real cutoff = partition_prior_code == 0 ? cutoff_share[partition_unit_market[u]] : 0;
-      vector[partition_unit_count[u]] score;
-      for (cc in cstart:cend) {
-        int k = partition_component_k[cc];
-        real sc = partition_prior_code == 1 ? partition_prior_logprob[cc] :
-          stack_cutoff_logprob(k, partition_unit_market_year[u], cutoff,
-            cutoff_scale, firm_mky_start, firm_mky_n, firm_mky_shareIn);
-        for (i in 1:N) {
-          int mky = market_year_idx[i];
-          if (likelihood_mode != 2 && mky_to_partition_unit[mky] == u && margin_obs[i] == 1) {
-            real invm = stack_logit_inv_margin(i, mky, k, s0_prob[mky],
-              alpha_structural_market[market[i]], supply_model,
-              firm_mky_start, firm_mky_n, firm_mky_shareIn,
-              firm_mky_rank, obs_to_firm_mky, price);
-            real pred = log(invm + 1e-9);
-            real sharepred = logit(s0_prob[mky]) + b_market[market[i]]
-              + b_quality_all[group[i]] + market_sign * a_market[market[i]] * price_std[i];
-            sc += stack_margin_density(log_marginNormInv[i], pred, log_shareIn[i],
-              sharepred, sigma_share_market[market[i]], sigma_margin_market[market[i]],
-              rho, nu, rho_active);
+
+  if (likelihood_mode != 2) for (m in 1:N_market) {
+    int mky0 = market_mky_order[market_mky_start[m]];
+    int u = mky_to_partition_unit[mky0];
+    int cstart = partition_unit_start[u];
+    int nk = partition_unit_count[u];
+    vector[nk] score = rep_vector(0, nk);
+    for (kk in 1:nk) {
+      int cc = cstart + kk - 1;
+      int k = partition_component_k[cc];
+      vector[market_mky_n[m]] response = rep_vector(0, market_mky_n[m]);
+      score[kk] = partition_prior_probability[cc] > 0
+        ? partition_prior_logprob[cc] : negative_infinity();
+      // Compute Stack's follower aggregate once per component-period.
+      if (structure == 2) for (q in 1:market_mky_n[m]) {
+        int mky = market_mky_order[market_mky_start[m] + q - 1];
+        int st = firm_mky_start[mky];
+        if (supply_model == 1) {
+          real B = 0;
+          for (j in 1:firm_mky_n[mky]) {
+            int fj = st + j - 1;
+            real S = firm_mky_shareIn[fj] * (1 - s0_prob[mky]);
+            if (firm_mky_rank[fj] > k)
+              B += square(S) / (1 - S + square(S));
           }
+          response[q] = 1 / (1 - B);
+        } else {
+          real S_F = 0;
+          for (j in 1:firm_mky_n[mky]) {
+            int fj = st + j - 1;
+            if (firm_mky_rank[fj] > k)
+              S_F += firm_mky_shareIn[fj] * (1 - s0_prob[mky]);
+          }
+          response[q] = S_F;
         }
-        score[cc - cstart + 1] = sc;
       }
-      target += log_sum_exp(score);
+      for (pos in 1:market_obs_n[m]) {
+        int i = market_obs_order[market_obs_start[m] + pos - 1];
+        int mky = market_year_idx[i];
+        if (margin_obs[i] == 1) {
+          real invm = stack_logit_inv_margin(i, mky, k, s0_prob[mky],
+            alpha_structural_market[m], supply_model, structure,
+            response[mky_pos_in_market[mky]], firm_mky_start, firm_mky_n,
+            firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
+          real sharepred = logit(s0_prob[mky]) + b_market[m]
+            + b_quality_all[group[i]] + market_sign * a_market[m] * price_std[i];
+          score[kk] += stack_margin_density(log_marginNormInv[i],
+            log(invm + 1e-9), log_shareIn[i], sharepred,
+            sigma_share_market[m], sigma_margin_market[m], rho, nu, rho_active);
+        }
+      }
     }
+    target += log_sum_exp(score);
   }
 }
 
@@ -536,97 +503,157 @@ generated quantities {
   vector[N_partition_component] posterior_component_prob = rep_vector(0, N_partition_component);
   vector[N_partition_component] prior_component_prob = rep_vector(0, N_partition_component);
   vector[N_partition_component] component_log_score = rep_vector(0, N_partition_component);
+  array[N_partition_component] int component_k;
   vector[N_firm_mky] firm_leader_prob = rep_vector(0, N_firm_mky);
   vector[N_firm_mky] prior_firm_leader_prob = rep_vector(0, N_firm_mky);
+  vector[N_firm_market] firm_market_core_prob = rep_vector(0, N_firm_market);
   vector[N_partition_unit] unit_margin_loglik = rep_vector(0, N_partition_unit);
+  vector[N_partition_unit] posterior_k_mean = rep_vector(0, N_partition_unit);
+  vector[N_partition_unit] posterior_k_median = rep_vector(0, N_partition_unit);
+  vector[N_partition_unit] posterior_k_mode = rep_vector(0, N_partition_unit);
+  vector[N_partition_unit] posterior_core_share_conditional = rep_vector(0, N_partition_unit);
+  vector[N_market_year] posterior_core_share_conditional_mky = rep_vector(0, N_market_year);
+  vector[N_market_year] posterior_core_share_unconditional_mky = rep_vector(0, N_market_year);
+  vector[N_market] log_lik_share_market = rep_vector(0, N_market);
+  vector[N_market] log_lik_margin_market = rep_vector(0, N_market);
+
+  for (cc in 1:N_partition_component) component_k[cc] = partition_component_k[cc];
 
   {
     vector[N] sharepred;
     for (i in 1:N) {
       int m = market[i];
       int mky = market_year_idx[i];
-      sharepred[i] = logit(s0_prob[mky]) + b_market[m] + b_quality_all[group[i]]
-          + market_sign * a_market[m] * price_std[i];
+      sharepred[i] = logit(s0_prob[mky]) + b_market[m]
+        + b_quality_all[group[i]] + market_sign * a_market[m] * price_std[i];
       pred_shareIn[i] = exp(sharepred[i]);
       pred_shareUncond[i] = (1 - s0_prob[mky]) * pred_shareIn[i];
       if (likelihood_mode != 3)
         log_lik_share_marginal[i] = student_t_lpdf(log_shareIn[i] | nu,
           sharepred[i], sigma_share_market[m] * sqrt((nu - 2) / nu));
       log_lik[i] = log_lik_share_marginal[i];
+      log_lik_share_market[m] += log_lik_share_marginal[i];
     }
 
-    for (u in 1:N_partition_unit) {
+    for (m in 1:N_market) {
+      int mky0 = market_mky_order[market_mky_start[m]];
+      int u = mky_to_partition_unit[mky0];
       int cstart = partition_unit_start[u];
       int nk = partition_unit_count[u];
-      real cutoff = partition_prior_code == 0 ? cutoff_share[partition_unit_market[u]] : 0;
       vector[nk] prior;
+      vector[nk] priorprob;
       vector[nk] score;
       vector[nk] prefix;
-      matrix[N, nk] ell = rep_matrix(0, N, nk);
-      matrix[N, nk] invmargin = rep_matrix(0, N, nk);
+      matrix[market_obs_n[m], nk] ell;
+      matrix[market_obs_n[m], nk] invmargin;
       real previous;
+      prior = rep_vector(0, nk);
+      priorprob = rep_vector(0, nk);
+      score = rep_vector(0, nk);
+      ell = rep_matrix(0, market_obs_n[m], nk);
+      invmargin = rep_matrix(0, market_obs_n[m], nk);
+
       for (kk in 1:nk) {
         int cc = cstart + kk - 1;
         int k = partition_component_k[cc];
-        prior[kk] = partition_prior_code == 1 ? partition_prior_logprob[cc] :
-          stack_cutoff_logprob(k, partition_unit_market_year[u], cutoff, cutoff_scale,
-            firm_mky_start, firm_mky_n, firm_mky_shareIn);
-        score[kk] = prior[kk];
-        for (i in 1:N) {
-          int mky = market_year_idx[i];
-          if (mky_to_partition_unit[mky] == u) {
-            invmargin[i, kk] = stack_logit_inv_margin(i, mky, k, s0_prob[mky],
-              alpha_structural_market[market[i]], supply_model, firm_mky_start,
-              firm_mky_n, firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
-            if (likelihood_mode != 2 && margin_obs[i] == 1) {
-              ell[i, kk] = stack_margin_density(log_marginNormInv[i],
-                log(invmargin[i, kk] + 1e-9), log_shareIn[i], sharepred[i],
-                sigma_share_market[market[i]], sigma_margin_market[market[i]], rho, nu, rho_active);
-              score[kk] += ell[i, kk];
+        vector[market_mky_n[m]] response;
+        response = rep_vector(0, market_mky_n[m]);
+        prior[kk] = partition_prior_probability[cc] > 0
+          ? partition_prior_logprob[cc] : negative_infinity();
+        priorprob[kk] = partition_prior_probability[cc];
+        score[kk] = partition_prior_probability[cc] > 0
+          ? partition_prior_logprob[cc] : negative_infinity();
+        if (structure == 2) for (q in 1:market_mky_n[m]) {
+          int mky = market_mky_order[market_mky_start[m] + q - 1];
+          int st = firm_mky_start[mky];
+          if (supply_model == 1) {
+            real B = 0;
+            for (j in 1:firm_mky_n[mky]) {
+              int fj = st + j - 1;
+              real S = firm_mky_shareIn[fj] * (1 - s0_prob[mky]);
+              if (firm_mky_rank[fj] > k)
+                B += square(S) / (1 - S + square(S));
             }
+            response[q] = 1 / (1 - B);
+          } else {
+            real S_F = 0;
+            for (j in 1:firm_mky_n[mky]) {
+              int fj = st + j - 1;
+              if (firm_mky_rank[fj] > k)
+                S_F += firm_mky_shareIn[fj] * (1 - s0_prob[mky]);
+            }
+            response[q] = S_F;
+          }
+        }
+        for (pos in 1:market_obs_n[m]) {
+          int i = market_obs_order[market_obs_start[m] + pos - 1];
+          int mky = market_year_idx[i];
+          invmargin[pos, kk] = stack_logit_inv_margin(i, mky, k,
+            s0_prob[mky], alpha_structural_market[m], supply_model, structure,
+            response[mky_pos_in_market[mky]], firm_mky_start, firm_mky_n,
+            firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
+          if (margin_obs[i] == 1) {
+            ell[pos, kk] = stack_margin_density(log_marginNormInv[i],
+              log(invmargin[pos, kk] + 1e-9), log_shareIn[i], sharepred[i],
+              sigma_share_market[m], sigma_margin_market[m], rho, nu, rho_active);
+            score[kk] += ell[pos, kk];
           }
         }
         component_log_score[cc] = score[kk];
       }
+
       {
         vector[nk] postprob = softmax(score);
-        vector[nk] priorprob = softmax(prior);
+        real mode_prob = -1;
         for (kk in 1:nk) {
           int cc = cstart + kk - 1;
           posterior_component_prob[cc] = postprob[kk];
           prior_component_prob[cc] = priorprob[kk];
+          posterior_k_mean[u] += postprob[kk] * partition_component_k[cc];
+          if (postprob[kk] > mode_prob) {
+            mode_prob = postprob[kk];
+            posterior_k_mode[u] = partition_component_k[cc];
+          }
+        }
+        {
+          real cum = 0;
+          for (kk in 1:nk) {
+            int cc = cstart + kk - 1;
+            if (cum < 0.5 && cum + postprob[kk] >= 0.5)
+              posterior_k_median[u] = partition_component_k[cc];
+            cum += postprob[kk];
+          }
         }
         unit_margin_loglik[u] = likelihood_mode == 2 ? 0 : log_sum_exp(score);
-        for (i in 1:N) if (mky_to_partition_unit[market_year_idx[i]] == u) {
+        log_lik_margin_market[m] = unit_margin_loglik[u];
+        for (pos in 1:market_obs_n[m]) {
+          int i = market_obs_order[market_obs_start[m] + pos - 1];
           for (kk in 1:nk) {
-            pred_marginNormInv[i] += postprob[kk] * invmargin[i, kk];
-            pred_margin[i] += postprob[kk] / invmargin[i, kk];
+            pred_marginNormInv[i] += postprob[kk] * invmargin[pos, kk];
+            pred_margin[i] += postprob[kk] / invmargin[pos, kk];
+          }
+        }
+        // Ordered accounting factors telescope to the single market mixture.
+        prefix = prior;
+        previous = log_sum_exp(prefix);
+        if (likelihood_mode != 2) for (pos in 1:market_obs_n[m]) {
+          int i = market_obs_order[market_obs_start[m] + pos - 1];
+          if (margin_obs[i] == 1) {
+            for (kk in 1:nk) prefix[kk] += ell[pos, kk];
+            {
+              real current = log_sum_exp(prefix);
+              log_lik_margin[i] = current - previous;
+              log_lik[i] += log_lik_margin[i];
+              previous = current;
+            }
           }
         }
       }
-      // These ordered accounting factors telescope to the whole-unit mixture.
-      // They are not independent rowwise mixtures or observation LOO units.
-      prefix = prior;
-      previous = log_sum_exp(prefix);
-      if (likelihood_mode != 2) for (pos in 1:N) {
-        int i = obs_order[pos];
-        if (mky_to_partition_unit[market_year_idx[i]] == u && margin_obs[i] == 1) {
-          for (kk in 1:nk) prefix[kk] += ell[i, kk];
-          {
-            real current = log_sum_exp(prefix);
-            log_lik_margin[i] = current - previous;
-            log_lik[i] += log_lik_margin[i];
-            previous = current;
-          }
-        }
-      }
+      log_lik_market[m] = log_lik_share_market[m] + log_lik_margin_market[m];
     }
   }
-  for (i in 1:N) {
-    log_lik_period[market_year_idx[i]] += log_lik[i];
-    log_lik_market[market[i]] += log_lik[i];
-    log_lik_cluster[cluster[i]] += log_lik[i];
-  }
+
+  // Fixed ranking makes these role/core probabilities invariant to row order.
   for (fm in 1:N_firm_mky) {
     int u = mky_to_partition_unit[firm_mky_market_year[fm]];
     int cstart = partition_unit_start[u];
@@ -637,5 +664,50 @@ generated quantities {
         prior_firm_leader_prob[fm] += prior_component_prob[cc];
       }
     }
+  }
+  for (fm in 1:N_firm_market) {
+    int m = firm_market_market[fm];
+    int u = mky_to_partition_unit[market_mky_order[market_mky_start[m]]];
+    int cstart = partition_unit_start[u];
+    for (kk in 1:partition_unit_count[u]) {
+      int cc = cstart + kk - 1;
+      if (firm_market_rank[fm] <= partition_component_k[cc])
+        firm_market_core_prob[fm] += posterior_component_prob[cc];
+    }
+  }
+  for (mky in 1:N_market_year) {
+    int u = mky_to_partition_unit[mky];
+    int cstart = partition_unit_start[u];
+    int st = firm_mky_start[mky];
+    for (kk in 1:partition_unit_count[u]) {
+      int cc = cstart + kk - 1;
+      real core = 0;
+      for (j in 1:firm_mky_n[mky]) {
+        int fj = st + j - 1;
+        if (firm_mky_rank[fj] <= partition_component_k[cc])
+          core += firm_mky_shareIn[fj];
+      }
+      posterior_core_share_conditional_mky[mky] += posterior_component_prob[cc] * core;
+      posterior_core_share_unconditional_mky[mky] += posterior_component_prob[cc]
+        * core * (1 - s0_prob[mky]);
+    }
+  }
+  for (m in 1:N_market) {
+    int u = mky_to_partition_unit[market_mky_order[market_mky_start[m]]];
+    int cstart = partition_unit_start[u];
+    for (kk in 1:partition_unit_count[u]) {
+      int cc = cstart + kk - 1;
+      real core = 0;
+      for (j in 1:firm_market_n[m]) {
+        int fj = firm_market_start[m] + j - 1;
+        if (firm_market_rank[fj] <= partition_component_k[cc])
+          core += firm_market_shareIn[fj];
+      }
+      posterior_core_share_conditional[u] += posterior_component_prob[cc] * core;
+    }
+  }
+  for (i in 1:N) {
+    log_lik_period[market_year_idx[i]] += log_lik[i];
+    log_lik_cluster[cluster[i]] += log_lik[i];
   }
 }
