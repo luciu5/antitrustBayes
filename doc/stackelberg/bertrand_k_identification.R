@@ -100,11 +100,58 @@ zero_noise <- do.call(rbind, lapply(c(.04, .02), function(sd) {
              posterior_probability = exp(zero_score - log_sum_exp(zero_score)))
 }))
 
+## Repeat the true-parameter oracle calculation for the other prespecified
+## ownership layouts.  This is a conditional identification diagnostic only;
+## it does not change the DGP, likelihood, prior, or sampler configuration.
+layout_design <- data.frame(
+  seed = c(1103L, 2207L, 3301L),
+  layout = c("single", "multi_leader", "multi_follower"),
+  stringsAsFactors = FALSE
+)
+layout_score_table <- do.call(rbind, lapply(seq_len(nrow(layout_design)), function(ii) {
+  design <- layout_design[ii, ]
+  candidate <- synthetic_stackelberg_panel(
+    demand = "logit", conduct = "bertrand", seed = design$seed,
+    layout = design$layout, normalize_bayes = TRUE,
+    partition = "ordered_k", k = 2L, structure = "stackelberg"
+  )
+  candidate_mu <- vapply(
+    support,
+    function(k) predict_log_inverse_margin(candidate, k),
+    numeric(nrow(candidate$data))
+  )
+  candidate_y <- log(1 / candidate$data$margins)
+  candidate_scale <- candidate$parameters$margin_noise_sd *
+    sqrt((candidate$parameters$margin_noise_df - 2) /
+           candidate$parameters$margin_noise_df)
+  candidate_score <- colSums(apply(candidate_mu, 2L, function(pred) {
+    stats::dt((candidate_y - pred) / candidate_scale,
+              df = candidate$parameters$margin_noise_df, log = TRUE) -
+      log(candidate_scale)
+  }))
+  candidate_probability <- exp(candidate_score - log_sum_exp(candidate_score))
+  data.frame(
+    seed = design$seed,
+    layout = design$layout,
+    k = support,
+    noiseless_rmse_log_inverse_margin =
+      sqrt(colMeans((candidate_mu - candidate_mu[, 2L])^2)),
+    realized_log_likelihood = candidate_score,
+    realized_log_likelihood_relative_to_k2 =
+      candidate_score - candidate_score[[2L]],
+    oracle_posterior_probability = candidate_probability,
+    stringsAsFactors = FALSE
+  )
+}))
+
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 utils::write.csv(score_table, file.path(out_dir, "bertrand_k_oracle_scores.csv"),
                  row.names = FALSE)
 utils::write.csv(power_table, file.path(out_dir, "bertrand_k_oracle_power.csv"),
                  row.names = FALSE)
 utils::write.csv(zero_noise, file.path(out_dir, "bertrand_k_zero_noise.csv"),
+                 row.names = FALSE)
+utils::write.csv(layout_score_table,
+                 file.path(out_dir, "bertrand_k_layout_scores.csv"),
                  row.names = FALSE)
 cat("PASS: exact-k conditional identification audit; outputs in ", out_dir, "\n", sep = "")

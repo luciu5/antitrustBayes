@@ -39,3 +39,4 @@ tmp_lib/
 !/doc/stackelberg/native8_gate_summary.csv
 !/doc/stackelberg/exact_share_scale.md
 !/doc/stackelberg/package_validation.md
+!/doc/stackelberg/bertrand_k_layout_scores.csv

@@ -29,8 +29,8 @@ original order. Only the firm-level role partition changes.
 ## Numerically verified at the true continuous parameters
 
 The reproducible calculation is in `bertrand_k_identification.R`; its tables are
-`bertrand_k_oracle_scores.csv`, `bertrand_k_oracle_power.csv`, and
-`bertrand_k_zero_noise.csv`.
+`bertrand_k_oracle_scores.csv`, `bertrand_k_oracle_power.csv`,
+`bertrand_k_zero_noise.csv`, and `bertrand_k_layout_scores.csv`.
 
 For the realized true-k=2 sample, the exact conditional log likelihoods are:
 
@@ -72,10 +72,56 @@ and effective sample size is about 97 under the prespecified two-chain run.
 Those diagnostics limit precision, but they do not explain why k=1 is modal;
 the exact oracle already has the same ordering.
 
+The two other prespecified ownership layouts select the true state.  At the
+true continuous parameters, the multiproduct-leader design assigns probability
+0.6840 to k=2; HMC assigns 0.6184 and has posterior mode and median 2.  The
+multiproduct-follower design assigns oracle probability 0.9001 to k=2; HMC
+assigns 0.9050 and again has mode and median 2.  The HMC and oracle results are
+therefore close in all three layouts:
+
+| layout | oracle P(k=2) | HMC P(k=2) | HMC mode |
+|:--|--:|--:|--:|
+| single product | 0.2012 | 0.1967 | 1 |
+| multiproduct leader | 0.6840 | 0.6184 | 2 |
+| multiproduct follower | 0.9001 | 0.9050 | 2 |
+
+These compact HMC fits all fail the prespecified sampler gate, so their
+posterior probabilities remain exploratory.  The oracle calculations do not
+use HMC and establish the same cross-layout pattern.
+
+## Sampler geometry of the exact-share experiment
+
+The primary recovery DGP deliberately has zero share-equation residual.  That
+choice places the data-generating share-error standard deviation on the
+boundary of the fitted model, whose parameter is strictly positive.  The
+result is visible in every candidate structure because the share likelihood is
+common to every k state.
+
+The scale collapse has a quantitative check.  With x = log(sigma_share), a
+Normal prior centered at log(.5) with SD .5, N exact observations, and p locally
+fitted regression coordinates, the zero-residual scale kernel has approximate
+mode
+
+    x = log(.5) - (N - p) * .5^2.
+
+There are p=13 effective conditional-demand coordinates here: one alpha, eight
+market-year outside-share intercepts, and four centered firm-quality
+coordinates.  The single-product layout has N=40, giving -7.443; its sampled
+mean is -7.497.  Each multiproduct layout has N=48, giving -9.443; their sampled
+means are -9.430 and -9.410.  This agreement diagnoses the small share scale as
+the expected consequence of exact-fit data rather than a conduct-equation
+scale error.
+
+The collapsed scale creates difficult posterior geometry and low effective
+sample size.  It does not determine k directly: the common share likelihood
+cancels from the conditional k odds when rho is fixed at zero.  A separately
+prespecified compositional-share-noise stress experiment is the appropriate
+way to test sampling away from this boundary.  It cannot replace or relabel
+the failed primary sampler gate.
+
 ## Still unresolved
 
-The complete multi-seed and multi-layout recovery matrix must establish how
-identification changes with multiproduct leaders and followers, Cournot, and
-CES. A useful future DGP-design exercise can vary the number and precision of
-margin observations prospectively. It must remain separate from the current
-prespecified recovery gate and from the PNB application.
+Cournot and CES recovery remain to be established.  A useful future DGP-design
+exercise can vary the number and precision of margin observations
+prospectively. It must remain separate from the current prespecified recovery
+gate and from the PNB application.
