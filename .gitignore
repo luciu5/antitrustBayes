@@ -40,3 +40,4 @@ tmp_lib/
 !/doc/stackelberg/exact_share_scale.md
 !/doc/stackelberg/package_validation.md
 !/doc/stackelberg/bertrand_k_layout_scores.csv
+!/doc/stackelberg/compositional_share_noise_spec.md
