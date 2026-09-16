@@ -36,7 +36,10 @@ prepare_ces_stan_data(
   partition_prior = "cutoff",
   k_support = NULL,
   k_prior = NULL,
-  k_scope = "market"
+  k_scope = "market",
+  share_likelihood = c("student_t", "gaussian"),
+  quality_parameterization = c("sampled", "collapsed"),
+  margin_likelihood = NULL
 )
 }
 \arguments{
@@ -76,7 +79,9 @@ greater than 1 are valid for input-market markdowns.}
 \item{use_s0_market_year_pool}{Logical.}
 
 \item{use_s0_market_pool}{Logical. If true, use one latent outside quantity
-share per market before any market-year \code{X_s0} adjustment.}
+share per market before any market-year \code{X_s0} adjustment.
+The preparation helpers retain these explicit legacy controls; resolved
+pooling mode is recorded in the returned list attributes.}
 
 \item{use_centered_alpha}{Logical.}
 

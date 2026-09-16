@@ -101,7 +101,7 @@ test_that("prepare_stan_data returns correct structure", {
   expect_equal(length(sd$price_std), N)
   expect_true(sd$price_sd > 0)
   expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 8L)
+  expect_equal(attr(sd, "model_spec_version"), 9L)
   expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
 })
 
@@ -458,7 +458,7 @@ test_that("prepare_ces_stan_data returns correct structure", {
   expect_equal(length(sd$log_price_std), N)
   expect_true(sd$log_price_sd > 0)
   expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 8L)
+  expect_equal(attr(sd, "model_spec_version"), 9L)
   expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
   # Revenue shares should sum to ~1 within each market
   for (m in 1:sd$N_market_year) {

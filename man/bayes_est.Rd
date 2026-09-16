@@ -17,10 +17,14 @@ bayes_est(
   use_cutoff = FALSE,
   use_rho = TRUE,
   df = 5,
+  share_likelihood = c("student_t", "gaussian"),
+  quality_parameterization = c("sampled", "collapsed"),
+  margin_likelihood = NULL,
   use_market_resid_scale = FALSE,
   use_alpha_market_pool = TRUE,
   use_s0_market_year_pool = FALSE,
   use_s0_market_pool = FALSE,
+  s0_pooling = c("auto", "none", "market", "market_year"),
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
   use_hmt = FALSE,
@@ -103,6 +107,18 @@ places a \code{gamma(prior_nu_shape, prior_nu_rate)} prior on
 \code{nu - 2} and estimates \code{nu} jointly with the rest of the
 model.}
 
+\item{share_likelihood}{Share residual family: \code{"student_t"}
+(default) or \code{"gaussian"}.}
+
+\item{quality_parameterization}{Quality effects are \code{"sampled"}
+(default) or \code{"collapsed"}; collapsed quality integrates Gaussian
+group effects and disallows market residual scales.}
+
+\item{margin_likelihood}{Margin residual family, \code{"student_t"} or
+\code{"gaussian"}; \code{NULL} (default) follows
+\code{share_likelihood}. Gaussian-share Student-t margins require
+collapsed quality, fixed \code{df}, and \code{use_rho = FALSE}.}
+
 \item{use_market_resid_scale}{Logical. If \code{TRUE}, allow market-level
 share and inverse-margin residual scales with hierarchical shrinkage.
 Default \code{FALSE}.}
@@ -112,24 +128,34 @@ price effect to vary by market with hierarchical shrinkage. For Logit this
 gives market-level price coefficients; for CES it gives market-level
 structural elasticities \code{gamma}. Default \code{TRUE}.}
 
-\item{use_s0_market_year_pool}{Logical. If \code{TRUE}, allow market-year
-outside shares with hierarchical shrinkage (one outside share per
-market-year). Default \code{FALSE}. Mutually exclusive with
-\code{use_s0_market_pool}. Note that market-year pooling introduces one
+\item{use_s0_market_year_pool}{Logical legacy control. If \code{TRUE}, allow
+market-year outside shares with hierarchical shrinkage (one outside share
+per market-year). It is mutually exclusive with
+\code{use_s0_market_pool}; omit both legacy controls to use
+\code{s0_pooling = "auto"}. Note that market-year pooling introduces one
 weakly-identified outside share per market-year cell; when a market spans
 several periods with sparse per-cell information, its hyper-scale can be
 poorly identified (low BFMI). Prefer \code{use_s0_market_pool} in that
 regime.}
 
-\item{use_s0_market_pool}{Logical. If \code{TRUE}, pool the outside quantity
+\item{use_s0_market_pool}{Logical legacy control. If \code{TRUE}, pool the outside quantity
 share at the \emph{market} level: one latent share per market, shared
 across all of that market's periods before any market-year \code{X_s0}
 adjustment, with hierarchical shrinkage across markets
 (structurally parallel to \code{use_alpha_market_pool}). Better identified
 than \code{use_s0_market_year_pool} when markets are observed over multiple
 periods, because each market-level effect is disciplined by all of the
-market's observations. Default \code{FALSE}. Mutually exclusive with
-\code{use_s0_market_year_pool}.}
+market's observations. It is mutually exclusive with
+\code{use_s0_market_year_pool}; omit both legacy controls to use
+\code{s0_pooling = "auto"}.}
+
+\item{s0_pooling}{Character string selecting the outside-share pooling
+ladder: \code{"auto"} (default), \code{"none"}, \code{"market"}, or
+\code{"market_year"}. In automatic mode, a single market-year uses one
+direct outside share, while panels use one base outside share per market.
+The explicit legacy flags \code{use_s0_market_pool} and
+\code{use_s0_market_year_pool} remain supported when \code{s0_pooling} is
+omitted; supplying both interfaces together is ambiguous and errors.}
 
 \item{use_centered_alpha}{Logical. If \code{TRUE}, use the centered
 parameterization for the selected market-level price-effect pool (Logit
@@ -215,6 +241,13 @@ demand parameters (price sensitivity, mean valuations, outside share) and
 supply parameters under one of five supply models.
 }
 \details{
+The default is the historical Student-t share and margin likelihood with
+sampled quality. Gaussian sampled and Gaussian collapsed quality are
+selected with \code{share_likelihood} and
+\code{quality_parameterization}. Collapsed fits retain normalized bridge
+evidence; their observation-level predictive arrays are unavailable for
+LOO/WAIC.
+
 Two demand models are supported:
 \describe{
 \item{\code{"logit"}}{Standard multinomial logit. Uses quantity shares

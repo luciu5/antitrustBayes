@@ -1,0 +1,130 @@
+Collapsed-Gaussian saved-draw divergence diagnostic
+Fit: doc/collapsed_gaussian_runs/20260916/cga-ladder-benchmark-20260916/stanfit/logit_bertrand_noisy_271828__B__ladder_multi_market.rds 
+Stored post-warmup draws: 2000 across 4 chains
+Total divergences: 10 
+
+Chain divergence counts
+ chain divergences
+     1           6
+     2           4
+     3           0
+     4           0
+
+Requested parameters found:
+sigma_b_strat, sigma_share, s0_prob[1], s0_prob[2], s0_prob[3], s0_prob[4], alpha_structural_market[1], alpha_structural_market[2], b_market_raw[1], b_market_raw[2], b_market[1], b_market[2], mu_b_market_vec[1], sigma_b_market_vec[1] 
+
+All-draw and divergent-draw summaries are in the CSV. Divergent rank is
+the within-chain percentile of each divergent value (ties mid-ranked).
+
+Point-biserial correlations with the divergence indicator
+             sigma_b_strat                sigma_share 
+                    0.0074                     0.0065 
+                s0_prob[1]                 s0_prob[2] 
+                    0.0406                     0.0383 
+                s0_prob[3]                 s0_prob[4] 
+                   -0.0249                    -0.0251 
+alpha_structural_market[1] alpha_structural_market[2] 
+                   -0.0152                    -0.0152 
+           b_market_raw[1]            b_market_raw[2] 
+                   -0.0764                    -0.0649 
+               b_market[1]                b_market[2] 
+                   -0.0385                     0.0233 
+        mu_b_market_vec[1]      sigma_b_market_vec[1] 
+                    0.1133                     0.0415 
+
+Correlation matrix among the ten divergent draws (exploratory; n=10)
+                           sigma_b_strat sigma_share s0_prob[1] s0_prob[2]
+sigma_b_strat                      1.000       0.321      0.397      0.420
+sigma_share                        0.321       1.000      0.025      0.032
+s0_prob[1]                         0.397       0.025      1.000      0.999
+s0_prob[2]                         0.420       0.032      0.999      1.000
+s0_prob[3]                         0.062       0.611      0.311      0.321
+s0_prob[4]                         0.069       0.584      0.344      0.353
+alpha_structural_market[1]         0.144      -0.514     -0.316     -0.287
+alpha_structural_market[2]         0.144      -0.514     -0.316     -0.287
+b_market_raw[1]                   -0.497      -0.001     -0.465     -0.467
+b_market_raw[2]                   -0.305      -0.438     -0.380     -0.358
+b_market[1]                       -0.440      -0.066     -0.992     -0.997
+b_market[2]                       -0.068      -0.611     -0.391     -0.397
+mu_b_market_vec[1]                 0.228       0.179      0.314      0.293
+sigma_b_market_vec[1]             -0.036       0.189      0.305      0.275
+                           s0_prob[3] s0_prob[4] alpha_structural_market[1]
+sigma_b_strat                   0.062      0.069                      0.144
+sigma_share                     0.611      0.584                     -0.514
+s0_prob[1]                      0.311      0.344                     -0.316
+s0_prob[2]                      0.321      0.353                     -0.287
+s0_prob[3]                      1.000      0.995                     -0.531
+s0_prob[4]                      0.995      1.000                     -0.512
+alpha_structural_market[1]     -0.531     -0.512                      1.000
+alpha_structural_market[2]     -0.531     -0.512                      1.000
+b_market_raw[1]                 0.466      0.441                     -0.157
+b_market_raw[2]                 0.038      0.022                      0.463
+b_market[1]                    -0.365     -0.397                      0.279
+b_market[2]                    -0.986     -0.995                      0.548
+mu_b_market_vec[1]             -0.357     -0.341                     -0.343
+sigma_b_market_vec[1]           0.013      0.035                     -0.641
+                           alpha_structural_market[2] b_market_raw[1]
+sigma_b_strat                                   0.144          -0.497
+sigma_share                                    -0.514          -0.001
+s0_prob[1]                                     -0.316          -0.465
+s0_prob[2]                                     -0.287          -0.467
+s0_prob[3]                                     -0.531           0.466
+s0_prob[4]                                     -0.512           0.441
+alpha_structural_market[1]                      1.000          -0.157
+alpha_structural_market[2]                      1.000          -0.157
+b_market_raw[1]                                -0.157           1.000
+b_market_raw[2]                                 0.463           0.506
+b_market[1]                                     0.279           0.446
+b_market[2]                                     0.548          -0.371
+mu_b_market_vec[1]                             -0.343          -0.674
+sigma_b_market_vec[1]                          -0.641          -0.166
+                           b_market_raw[2] b_market[1] b_market[2]
+sigma_b_strat                       -0.305      -0.440      -0.068
+sigma_share                         -0.438      -0.066      -0.611
+s0_prob[1]                          -0.380      -0.992      -0.391
+s0_prob[2]                          -0.358      -0.997      -0.397
+s0_prob[3]                           0.038      -0.365      -0.986
+s0_prob[4]                           0.022      -0.397      -0.995
+alpha_structural_market[1]           0.463       0.279       0.548
+alpha_structural_market[2]           0.463       0.279       0.548
+b_market_raw[1]                      0.506       0.446      -0.371
+b_market_raw[2]                      1.000       0.325       0.053
+b_market[1]                          0.325       1.000       0.439
+b_market[2]                          0.053       0.439       1.000
+mu_b_market_vec[1]                  -0.878      -0.259       0.264
+sigma_b_market_vec[1]               -0.771      -0.250      -0.091
+                           mu_b_market_vec[1] sigma_b_market_vec[1]
+sigma_b_strat                           0.228                -0.036
+sigma_share                             0.179                 0.189
+s0_prob[1]                              0.314                 0.305
+s0_prob[2]                              0.293                 0.275
+s0_prob[3]                             -0.357                 0.013
+s0_prob[4]                             -0.341                 0.035
+alpha_structural_market[1]             -0.343                -0.641
+alpha_structural_market[2]             -0.343                -0.641
+b_market_raw[1]                        -0.674                -0.166
+b_market_raw[2]                        -0.878                -0.771
+b_market[1]                            -0.259                -0.250
+b_market[2]                             0.264                -0.091
+mu_b_market_vec[1]                      1.000                 0.800
+sigma_b_market_vec[1]                   0.800                 1.000
+
+All-draw correlations for market intercepts and matched outside shares
+                                   relation correlation
+                   b_market[1] ~ s0_prob[1]     -0.9969
+                   b_market[1] ~ s0_prob[2]     -0.9970
+                   b_market[2] ~ s0_prob[3]     -0.9967
+                   b_market[2] ~ s0_prob[4]     -0.9967
+         mu_b_market_vec[1] ~ sigma_b_strat      0.1130
+           mu_b_market_vec[1] ~ sigma_share      0.0058
+ mu_b_market_vec[1] ~ sigma_b_market_vec[1]      0.4529
+
+These use the stored market-year mapping (mky 1--2 in market 1;
+mky 3--4 in market 2). They describe posterior dependence in this
+failed fit; they are not evidence of a required reparameterization.
+
+Interpretation guard:
+This is a descriptive analysis of stored draws from a fit that failed the
+diagnostic gate. It does not establish a causal source of divergences and
+does not evaluate the new s0 auto preset: this fit used explicit unpooled
+controls. No refit or sampler tuning was performed.

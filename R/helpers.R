@@ -4,6 +4,141 @@ safe_sd <- function(x, floor = 1e-8) {
   if (!is.finite(s) || s < floor) 1.0 else s
 }
 
+## Resolve the statistical likelihood contract shared by bayes_est() and the
+## two direct Stan-data preparation entry points.  Codes are deliberately
+## stable and are passed as data to Stan: 1 = Student-t, 2 = Gaussian;
+## 1 = sampled quality, 2 = collapsed quality.
+.resolve_likelihood_modes <- function(share_likelihood = c("student_t", "gaussian"),
+                                      quality_parameterization = c("sampled", "collapsed"),
+                                      margin_likelihood = NULL,
+                                      use_rho = TRUE,
+                                      use_market_resid_scale = FALSE,
+                                      estimate_df = FALSE,
+                                      N_market = NULL,
+                                      N_margin = NULL,
+                                      likelihood_mode = 1L,
+                                      exact_k = FALSE) {
+  share_likelihood <- match.arg(share_likelihood)
+  quality_parameterization <- match.arg(quality_parameterization)
+  if (is.null(margin_likelihood)) margin_likelihood <- share_likelihood
+  margin_likelihood <- match.arg(margin_likelihood, c("student_t", "gaussian"))
+  if (quality_parameterization == "collapsed" && share_likelihood != "gaussian") {
+    stop("quality_parameterization = 'collapsed' requires share_likelihood = 'gaussian'.")
+  }
+  if (quality_parameterization == "collapsed" && use_market_resid_scale) {
+    stop("Collapsed Gaussian quality does not support use_market_resid_scale = TRUE.")
+  }
+  if (share_likelihood == "student_t" && margin_likelihood == "gaussian") {
+    stop("Student-t shares cannot be combined with Gaussian margins.")
+  }
+  if (share_likelihood == "gaussian" && margin_likelihood == "student_t" &&
+      !(quality_parameterization == "collapsed" && !isTRUE(use_rho))) {
+    stop("The Gaussian-share/Student-t-margin hybrid requires collapsed quality and use_rho = FALSE.")
+  }
+  if (isTRUE(estimate_df) && share_likelihood == "gaussian") {
+    stop("df = 'estimate' is only available for Student-t shares.")
+  }
+  if (isTRUE(estimate_df) && margin_likelihood == "gaussian") {
+    stop("df = 'estimate' is unavailable with Gaussian margins.")
+  }
+  if (share_likelihood == "gaussian" && margin_likelihood == "student_t" &&
+      isTRUE(estimate_df)) {
+    stop("The collapsed Gaussian-share/Student-t-margin hybrid requires fixed df.")
+  }
+  if (share_likelihood == "gaussian" && margin_likelihood == "student_t" &&
+      isTRUE(use_rho)) {
+    stop("Gaussian-share/Student-t-margin hybrids require use_rho = FALSE.")
+  }
+  if (!is.null(N_market) && !is.null(N_margin) &&
+      quality_parameterization == "collapsed" && isTRUE(use_rho) &&
+      likelihood_mode == 1L && N_market > 1L && N_margin > 0L && exact_k) {
+    stop("Collapsed Gaussian rho is currently supported only for one market.")
+  }
+  list(
+    share_likelihood = share_likelihood,
+    margin_likelihood = margin_likelihood,
+    quality_parameterization = quality_parameterization,
+    share_likelihood_code = if (share_likelihood == "student_t") 1L else 2L,
+    margin_likelihood_code = if (margin_likelihood == "student_t") 1L else 2L,
+    quality_parameterization_code = if (quality_parameterization == "sampled") 1L else 2L,
+    mode = paste(share_likelihood, quality_parameterization, margin_likelihood,
+                 sep = "/")
+  )
+}
+
+## Resolve the outside-share pooling ladder.  `s0_pooling` is the public
+## interface used by bayes_est(); direct preparation helpers continue to take
+## the two legacy booleans and therefore resolve only their explicit mode.
+.resolve_s0_pooling <- function(s0_pooling = "auto",
+                                s0_pooling_supplied = FALSE,
+                                use_s0_market_pool = FALSE,
+                                use_s0_market_year_pool = FALSE,
+                                legacy_supplied = FALSE,
+                                N_market = NULL,
+                                N_market_year = NULL) {
+  if (!is.logical(s0_pooling_supplied) || length(s0_pooling_supplied) != 1L ||
+      is.na(s0_pooling_supplied)) {
+    stop("'s0_pooling_supplied' must be a non-missing logical scalar.")
+  }
+  if (!is.logical(legacy_supplied) || length(legacy_supplied) != 1L ||
+      is.na(legacy_supplied)) {
+    stop("'legacy_supplied' must be a non-missing logical scalar.")
+  }
+  if (!is.logical(use_s0_market_pool) || length(use_s0_market_pool) != 1L ||
+      is.na(use_s0_market_pool) ||
+      !is.logical(use_s0_market_year_pool) ||
+      length(use_s0_market_year_pool) != 1L ||
+      is.na(use_s0_market_year_pool)) {
+    stop("The legacy outside-share pooling flags must be non-missing logical scalars.")
+  }
+  if (isTRUE(s0_pooling_supplied) && isTRUE(legacy_supplied)) {
+    stop("'s0_pooling' cannot be supplied together with either legacy outside-share pooling flag.")
+  }
+
+  if (isTRUE(s0_pooling_supplied)) {
+    requested <- match.arg(s0_pooling, c("auto", "none", "market", "market_year"))
+    source <- "s0_pooling"
+  } else if (isTRUE(legacy_supplied)) {
+    if (use_s0_market_pool && use_s0_market_year_pool) {
+      stop("Use at most one of 'use_s0_market_pool' (one outside share per ",
+           "market) and 'use_s0_market_year_pool' (one per market-year).")
+    }
+    requested <- if (use_s0_market_year_pool) {
+      "market_year"
+    } else if (use_s0_market_pool) {
+      "market"
+    } else {
+      "none"
+    }
+    source <- "legacy_flags"
+  } else {
+    requested <- "auto"
+    source <- "auto_data"
+  }
+
+  if (identical(requested, "auto")) {
+    if (is.null(N_market) || is.null(N_market_year)) {
+      resolved <- "auto"
+    } else if (N_market == 1L && N_market_year == 1L) {
+      resolved <- "none"
+    } else if (N_market == 1L) {
+      resolved <- "market"
+    } else {
+      resolved <- "market"
+    }
+  } else {
+    resolved <- requested
+  }
+
+  list(
+    requested = requested,
+    resolved = resolved,
+    source = source,
+    use_s0_market_pool = identical(resolved, "market"),
+    use_s0_market_year_pool = identical(resolved, "market_year")
+  )
+}
+
 bounded01 <- function(x, eps = 1e-6) {
   pmin(pmax(x, eps), 1 - eps)
 }
@@ -173,6 +308,8 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #' @param use_s0_market_year_pool Logical.
 #' @param use_s0_market_pool Logical. If true, use one latent outside quantity
 #'   share per market before any market-year \code{X_s0} adjustment.
+#'   The preparation helpers retain these explicit legacy controls; resolved
+#'   pooling mode is recorded in the returned list attributes.
 #' @param use_hmt Logical.
 #' @param use_centered_alpha Logical.
 #' @param use_centered_s0_pool Logical. Select the centered parameterization
@@ -217,8 +354,23 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               partition_prior = "cutoff",
                               k_support = NULL,
                               k_prior = NULL,
-                              k_scope = "market") {
+                              k_scope = "market",
+                              share_likelihood = c("student_t", "gaussian"),
+                              quality_parameterization = c("sampled", "collapsed"),
+                              margin_likelihood = NULL) {
   N <- length(prices)
+  likelihood_modes <- .resolve_likelihood_modes(
+    share_likelihood = share_likelihood,
+    quality_parameterization = quality_parameterization,
+    margin_likelihood = margin_likelihood,
+    use_rho = use_rho,
+    use_market_resid_scale = use_market_resid_scale,
+    estimate_df = estimate_df,
+    likelihood_mode = likelihood_mode
+  )
+  share_likelihood <- likelihood_modes$share_likelihood
+  margin_likelihood <- likelihood_modes$margin_likelihood
+  quality_parameterization <- likelihood_modes$quality_parameterization
   market_side <- match.arg(market_side, c("input", "output"))
   market_sign <- if (market_side == "input") 1L else -1L
   resolved_structure <- .stack_resolve_structure(
@@ -300,6 +452,16 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   mky_f <- as.factor(mky_labels)
   mky_int <- as.integer(mky_f)
   N_market_year <- nlevels(mky_f)
+  s0_resolution <- .resolve_s0_pooling(
+    s0_pooling_supplied = FALSE,
+    use_s0_market_pool = use_s0_market_pool,
+    use_s0_market_year_pool = use_s0_market_year_pool,
+    legacy_supplied = TRUE,
+    N_market = N_market,
+    N_market_year = N_market_year
+  )
+  use_s0_market_pool <- s0_resolution$use_s0_market_pool
+  use_s0_market_year_pool <- s0_resolution$use_s0_market_year_pool
   outside_price <- resolve_outside_price(outside_price, N_market_year)
   cluster_f <- droplevels(as.factor(loo_cluster))
   if (length(cluster_f) != N || anyNA(cluster_f)) {
@@ -307,6 +469,22 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   }
   cluster_int <- as.integer(cluster_f)
   N_cluster <- nlevels(cluster_f)
+  margin_idx <- which(margin_observed)
+  N_margin <- length(margin_idx)
+  if (quality_parameterization == "collapsed" && isTRUE(use_rho) &&
+      likelihood_mode == 1L && N_market > 1L && N_margin > 0L) {
+    .resolve_likelihood_modes(
+      share_likelihood = likelihood_modes$share_likelihood,
+      quality_parameterization = likelihood_modes$quality_parameterization,
+      margin_likelihood = likelihood_modes$margin_likelihood,
+      use_rho = use_rho,
+      use_market_resid_scale = use_market_resid_scale,
+      estimate_df = estimate_df,
+      N_market = N_market, N_margin = N_margin,
+      likelihood_mode = likelihood_mode,
+      exact_k = exact_structure && identical(partition_prior, "ordered_k")
+    )
+  }
   if (any(vapply(split(cluster_int, mky_int), function(x) length(unique(x)) > 1L,
                  logical(1)))) {
     stop("'loo_cluster' must be constant within each market-year equilibrium.")
@@ -436,6 +614,11 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       cluster = array(cluster_int, dim = N),
       likelihood_mode = as.integer(likelihood_mode),
       margin_obs = array(as.integer(margin_observed), dim = N),
+      N_margin = as.integer(N_margin),
+      margin_idx = array(as.integer(margin_idx), dim = N_margin),
+      share_likelihood = likelihood_modes$share_likelihood_code,
+      margin_likelihood = likelihood_modes$margin_likelihood_code,
+      quality_parameterization = likelihood_modes$quality_parameterization_code,
       K_s0 = K_s0,
       X_s0 = X_s0_mat,
       mky_to_market = array(mky_to_market),
@@ -473,6 +656,14 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   attr(stan_data, "k_scope") <- k_scope
   attr(stan_data, "k_support") <- k_support
   attr(stan_data, "k_prior") <- k_prior
+  attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
+  attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
+  attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+  attr(stan_data, "likelihood_mode_metadata") <- likelihood_modes
+  attr(stan_data, "s0_pooling") <- s0_resolution$resolved
+  attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
+  attr(stan_data, "s0_pooling_resolved") <- s0_resolution$resolved
+  attr(stan_data, "s0_pooling_source") <- s0_resolution$source
   if (resolved_structure$name == "stackelberg" ||
       (exact_structure && identical(resolved_structure$name, "fringe") &&
        identical(partition_prior, "ordered_k"))) {
@@ -503,6 +694,14 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     attr(stan_data, "k_scope") <- k_scope
     attr(stan_data, "k_support") <- k_support
     attr(stan_data, "k_prior") <- k_prior
+    attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
+    attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
+    attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+    attr(stan_data, "likelihood_mode_metadata") <- likelihood_modes
+    attr(stan_data, "s0_pooling") <- s0_resolution$resolved
+    attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
+    attr(stan_data, "s0_pooling_resolved") <- s0_resolution$resolved
+    attr(stan_data, "s0_pooling_source") <- s0_resolution$source
     attr(stan_data, "firm_market_ranking") <- ranking_metadata
     attr(stan_data, "partition_metadata") <- partition_metadata
   }
@@ -542,8 +741,23 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   partition_prior = "cutoff",
                                   k_support = NULL,
                                   k_prior = NULL,
-                                  k_scope = "market") {
+                                  k_scope = "market",
+                                  share_likelihood = c("student_t", "gaussian"),
+                                  quality_parameterization = c("sampled", "collapsed"),
+                                  margin_likelihood = NULL) {
   N <- length(prices)
+  likelihood_modes <- .resolve_likelihood_modes(
+    share_likelihood = share_likelihood,
+    quality_parameterization = quality_parameterization,
+    margin_likelihood = margin_likelihood,
+    use_rho = use_rho,
+    use_market_resid_scale = use_market_resid_scale,
+    estimate_df = estimate_df,
+    likelihood_mode = likelihood_mode
+  )
+  share_likelihood <- likelihood_modes$share_likelihood
+  margin_likelihood <- likelihood_modes$margin_likelihood
+  quality_parameterization <- likelihood_modes$quality_parameterization
   market_side <- match.arg(market_side, c("input", "output"))
   if (market_side != "output") {
     stop("CES estimation currently supports output markets only; use ",
@@ -641,6 +855,16 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   mky_f <- as.factor(mky_labels)
   mky_int <- as.integer(mky_f)
   N_market_year <- nlevels(mky_f)
+  s0_resolution <- .resolve_s0_pooling(
+    s0_pooling_supplied = FALSE,
+    use_s0_market_pool = use_s0_market_pool,
+    use_s0_market_year_pool = use_s0_market_year_pool,
+    legacy_supplied = TRUE,
+    N_market = N_market,
+    N_market_year = N_market_year
+  )
+  use_s0_market_pool <- s0_resolution$use_s0_market_pool
+  use_s0_market_year_pool <- s0_resolution$use_s0_market_year_pool
   outside_price <- resolve_outside_price(outside_price, N_market_year)
   cluster_f <- droplevels(as.factor(loo_cluster))
   if (length(cluster_f) != N || anyNA(cluster_f)) {
@@ -648,6 +872,22 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   }
   cluster_int <- as.integer(cluster_f)
   N_cluster <- nlevels(cluster_f)
+  margin_idx <- which(margin_observed)
+  N_margin <- length(margin_idx)
+  if (quality_parameterization == "collapsed" && isTRUE(use_rho) &&
+      likelihood_mode == 1L && N_market > 1L && N_margin > 0L) {
+    .resolve_likelihood_modes(
+      share_likelihood = likelihood_modes$share_likelihood,
+      quality_parameterization = likelihood_modes$quality_parameterization,
+      margin_likelihood = likelihood_modes$margin_likelihood,
+      use_rho = use_rho,
+      use_market_resid_scale = use_market_resid_scale,
+      estimate_df = estimate_df,
+      N_market = N_market, N_margin = N_margin,
+      likelihood_mode = likelihood_mode,
+      exact_k = exact_structure && identical(partition_prior, "ordered_k")
+    )
+  }
   if (any(vapply(split(cluster_int, mky_int), function(x) length(unique(x)) > 1L,
                  logical(1)))) {
     stop("'loo_cluster' must be constant within each market-year equilibrium.")
@@ -783,6 +1023,11 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       cluster = array(cluster_int, dim = N),
       likelihood_mode = as.integer(likelihood_mode),
       margin_obs = array(as.integer(margin_observed), dim = N),
+      N_margin = as.integer(N_margin),
+      margin_idx = array(as.integer(margin_idx), dim = N_margin),
+      share_likelihood = likelihood_modes$share_likelihood_code,
+      margin_likelihood = likelihood_modes$margin_likelihood_code,
+      quality_parameterization = likelihood_modes$quality_parameterization_code,
       K_s0 = K_s0,
       X_s0 = X_s0_mat,
       mky_to_market = array(mky_to_market),
@@ -821,6 +1066,14 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   attr(stan_data, "k_scope") <- k_scope
   attr(stan_data, "k_support") <- k_support
   attr(stan_data, "k_prior") <- k_prior
+  attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
+  attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
+  attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+  attr(stan_data, "likelihood_mode_metadata") <- likelihood_modes
+  attr(stan_data, "s0_pooling") <- s0_resolution$resolved
+  attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
+  attr(stan_data, "s0_pooling_resolved") <- s0_resolution$resolved
+  attr(stan_data, "s0_pooling_source") <- s0_resolution$source
   if (resolved_structure$name == "stackelberg" ||
       (exact_structure && identical(resolved_structure$name, "fringe") &&
        identical(partition_prior, "ordered_k"))) {
@@ -852,6 +1105,14 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     attr(stan_data, "k_scope") <- k_scope
     attr(stan_data, "k_support") <- k_support
     attr(stan_data, "k_prior") <- k_prior
+    attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
+    attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
+    attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+    attr(stan_data, "likelihood_mode_metadata") <- likelihood_modes
+    attr(stan_data, "s0_pooling") <- s0_resolution$resolved
+    attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
+    attr(stan_data, "s0_pooling_resolved") <- s0_resolution$resolved
+    attr(stan_data, "s0_pooling_source") <- s0_resolution$source
     attr(stan_data, "firm_market_ranking") <- ranking_metadata
     attr(stan_data, "partition_metadata") <- partition_metadata
   }
@@ -1024,7 +1285,7 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
 # Current fitted-object/model contract. Increment whenever the Stan likelihood
 # changes in a way that makes serialized fits unsuitable for comparison or
 # simulation under the current package.
-.antitrust_bayes_model_spec_version <- 8L
+.antitrust_bayes_model_spec_version <- 9L
 
 # Arithmetic mean of a logistic-normal random variable. The outside-share
 # prior is parameterized on the logit scale in Stan, while FOC prior

@@ -1,3 +1,10 @@
+.bayes_is_collapsed_quality <- function(fit) {
+  metadata <- fit@metadata
+  isTRUE(metadata$bayes_is_collapsed_quality) ||
+    identical(metadata$quality_parameterization, "collapsed") ||
+    isTRUE(fit@stan_data$quality_parameterization == 2L)
+}
+
 validate_comparison_contract <- function(fits) {
   reference <- fits[[1L]]
   columns <- c(
@@ -182,7 +189,12 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
   }
   invisible(lapply(fits, validate_fit_spec))
   validate_comparison_contract(fits)
-  .bayes_comparison_units(fits, loo_unit)
+  collapsed_quality <- any(vapply(fits, .bayes_is_collapsed_quality, logical(1)))
+  if (collapsed_quality && !isTRUE(bridge)) {
+    stop("LOO/WAIC comparison is unavailable for collapsed quality fits; ",
+         "use bridge = TRUE for normalized evidence.", call. = FALSE)
+  }
+  if (!collapsed_quality) .bayes_comparison_units(fits, loo_unit)
   if (bridge) .bayes_validate_bridge(fits)
 
   # Handle named and unnamed arguments
@@ -232,21 +244,23 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
     market = "log_lik_market",
     cluster = "log_lik_cluster"
   )
-  loo_available <- TRUE
+  loo_available <- !collapsed_quality
 
   for (i in seq_along(fits)) {
     fit <- fits[[i]]
 
-    log_lik <- loo::extract_log_lik(fit@stanfit, parameter_name = parameter_name,
-                                     merge_chains = FALSE)
-    n_units <- dim(log_lik)[3L]
-    if (is.null(n_units)) n_units <- 1L
-    if (n_units < 2L) {
-      loo_available <- FALSE
-    } else {
-      r_eff <- loo::relative_eff(exp(log_lik))
-      loo_list[[i]]  <- loo::loo(log_lik, r_eff = r_eff)
-      waic_list[[i]] <- loo::waic(log_lik)
+    if (loo_available) {
+      log_lik <- loo::extract_log_lik(fit@stanfit, parameter_name = parameter_name,
+                                       merge_chains = FALSE)
+      n_units <- dim(log_lik)[3L]
+      if (is.null(n_units)) n_units <- 1L
+      if (n_units < 2L) {
+        loo_available <- FALSE
+      } else {
+        r_eff <- loo::relative_eff(exp(log_lik))
+        loo_list[[i]]  <- loo::loo(log_lik, r_eff = r_eff)
+        waic_list[[i]] <- loo::waic(log_lik)
+      }
     }
 
     # Bridge sampling for marginal likelihood
@@ -271,9 +285,12 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
   if (loo_available) {
     comp <- loo::loo_compare(loo_list)
     weights_stacking <- loo::loo_model_weights(loo_list, method = "stacking")
-  } else {
+  } else if (!collapsed_quality) {
     warning("LOO/WAIC require at least two ", loo_unit,
             " units; returning NA predictive summaries.", call. = FALSE)
+    comp <- NULL
+    weights_stacking <- rep(NA_real_, length(fits))
+  } else {
     comp <- NULL
     weights_stacking <- rep(NA_real_, length(fits))
   }
@@ -284,6 +301,12 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
       supply_names[f@supply_model], character(1)),
     demand_model  = vapply(fits, slot, character(1), "demand_model"),
     market_side   = vapply(fits, slot, character(1), "market_side"),
+    share_likelihood = vapply(fits, function(x)
+      x@metadata$share_likelihood %||% "student_t", character(1)),
+    margin_likelihood = vapply(fits, function(x)
+      x@metadata$margin_likelihood %||% "student_t", character(1)),
+    quality_parameterization = vapply(fits, function(x)
+      x@metadata$quality_parameterization %||% "sampled", character(1)),
     prior_manifest = vapply(fits, function(x) x@metadata$prior_manifest,
                             character(1)),
     model_prior = prior_weights,

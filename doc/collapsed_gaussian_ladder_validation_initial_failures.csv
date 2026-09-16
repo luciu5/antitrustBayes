@@ -1,0 +1,3 @@
+"model","cell","check","status","value","message"
+"logit","explicit_market_year","fit_or_assertions","fail",,"variable name=mu_log_a_free; dims declared=(1); dims found=()"
+"ces","explicit_market_year","fit_or_assertions","fail",,"variable name=mu_s0_pool_vec; dims declared=(1); dims found=()"

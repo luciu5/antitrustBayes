@@ -66,7 +66,7 @@ test_that("fringe cutoff scales remain prespecified and are carried into data", 
   )
   expect_equal(d$cutoff_scale, .37)
   expect_equal(attr(d, "cutoff_scale"), .37)
-  expect_equal(attr(d, "model_spec_version"), 8L)
+  expect_equal(attr(d, "model_spec_version"), 9L)
 })
 
 test_that("singleton CES common vectors retain one-dimensional Stan shapes", {
@@ -289,7 +289,7 @@ test_that("shared-market cache uses full component support for selected years", 
     partition_unit_count = array(3L, dim = 1L),
     partition_component_k = array(1:3, dim = 3L), use_cutoff = 0L
   )
-  attr(stan_data, "model_spec_version") <- 8L
+  attr(stan_data, "model_spec_version") <- 9L
   fit <- methods::new(
     "BayesLogit", data = df, supply_model = 1L, demand_model = "logit",
     market_side = "input", call = quote(fake()),
@@ -340,7 +340,7 @@ test_that("specified Stackelberg simulation uses the native one-step route", {
   expect_identical(native@diagnostics$bayes_reconstruction$normalization$mode,
                    "supplied_draws")
   expect_equal(native@diagnostics$bayes_reconstruction$normalization$model_spec_version,
-               8L)
+               9L)
   out <- bayes_sim(
     fit, ownerPost = antitrust::counterfactual(
       costs = stats::setNames(.02, "p1")

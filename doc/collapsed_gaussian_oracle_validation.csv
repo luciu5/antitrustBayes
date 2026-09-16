@@ -1,0 +1,13 @@
+"family","structure","supply_model","n_draws","max_abs_error"
+"logit","simultaneous","bertrand",1000,1.11022302462516e-16
+"logit","simultaneous","cournot",1000,2.22044604925031e-16
+"logit","fringe","bertrand",1000,1.11022302462516e-16
+"logit","fringe","cournot",1000,2.22044604925031e-16
+"logit","stackelberg","bertrand",1000,1.11022302462516e-16
+"logit","stackelberg","cournot",1000,2.22044604925031e-16
+"ces","simultaneous","bertrand",1000,0
+"ces","simultaneous","cournot",1000,0
+"ces","fringe","bertrand",1000,0
+"ces","fringe","cournot",1000,8.88178419700125e-16
+"ces","stackelberg","bertrand",1000,0
+"ces","stackelberg","cournot",1000,0

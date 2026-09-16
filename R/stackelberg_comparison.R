@@ -78,8 +78,8 @@
     normalization <- fit@metadata$prior_normalization
     if (!is.list(normalization) ||
         !identical(normalization$mode, "native_stan_normalized") ||
-        !isTRUE(normalization$model_spec_version == 8L)) {
-      stop("Marginal likelihood requires native normalized specification-8 fits. Refit older or unverified objects.")
+        !isTRUE(normalization$model_spec_version == 9L)) {
+      stop("Marginal likelihood requires native normalized specification-9 fits. Refit older or unverified objects.")
     }
     if (isTRUE(dat$use_s0_market_pool == 1L) &&
         isTRUE(dat$use_s0_market_year_pool == 1L)) {

@@ -1,0 +1,5 @@
+"check","cases","max_abs_error","tolerance","status","notes"
+"structured_vs_dense_generic",192,2.41584530158434e-13,2e-10,"passed","deterministic seeds; one-product, multiproduct, repeated-panel, unequal-v, weighted-x fixtures"
+"G1_centered_projection_boundary",3,7.105427357601e-15,2e-12,"passed","P_1 = 0 for tau=0, positive tau, and unequal variances"
+"tau_zero_diagonal_limit",3,3.5527136788005e-15,2e-14,"passed","tau=0 removes the centered quality contribution exactly"
+"rho_augmented_vs_dense_original",36,2.1600499167107e-12,3e-10,"passed","share rows plus matched observed margins; transformed margin has unit Jacobian"

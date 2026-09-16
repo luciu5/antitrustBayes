@@ -21,7 +21,7 @@ test_that("exact ordered-k Stan sources use one market mixture", {
     expect_match(src, "posterior_k_mean", fixed = TRUE)
     expect_match(src, "posterior_k_median", fixed = TRUE)
     expect_match(src, "posterior_k_mode", fixed = TRUE)
-    expect_match(src, "if (likelihood_mode != 2 && margin_obs[i] == 1)", fixed = TRUE)
+    expect_match(src, "if (likelihood_mode != 2 && margin_obs[i] == 1 &&", fixed = TRUE)
     expect_match(src, "partition_component_k[cr] <= partition_component_k[cc]", fixed = TRUE)
     expect_match(src, "firm_market_core_prob", fixed = TRUE)
     expect_match(src, "current - previous", fixed = TRUE)

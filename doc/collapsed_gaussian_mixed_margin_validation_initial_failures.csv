@@ -1,0 +1,5 @@
+"demand","structure","check","max_abs_error","tolerance","status"
+"logit","simultaneous","error: 'margins' must be positive and finite.",Inf,1e-08,"failed"
+"logit","stackelberg","error: 'margins' must be positive and finite.",Inf,1e-08,"failed"
+"ces","simultaneous","error: 'margins' must be positive and finite.",Inf,1e-08,"failed"
+"ces","stackelberg","error: 'margins' must be positive and finite.",Inf,1e-08,"failed"

@@ -401,7 +401,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     component_k = comp$k, component_probability = comp$probability,
     partition_prior = params$partition_prior, k_scope = params$k_scope,
     normalization = .stack_whole_or(fit@metadata$prior_normalization, list(
-      mode = "native_stan_normalized", model_spec_version = 8L,
+      mode = "native_stan_normalized", model_spec_version = 9L,
       partition_support = "1:N"
     )),
     demand_anchoring = list(
@@ -560,7 +560,7 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     component_k = comp$k, component_probability = comp$probability,
     partition_prior = params$partition_prior, k_scope = params$k_scope,
     normalization = .stack_whole_or(fit@metadata$prior_normalization, list(
-      mode = "native_stan_normalized", model_spec_version = 8L,
+      mode = "native_stan_normalized", model_spec_version = 9L,
       partition_support = "0:N"
     )),
     demand_anchoring = list(

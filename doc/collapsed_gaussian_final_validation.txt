@@ -1,0 +1,75 @@
+Collapsed-Gaussian final bounded evidence check
+Date: 2026-09-16
+
+Independent numerical checks
+
+- The seven primary design rows occur once for each of A, B, and C. B has 7/7
+  usable fits; A and C have 0/7. Divergences sum to 1, 0, and 1 respectively.
+- Recomputing each structural ESS/native-Stan-second ratio directly from the
+  benchmark and joining by design reproduces the efficiency table to a maximum
+  absolute difference of 4.7e-15. The B/A median is 1.316144 and the B/C
+  median is 1.531257. These comparisons remain provisional for A and C because
+  their fits failed the frozen diagnostic gate.
+- The policy table has 1127 rows: 1113 complete rows and 14 unusable-fit rows.
+  The 21 usable design-policy scenarios each have 100 valid draws, giving
+  2100 simulations. Every complete row has zero solver failure rate and all
+  requested metric draws are finite.
+- Sensitivity has 3/3 usable cells; production validation has 113/113 checks;
+  the Fixed_param s0 ladder validation has 204/204 checks; and optional mixed
+  margins has 12/12 checks. The B-only HMC information-ladder check has one
+  usable four-period fit and one failed two-market fit with 10 divergences.
+
+Commands and checks
+
+The following focused installed tests passed with R_LIBS=/tmp/cga-Rlib and
+NOT_CRAN=true:
+
+  testthat::test_file("tests/testthat/test-collapsed-gaussian-api.R", ...)
+  testthat::test_file("tests/testthat/test-s0-information-ladder.R", ...)
+  testthat::test_file("tests/testthat/test-posterior-quality.R", ...)
+
+The s0 test had one expected skip because ANTITRUSTBAYES_RUN_STAN_TESTS was not
+enabled. All 12 existing collapsed-Gaussian R scripts parsed successfully.
+The dense/reference script name collapsed_gaussian_structured_benchmark.R was
+probed once but does not exist; collapsed_gaussian_structured_reference.R is
+the repository artifact and parsed successfully.
+
+The 149-file durable archive totals 200447671 bytes (about 191 MiB). A full
+manifest check found no byte-count or SHA-256 mismatch. git check-ignore marks
+the archive directory ignored, and .Rbuildignore excludes ^doc$.
+
+Bridge targets retain their probability-density normalizing constants and
+Jacobian/prior terms. That establishes proper target construction, not reliable
+evidence here: A and C failed HMC diagnostics, and the A/B bridge medians differ
+by 0.2313 even though the underlying expanded and collapsed Gaussian models are
+analytically identical. No bridge-based model preference is supported.
+
+The documented limitations remain material. Existing policy reconstruction is
+anchored on observed shares and common structural draws and does not directly
+propagate latent firm-quality draws. Collapsed multi-market exact-k rho is
+explicitly rejected because global quality centering couples conditional margin
+errors across markets. The failed two-market ladder fit used explicit unpooled
+controls, so this check does not establish what the new s0_pooling="auto" preset
+would do.
+
+Post hoc saved-draw divergence diagnostic
+
+The accompanying divergence diagnostic reads only the saved failed two-market
+fit and performs no refit or sampler tuning. It contains 2000 post-warmup draws
+and 10 divergences: chain 1 has 6, chain 2 has 4, and chains 3 and 4 have 0.
+The divergent values are stored with within-chain percentile ranks in the CSV.
+
+Across all 2000 draws, the market intercepts are almost perfectly negatively
+correlated with matched logit outside-share coordinates:
+
+  b_market[1] ~ qlogis(s0_prob[1]): -0.9969
+  b_market[1] ~ qlogis(s0_prob[2]): -0.9970
+  b_market[2] ~ qlogis(s0_prob[3]): -0.9967
+  b_market[2] ~ qlogis(s0_prob[4]): -0.9967
+
+The global market-intercept location has correlations 0.1130 with
+sigma_b_strat, 0.0058 with sigma_share, and 0.4529 with the market-intercept
+scale. The divergent-only sample has n=10, so its larger pairwise correlations
+are descriptive and cannot establish a causal source of divergences. The
+market-intercept raw coordinate is already noncentered in the saved fit. No
+architectural or economic change follows from these ten events.

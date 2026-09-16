@@ -53,6 +53,15 @@
 #'   places a \code{gamma(prior_nu_shape, prior_nu_rate)} prior on
 #'   \code{nu - 2} and estimates \code{nu} jointly with the rest of the
 #'   model.
+#' @param share_likelihood Share residual family: \code{"student_t"}
+#'   (default) or \code{"gaussian"}.
+#' @param quality_parameterization Quality effects are \code{"sampled"}
+#'   (default) or \code{"collapsed"}; collapsed quality integrates Gaussian
+#'   group effects and disallows market residual scales.
+#' @param margin_likelihood Margin residual family, \code{"student_t"} or
+#'   \code{"gaussian"}; \code{NULL} (default) follows
+#'   \code{share_likelihood}. Gaussian-share Student-t margins require
+#'   collapsed quality, fixed \code{df}, and \code{use_rho = FALSE}.
 #' @param use_market_resid_scale Logical. If \code{TRUE}, allow market-level
 #'   share and inverse-margin residual scales with hierarchical shrinkage.
 #'   Default \code{FALSE}.
@@ -60,23 +69,32 @@
 #'   price effect to vary by market with hierarchical shrinkage. For Logit this
 #'   gives market-level price coefficients; for CES it gives market-level
 #'   structural elasticities \code{gamma}. Default \code{TRUE}.
-#' @param use_s0_market_year_pool Logical. If \code{TRUE}, allow market-year
-#'   outside shares with hierarchical shrinkage (one outside share per
-#'   market-year). Default \code{FALSE}. Mutually exclusive with
-#'   \code{use_s0_market_pool}. Note that market-year pooling introduces one
+#' @param use_s0_market_year_pool Logical legacy control. If \code{TRUE}, allow
+#'   market-year outside shares with hierarchical shrinkage (one outside share
+#'   per market-year). It is mutually exclusive with
+#'   \code{use_s0_market_pool}; omit both legacy controls to use
+#'   \code{s0_pooling = "auto"}. Note that market-year pooling introduces one
 #'   weakly-identified outside share per market-year cell; when a market spans
 #'   several periods with sparse per-cell information, its hyper-scale can be
 #'   poorly identified (low BFMI). Prefer \code{use_s0_market_pool} in that
 #'   regime.
-#' @param use_s0_market_pool Logical. If \code{TRUE}, pool the outside quantity
+#' @param use_s0_market_pool Logical legacy control. If \code{TRUE}, pool the outside quantity
 #'   share at the \emph{market} level: one latent share per market, shared
 #'   across all of that market's periods before any market-year \code{X_s0}
 #'   adjustment, with hierarchical shrinkage across markets
 #'   (structurally parallel to \code{use_alpha_market_pool}). Better identified
 #'   than \code{use_s0_market_year_pool} when markets are observed over multiple
 #'   periods, because each market-level effect is disciplined by all of the
-#'   market's observations. Default \code{FALSE}. Mutually exclusive with
-#'   \code{use_s0_market_year_pool}.
+#'   market's observations. It is mutually exclusive with
+#'   \code{use_s0_market_year_pool}; omit both legacy controls to use
+#'   \code{s0_pooling = "auto"}.
+#' @param s0_pooling Character string selecting the outside-share pooling
+#'   ladder: \code{"auto"} (default), \code{"none"}, \code{"market"}, or
+#'   \code{"market_year"}. In automatic mode, a single market-year uses one
+#'   direct outside share, while panels use one base outside share per market.
+#'   The explicit legacy flags \code{use_s0_market_pool} and
+#'   \code{use_s0_market_year_pool} remain supported when \code{s0_pooling} is
+#'   omitted; supplying both interfaces together is ambiguous and errors.
 #' @param use_centered_alpha Logical. If \code{TRUE}, use the centered
 #'   parameterization for the selected market-level price-effect pool (Logit
 #'   price coefficients or CES structural elasticities). Default \code{FALSE}.
@@ -134,6 +152,13 @@
 #' @param ... Additional arguments (currently unused).
 #'
 #' @details
+#' The default is the historical Student-t share and margin likelihood with
+#' sampled quality. Gaussian sampled and Gaussian collapsed quality are
+#' selected with \code{share_likelihood} and
+#' \code{quality_parameterization}. Collapsed fits retain normalized bridge
+#' evidence; their observation-level predictive arrays are unavailable for
+#' LOO/WAIC.
+#'
 #' Two demand models are supported:
 #' \describe{
 #'   \item{\code{"logit"}}{Standard multinomial logit. Uses quantity shares
@@ -243,10 +268,14 @@ bayes_est <- function(prices, quantities, margins,
                       use_cutoff = FALSE,
                       use_rho = TRUE,
                       df = 5,
+                      share_likelihood = c("student_t", "gaussian"),
+                      quality_parameterization = c("sampled", "collapsed"),
+                      margin_likelihood = NULL,
                       use_market_resid_scale = FALSE,
                       use_alpha_market_pool = TRUE,
                       use_s0_market_year_pool = FALSE,
                       use_s0_market_pool = FALSE,
+                      s0_pooling = c("auto", "none", "market", "market_year"),
                       use_centered_alpha = FALSE,
                       use_centered_s0_pool = FALSE,
                       use_hmt = FALSE,
@@ -267,6 +296,9 @@ bayes_est <- function(prices, quantities, margins,
                       k_scope = "market",
                       ...) {
   cl <- match.call()
+  s0_pooling_supplied <- !missing(s0_pooling)
+  legacy_s0_supplied <- !missing(use_s0_market_pool) ||
+    !missing(use_s0_market_year_pool)
   use_cutoff_supplied <- !missing(use_cutoff)
   resolved_structure <- .stack_resolve_structure(
     structure = structure, use_cutoff = use_cutoff,
@@ -281,6 +313,11 @@ bayes_est <- function(prices, quantities, margins,
   demand_model <- match.arg(demand_model)
   prior_manifest <- match.arg(prior_manifest)
   likelihood <- match.arg(likelihood)
+  share_likelihood <- match.arg(share_likelihood)
+  quality_parameterization <- match.arg(quality_parameterization)
+  if (!is.null(margin_likelihood)) {
+    margin_likelihood <- match.arg(margin_likelihood, c("student_t", "gaussian"))
+  }
   if (is.null(market_side)) {
     market_side <- if (demand_model == "ces") "output" else "input"
   } else {
@@ -374,6 +411,24 @@ bayes_est <- function(prices, quantities, margins,
   # Validate
   validate_inputs(prices, quantities, margins, market, year, group,
                   margin_observed = margin_observed)
+  s0_resolution <- .resolve_s0_pooling(
+    s0_pooling = if (s0_pooling_supplied) s0_pooling else "auto",
+    s0_pooling_supplied = s0_pooling_supplied,
+    use_s0_market_pool = use_s0_market_pool,
+    use_s0_market_year_pool = use_s0_market_year_pool,
+    legacy_supplied = legacy_s0_supplied,
+    N_market = nlevels(droplevels(as.factor(market))),
+    N_market_year = {
+      market_resolve <- droplevels(as.factor(market))
+      year_resolve <- droplevels(as.factor(year))
+      length(unique(paste(as.integer(market_resolve),
+                          as.integer(year_resolve), sep = "_")))
+    }
+  )
+  s0_pooling_requested <- s0_resolution$requested
+  s0_pooling <- s0_resolution$resolved
+  use_s0_market_pool <- s0_resolution$use_s0_market_pool
+  use_s0_market_year_pool <- s0_resolution$use_s0_market_year_pool
   observed_margins <- if (is.null(margin_observed)) margins else margins[margin_observed]
   if (market_side == "output" && any(observed_margins >= 1)) {
     stop("Output-market Lerner indices must be strictly less than 1. ",
@@ -388,6 +443,15 @@ bayes_est <- function(prices, quantities, margins,
     }
     resid_df_fixed <- df
   }
+  likelihood_modes <- .resolve_likelihood_modes(
+    share_likelihood = share_likelihood,
+    quality_parameterization = quality_parameterization,
+    margin_likelihood = margin_likelihood,
+    use_rho = use_rho,
+    use_market_resid_scale = use_market_resid_scale,
+    estimate_df = estimate_df,
+    likelihood_mode = match(likelihood, c("joint", "share", "margin"))
+  )
   flags <- list(
     use_cutoff = use_cutoff,
     use_rho = use_rho,
@@ -407,10 +471,6 @@ bayes_est <- function(prices, quantities, margins,
   if (length(bad_flags)) {
     stop("The following arguments must be non-missing logical scalars: ",
          paste(bad_flags, collapse = ", "), ".")
-  }
-  if (use_s0_market_pool && use_s0_market_year_pool) {
-    stop("Use at most one of 'use_s0_market_pool' (one outside share per ",
-         "market) and 'use_s0_market_year_pool' (one per market-year).")
   }
   priors <- resolve_prior_manifest(prior_manifest, priors)
   if (use_hmt && length(observed_margins) == 0L) {
@@ -504,7 +564,10 @@ bayes_est <- function(prices, quantities, margins,
       partition_prior = partition_prior,
       k_support = k_support,
       k_prior = k_prior,
-      k_scope = k_scope
+      k_scope = k_scope,
+      share_likelihood = likelihood_modes$share_likelihood,
+      quality_parameterization = likelihood_modes$quality_parameterization,
+      margin_likelihood = likelihood_modes$margin_likelihood
     )
     stan_mod <- stanmodels[[if (structure == "stackelberg" ||
                                 (exact_structure && structure == "fringe" &&
@@ -547,7 +610,10 @@ bayes_est <- function(prices, quantities, margins,
       partition_prior = partition_prior,
       k_support = k_support,
       k_prior = k_prior,
-      k_scope = k_scope
+      k_scope = k_scope,
+      share_likelihood = likelihood_modes$share_likelihood,
+      quality_parameterization = likelihood_modes$quality_parameterization,
+      margin_likelihood = likelihood_modes$margin_likelihood
     )
     stan_mod <- stanmodels[[if (structure == "stackelberg" ||
                                 (exact_structure && structure == "fringe" &&
@@ -556,6 +622,11 @@ bayes_est <- function(prices, quantities, margins,
     } else "ces_supply"]]
     price_sd_val <- stan_data$log_price_sd
   }
+
+  attr(stan_data, "s0_pooling") <- s0_pooling
+  attr(stan_data, "s0_pooling_requested") <- s0_pooling_requested
+  attr(stan_data, "s0_pooling_resolved") <- s0_pooling
+  attr(stan_data, "s0_pooling_source") <- s0_resolution$source
 
   # Store the resolved market-year outside price on every observation so that
   # simulation and cross-demand comparison use the fitted normalization.
@@ -571,8 +642,18 @@ bayes_est <- function(prices, quantities, margins,
 
   metadata <- package_provenance(df, prior_manifest, model_prior)
   metadata$likelihood <- likelihood
+  metadata$share_likelihood <- likelihood_modes$share_likelihood
+  metadata$margin_likelihood <- likelihood_modes$margin_likelihood
+  metadata$quality_parameterization <- likelihood_modes$quality_parameterization
+  metadata$likelihood_mode <- likelihood_modes$mode
+  metadata$bayes_is_collapsed_quality <-
+    identical(likelihood_modes$quality_parameterization, "collapsed")
   metadata$supply_model <- supply_model
   metadata$demand_model <- demand_model
+  metadata$s0_pooling <- s0_pooling
+  metadata$s0_pooling_requested <- s0_pooling_requested
+  metadata$s0_pooling_resolved <- s0_pooling
+  metadata$s0_pooling_source <- s0_resolution$source
   metadata$structure <- structure
   metadata$structure_code <- as.integer(.stack_structure_code[[structure]])
   metadata$cutoff_scale <- cutoff_scale
@@ -595,7 +676,14 @@ bayes_est <- function(prices, quantities, margins,
   )
   metadata$prior_normalization <- list(
     mode = "native_stan_normalized",
-    model_spec_version = 8L,
+    model_spec_version = 9L,
+    share_likelihood = likelihood_modes$share_likelihood,
+    margin_likelihood = likelihood_modes$margin_likelihood,
+    quality_parameterization = likelihood_modes$quality_parameterization,
+    s0_pooling = s0_pooling,
+    s0_pooling_requested = s0_pooling_requested,
+    s0_pooling_resolved = s0_pooling,
+    s0_pooling_source = s0_resolution$source,
     partition_support = k_support,
     k_support = k_support,
     k_prior = k_prior,

@@ -79,7 +79,7 @@ make_contract_fit <- function(demand_model = "logit") {
     cluster = c(1L, 1L),
     likelihood_mode = 1L
   )
-  attr(stan_data, "model_spec_version") <- 8L
+  attr(stan_data, "model_spec_version") <- 9L
   new("BayesLogit",
     stanfit = NULL,
     data = data.frame(

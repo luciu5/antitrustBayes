@@ -47,7 +47,7 @@ test_that("fit specification validation rejects stale fits", {
   expect_error(validate_fit_spec(stale), "Refit it with bayes_est")
 
   current_data <- list(N = 1L)
-  attr(current_data, "model_spec_version") <- 8L
+  attr(current_data, "model_spec_version") <- 9L
   current <- stale
   current@stan_data <- current_data
   expect_invisible(validate_fit_spec(current))
