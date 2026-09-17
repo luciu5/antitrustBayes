@@ -95,6 +95,16 @@ validate_comparison_contract <- function(fits) {
       "6b1c2ca570bcb62a6b3765979e9af873aac531960382568680306e1654e4c521",
     logit_supply =
       "1c759485e68a549fbe754623a4c615a3c36afed577c8861a8632819c02fc5313"
+  ),
+  helmert = c(
+    ces_stackelberg =
+      "5906d0e9f7a00c6ec29da47cb9e870bddb65f8750f53855286b068aa24de73e6",
+    ces_supply =
+      "e4a759841324154c27bdfc2508cf0babae3a0daaba0c942aefc1289deaae3592",
+    logit_stackelberg =
+      "4e91beeba1f0155781d72a824bda92f9e1ad51b901d583f9700056b2bb3bcc76",
+    logit_supply =
+      "59cdf553449bfe192aa8e13398fd54bcaf9b3e991289e2e9fd2afc0e93994ff3"
   )
 )
 
@@ -125,15 +135,33 @@ validate_comparison_contract <- function(fits) {
 }
 
 .bayes_bridge_is_approved_migration <- function(saved_hash, current_hash,
-                                                kernel, original, rotation) {
-  is.character(saved_hash) && length(saved_hash) == 1L &&
+                                                kernel, original, rotation,
+                                                helmert = NULL) {
+  !is.null(.bayes_bridge_migration_geometry(
+    saved_hash, current_hash, kernel, original, rotation, helmert
+  ))
+}
+
+.bayes_bridge_migration_geometry <- function(saved_hash, current_hash,
+                                              kernel, original, rotation,
+                                              helmert = NULL) {
+  valid <- is.character(saved_hash) && length(saved_hash) == 1L &&
     is.character(current_hash) && length(current_hash) == 1L &&
     is.character(kernel) && length(kernel) == 1L &&
     kernel %in% .bayes_bridge_kernel_names &&
     is.character(original) && is.character(rotation) &&
-    !is.null(names(original)) && !is.null(names(rotation)) &&
-    identical(unname(original[[kernel]]), saved_hash) &&
+    kernel %in% names(original) && kernel %in% names(rotation)
+  if (!valid || identical(saved_hash, current_hash)) return(NULL)
+  old_to_rotation <- identical(unname(original[[kernel]]), saved_hash) &&
     identical(unname(rotation[[kernel]]), current_hash)
+  new_helmert <- is.character(helmert) && kernel %in% names(helmert) &&
+    identical(unname(helmert[[kernel]]), current_hash)
+  if (old_to_rotation || (new_helmert &&
+      identical(unname(original[[kernel]]), saved_hash))) return("legacy")
+  if (new_helmert && identical(unname(rotation[[kernel]]), saved_hash)) {
+    return("preserve")
+  }
+  NULL
 }
 
 .bayes_bridge_code_contract <- function(stanfit) {
@@ -167,20 +195,23 @@ validate_comparison_contract <- function(fits) {
                                  serialize = FALSE)
   same_code <- identical(saved_hash, current_hash)
   migration <- FALSE
+  migration_geometry <- NULL
   if (!same_code) {
     original <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$original)
     rotation <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$rotation)
-    migration <- .bayes_bridge_is_approved_migration(
-      saved_hash, current_hash, kernel, original, rotation
+    helmert <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$helmert)
+    migration_geometry <- .bayes_bridge_migration_geometry(
+      saved_hash, current_hash, kernel, original, rotation, helmert
     )
+    migration <- !is.null(migration_geometry)
     if (!migration) {
       stop("Saved and installed Stan code hashes differ for ", kernel,
-           "; no approved original-to-rotation pair matches.", call. = FALSE)
+           "; no approved saved-to-current kernel pair matches.", call. = FALSE)
     }
   }
   list(kernel = kernel, current_model = current, saved_hash = saved_hash,
        current_hash = current_hash, same_code = same_code,
-       migration = migration)
+       migration = migration, migration_geometry = migration_geometry)
 }
 
 .bayes_bridge_canonicalize_data <- function(data) {
@@ -225,13 +256,27 @@ validate_comparison_contract <- function(fits) {
 .bayes_bridge_private_data <- function(fit, contract) {
   data <- .bayes_bridge_canonicalize_data(fit@stan_data)
   if (isTRUE(contract$migration)) {
-    if ("market_s0_parameterization" %in% names(data) &&
-        !identical(as.integer(data$market_s0_parameterization), 1L)) {
-      stop("Approved bridge migration requires a legacy private data flag of 1.",
+    if (identical(contract$migration_geometry, "legacy")) {
+      flag <- data$market_s0_parameterization
+      if ("market_s0_parameterization" %in% names(data) &&
+          (!is.numeric(flag) || length(flag) != 1L || !is.finite(flag) ||
+           flag != 1)) {
+        stop("Approved original-kernel migration requires a legacy private data flag of 1.",
+             call. = FALSE)
+      }
+      ## Only a pre-rotation source has this implicit legacy coordinate system.
+      data$market_s0_parameterization <- 1L
+    } else if (identical(contract$migration_geometry, "preserve")) {
+      flag <- data$market_s0_parameterization
+      if (!is.numeric(flag) || length(flag) != 1L || !is.finite(flag) ||
+          !flag %in% c(1, 2)) {
+        stop("Approved performance migration requires its saved private data flag of 1 or 2.",
+             call. = FALSE)
+      }
+    } else {
+      stop("Approved bridge migration has no validated coordinate policy.",
            call. = FALSE)
     }
-    ## Copy-on-write keeps the serialized fit and its stan_data untouched.
-    data$market_s0_parameterization <- 1L
   }
   data
 }
