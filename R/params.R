@@ -567,6 +567,15 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
   }
   args <- c(args, dots)
 
+  ## Newer antitrust constructors can bind an observed structural baseline
+  ## without solving an unchanged post state. Keep the public legacy route
+  ## usable with older antitrust installations; explicit lifecycle controls
+  ## supplied through ... still take precedence.
+  if ("baseline" %in% names(formals(antitrust::specify)) &&
+      !"baseline" %in% names(args)) {
+    args$baseline <- "observed"
+  }
+
   ## specify() returns the registered model with its baseline cost state and
   ## baseline prices initialized by antitrust. No private state or slots are
   ## rewritten here, and no counterfactual equilibrium is solved locally.
@@ -591,6 +600,8 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
 #'   \pkg{antitrust}).
 #' @param ... Additional arguments passed to the public
 #'   \code{antitrust::specify()} constructor for the baseline realization.
+#'   When supported, its observed-baseline lifecycle avoids an unchanged
+#'   equilibrium solve; \code{baseline = "solve"} selects the legacy path.
 #'   Counterfactual scenario options belong to \code{antitrust::simulate()}.
 #'
 #' @return An \code{antitrust::AntitrustFit}.

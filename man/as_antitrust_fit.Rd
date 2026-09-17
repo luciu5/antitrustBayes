@@ -16,6 +16,8 @@ by the package's posterior-realization helper.}
 
 \item{...}{Additional arguments passed to the public
 \code{antitrust::specify()} constructor for the baseline realization.
+When supported, its observed-baseline lifecycle avoids an unchanged
+equilibrium solve; \code{baseline = "solve"} selects the legacy path.
 Counterfactual scenario options belong to \code{antitrust::simulate()}.}
 }
 \value{
