@@ -1,0 +1,7 @@
+change,benchmark,seed,old_wall_time,new_wall_time,speed_ratio,memory_ratio,numerical_difference,diagnostics_failures,recommendation
+"parallel chains, cores 1 to 4",logit_bertrand_noisy_271828__D.rds,271828,5.596,2.81,1.991459074733096,1.9110511837850115,0,divergences 0/0; depth hits 0/0,option-aware default; explicit 4 processes when memory permits
+"parallel chains, cores 1 to 4",logit_bertrand_noisy_271828__D.rds,314159,4.841,3.101,1.5611093195743309,1.9433516646098108,0,divergences 0/0; depth hits 0/0,option-aware default; explicit 4 processes when memory permits
+"parallel chains, cores 1 to 4",logit_BF_noisy_271828__D.rds,271828,12.962,6.633,1.9541685511834765,2.0804064709321897,0,divergences 0/0; depth hits 0/0,option-aware default; explicit 4 processes when memory permits
+"parallel chains, cores 1 to 4",logit_BF_noisy_271828__D.rds,314159,12.522,5.774,2.1686872185659856,1.9704284609218858,0,divergences 0/0; depth hits 0/0,option-aware default; explicit 4 processes when memory permits
+"parallel chains, cores 1 to 4",logit_BS_noisy_271828__D.rds,271828,13.352,6.44,2.0732919254658384,1.8906484357784143,0,divergences 0/0; depth hits 0/0,option-aware default; explicit 4 processes when memory permits
+"parallel chains, cores 1 to 4",logit_BS_noisy_271828__D.rds,314159,12.438,6.155,2.020796100731113,1.9649459359079473,0,divergences 0/0; depth hits 0/0,option-aware default; explicit 4 processes when memory permits

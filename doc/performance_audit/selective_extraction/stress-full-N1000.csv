@@ -1,0 +1,3 @@
+"N","G","T","mode","fixed_param","posterior_inference","HMC","kernel","fit_seconds","full_extract_seconds","selected_extract_seconds","retained_mode_seconds","full_bytes","selected_bytes","full_count","selected_count","retained_bytes","retained_count","finite","canonical_hashes","fixed_rows"
+1000,1000,1,"full",TRUE,FALSE,FALSE,"logit_supply",0.149,0.0390000000000006,0.0209999999999999,0.0390000000000006,11285280,4936,200,200,11285280,200,TRUE,"9edacf21190615402bfb99b44978fba5",200
+1000,1000,1,"full",TRUE,FALSE,FALSE,"logit_supply",0.149,0.0390000000000006,0.0209999999999999,0.0390000000000006,11285280,4936,200,200,11285280,200,TRUE,"c7a62f6c93f50276b1dd30d1abff8b73",200

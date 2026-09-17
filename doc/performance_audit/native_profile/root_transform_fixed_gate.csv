@@ -1,0 +1,13 @@
+"case","n_upar","max_abs_gradient","n_output","max_abs_output","nonfinite_pattern_equal"
+"ces_stackelberg_fringe_1_3",7,0,95,0,TRUE
+"ces_stackelberg_fringe_3_3",7,0,95,0,TRUE
+"ces_stackelberg_stackelberg_1_3",7,0,91,0,TRUE
+"ces_stackelberg_stackelberg_3_3",7,0,91,0,TRUE
+"ces_supply_simultaneous_1_1",5,0,54,0,TRUE
+"ces_supply_simultaneous_1_3",7,0,58,0,TRUE
+"logit_stackelberg_fringe_1_3",7,0,97,0,TRUE
+"logit_stackelberg_fringe_3_3",7,0,97,0,TRUE
+"logit_stackelberg_stackelberg_1_3",7,0,93,0,TRUE
+"logit_stackelberg_stackelberg_3_3",7,0,93,0,TRUE
+"logit_supply_simultaneous_1_1",5,0,56,0,TRUE
+"logit_supply_simultaneous_1_3",7,0,60,0,TRUE

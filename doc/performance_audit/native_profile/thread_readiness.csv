@@ -1,0 +1,5 @@
+"kernel","model_code_sha256","has_reduce_sum","has_map_rect","has_openmp","rstan_threads_option_roundtrip","rstan_threads_option_before","rcppparallel_default_threads","stanheaders_cxxflags"
+"ces_stackelberg","fa5b77f0a7c8c0eb4ccf9a7f0bcac4e5d7f6441774b5065fadc09c535a1149a7",FALSE,FALSE,FALSE,TRUE,1,12,"-I'/home/ctaragin/R/x86_64-pc-linux-gnu-library/4.6/RcppParallel/include' -D_REENTRANT -DSTAN_THREADS  "
+"ces_supply","3dccb16e35f29f4daf71f454607655be221b26205cc24f89ac40b2551e32141c",FALSE,FALSE,FALSE,TRUE,1,12,"-I'/home/ctaragin/R/x86_64-pc-linux-gnu-library/4.6/RcppParallel/include' -D_REENTRANT -DSTAN_THREADS  "
+"logit_stackelberg","ce8d1b5b1427dcfb6d9374b1d2f08ae6a874cb733964d407693e5d27842ae6de",FALSE,FALSE,FALSE,TRUE,1,12,"-I'/home/ctaragin/R/x86_64-pc-linux-gnu-library/4.6/RcppParallel/include' -D_REENTRANT -DSTAN_THREADS  "
+"logit_supply","6725f3f439571545abd371bd73d2cfc3eda8c22384e0fe8f1a8fd05604456127",FALSE,FALSE,FALSE,TRUE,1,12,"-I'/home/ctaragin/R/x86_64-pc-linux-gnu-library/4.6/RcppParallel/include' -D_REENTRANT -DSTAN_THREADS  "

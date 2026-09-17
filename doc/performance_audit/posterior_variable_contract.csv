@@ -1,0 +1,11 @@
+route,code_path,required_draw_variables,aliases,factorization_note
+ordinary simultaneous simulation,.simulate_bayes_fit/.estimated_draw_params,a_market; s0_prob,fallback s0 then s0_logit,a by market; s0 by market-year; bargaining_power only for supply_model=5
+smooth fringe simulation,.simulate_bayes_fit/.estimated_draw_params,a_market; s0_prob; cutoff_share,s0 then s0_logit,cutoff_share by market; smooth role probabilities use cutoff and sizes
+exact BF/CF/BS/CS native simulation,.stack_bridge_params/.stack_bridge_component_prob,a_market; s0_prob; posterior_component_prob,s0 then s0_logit,posterior component probabilities by complete market partition unit; k_scope=market
+bargaining simulation,.estimated_draw_params,a_market; s0_prob; bargaining_power,s0 then s0_logit,bargaining_power is transformed scalar per draw; no bargaining_unit needed by simulation
+sampled latent-quality plan,.lq_quality_draws/.lq_reference_score,a_market; s0_prob; share_mean; b_quality_all,s0 then s0_logit,one sampled centered quality vector per selected theta row
+collapsed latent-quality plan (share),.lq_quality_draws/posterior_quality,a_market; s0_prob; share_mean; sigma_b_strat; sigma_share,s0 then s0_logit,"one conditional quality vector per selected theta row, shared across scenarios"
+collapsed latent-quality plan (joint rho),.lq_quality_draws/posterior_quality_joint_draws,a_market; s0_prob; share_mean; sigma_b_strat; sigma_share; rho; sigma_margin; pred_marginNormInv,s0 then s0_logit,requires matched Gaussian rho fields; exact-k/multimarket joint path rejects
+posterior_k summary,.posterior_k,posterior_component_prob; prior_component_prob,none,maps are from stan_data; one complete-market k distribution per partition unit
+cutoff summary (smooth),.stackelberg_bridge::bayes_cutoff_summary,cutoff_share; s0_prob (plus R0_prob for CES),none,no posterior component GQ
+cutoff summary (exact/stack),.stackelberg_bridge::bayes_cutoff_summary,posterior_component_prob; prior_component_prob; firm_leader_prob; prior_firm_leader_prob; s0_prob (plus R0_prob for CES),none,a_market extraction is only used for draw count and is redundant

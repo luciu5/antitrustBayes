@@ -1,0 +1,3 @@
+"demand_model","quality_parameterization","N","G","status","dense_helmert_bytes","dense_helmert_mib","note"
+"logit","sampled",10000,10000,"skipped_storage_cap",799920000,762.863159179688,"No native allocation; bound is dense Q only."
+"ces","sampled",10000,10000,"skipped_storage_cap",799920000,762.863159179688,"No native allocation; bound is dense Q only."

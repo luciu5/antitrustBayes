@@ -1,0 +1,4 @@
+"fixture","kernel","source","N","G","successful_calls","intercept_seconds","seconds_per_row","residual_sd","r_squared"
+"logit_BF","logit_stackelberg","archived_posterior",24,24,12,0.0296240449445463,8.38025825668639e-06,0.0112970441673353,0.00424025811141285
+"ces_simultaneous","ces_supply","archived_posterior",24,24,12,0.016690172741869,1.12199833945565e-05,0.00084704876390543,0.575867029497226
+"logit_sampled_N1000G1000_fixed_repeated","logit_supply","fixed_param_row_repeated",1000,1000,12,0.0611036968116894,0.000739711246151514,0.0112403240513575,0.971025802692399

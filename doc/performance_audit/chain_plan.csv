@@ -1,0 +1,13 @@
+case_id,fixture,cores,seed,chains,iter,warmup,adapt_delta,max_treedepth,metric
+chain_simult_cores1_seed271828,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_bertrand_noisy_271828__D.rds,1,271828,4,1000,500,0.95,13,diag_e
+chain_simult_cores4_seed271828,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_bertrand_noisy_271828__D.rds,4,271828,4,1000,500,0.95,13,diag_e
+chain_simult_cores1_seed314159,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_bertrand_noisy_271828__D.rds,1,314159,4,1000,500,0.95,13,diag_e
+chain_simult_cores4_seed314159,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_bertrand_noisy_271828__D.rds,4,314159,4,1000,500,0.95,13,diag_e
+chain_BF_cores1_seed271828,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BF_noisy_271828__D.rds,1,271828,4,1000,500,0.95,13,diag_e
+chain_BF_cores4_seed271828,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BF_noisy_271828__D.rds,4,271828,4,1000,500,0.95,13,diag_e
+chain_BF_cores1_seed314159,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BF_noisy_271828__D.rds,1,314159,4,1000,500,0.95,13,diag_e
+chain_BF_cores4_seed314159,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BF_noisy_271828__D.rds,4,314159,4,1000,500,0.95,13,diag_e
+chain_BS_cores1_seed271828,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BS_noisy_271828__D.rds,1,271828,4,1000,500,0.95,13,diag_e
+chain_BS_cores4_seed271828,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BS_noisy_271828__D.rds,4,271828,4,1000,500,0.95,13,diag_e
+chain_BS_cores1_seed314159,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BS_noisy_271828__D.rds,1,314159,4,1000,500,0.95,13,diag_e
+chain_BS_cores4_seed314159,doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BS_noisy_271828__D.rds,4,314159,4,1000,500,0.95,13,diag_e

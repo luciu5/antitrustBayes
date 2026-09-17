@@ -1,0 +1,6 @@
+engine,demand,conduct,model_class,baseline_calcPrices,baseline_calcQuantities,baseline_calcMC,baseline_nleqslv,baseline_iter,scenario_calcPrices,scenario_calcQuantities,scenario_calcMC,scenario_nleqslv,scenario_iter,target_max_abs_diff,post_foc_max_abs_diff,baseline_sec,scenario_sec
+antitrustBayes,logit,bertrand,Logit,1,0,2,1,5,1,0,1,1,5,1.640199e-11,2.759837e-11,0.110,0.037
+antitrustBayes,logit,cournot,LogitCournot,1,0,2,1,5,1,1,1,1,5,4.576341e-09,7.223693e-09,0.438,0.122
+antitrustBayes,ces,bertrand,CES,1,0,2,1,4,1,0,1,1,4,1.954083e-09,1.518363e-09,0.037,0.003
+antitrustBayes,ces,cournot,CESCournot,1,0,2,1,4,1,1,1,1,4,6.113510e-10,4.581264e-10,0.044,0.001
+trade,logit,bertrand,TariffLogit,2,0,2,2,6,1,0,1,1,3,0,1.45369e-09,0.182,0.004

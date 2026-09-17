@@ -1,0 +1,5 @@
+"label","path","exists"
+"logit_simultaneous","/mnt/d/projects/antitrustbayes/doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_bertrand_noisy_271828__D.rds",TRUE
+"logit_BF","/mnt/d/projects/antitrustbayes/doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BF_noisy_271828__D.rds",TRUE
+"logit_BS","/mnt/d/projects/antitrustbayes/doc/statistical_toolkit_runs/20260916/hybrid/fits/logit_BS_noisy_271828__D.rds",TRUE
+"ces_simultaneous","/mnt/d/projects/antitrustbayes/doc/statistical_toolkit_runs/20260916/hybrid/fits/ces_bertrand_noisy_271828__D.rds",TRUE
