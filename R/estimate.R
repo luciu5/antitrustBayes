@@ -1,3 +1,35 @@
+#' Resolve the number of independent Stan chain processes.
+#'
+#' This policy deliberately uses the user's \code{mc.cores} option as the
+#' default ceiling. It does not inspect host CPU topology or alter
+#' within-chain threading. An explicit \code{stan_options$cores} value is
+#' validated and retained unchanged.
+#'
+#' @keywords internal
+.resolve_stan_cores <- function(stan_options = list(), chains = 1L) {
+  validate_count <- function(value, label) {
+    valid <- is.numeric(value) && length(value) == 1L &&
+      !is.na(value) && is.finite(value) && value >= 1 &&
+      value <= .Machine$integer.max && value == floor(value)
+    if (!isTRUE(valid)) {
+      stop("'", label, "' must be a positive finite integer.",
+           call. = FALSE)
+    }
+    as.integer(value)
+  }
+
+  resolved_chains <- validate_count(chains, "stan_options$chains")
+  explicit <- "cores" %in% names(stan_options) &&
+    !is.null(stan_options$cores)
+  if (explicit) return(validate_count(stan_options$cores,
+                                      "stan_options$cores"))
+
+  option_cores <- getOption("mc.cores", 1L)
+  if (is.null(option_cores)) option_cores <- 1L
+  option_cores <- validate_count(option_cores, "getOption('mc.cores')")
+  min(resolved_chains, option_cores)
+}
+
 #' Bayesian Estimation of Demand and Supply
 #'
 #' Estimates a hierarchical Bayesian model of differentiated products demand
@@ -144,7 +176,9 @@
 #'   posterior model odds are computed by \code{bayes_compare}.
 #' @param stan_options Named list of arguments passed to
 #'   \code{\link[rstan]{sampling}} (e.g., \code{chains}, \code{iter},
-#'   \code{warmup}, \code{cores}).
+#'   \code{warmup}, \code{cores}). If \code{cores} is omitted or
+#'   \code{NULL}, the default is \code{min(chains, getOption("mc.cores", 1L))};
+#'   an explicit \code{cores} value is validated and used unchanged.
 #' @param margin_observed Optional logical vector (length \code{N}, one per
 #'   row) indicating which observations have a usable margin. \code{NA} is
 #'   treated as \code{FALSE}. Rows with \code{margin_observed == FALSE} are
@@ -512,6 +546,14 @@ bayes_est <- function(prices, quantities, margins,
   for (nm in names(stan_options)) {
     default_stan[[nm]] <- stan_options[[nm]]
   }
+  ## Keep the chain count needed for the default core policy even when a
+  ## caller explicitly supplies chains = NULL.  A non-NULL cores entry is
+  ## validated and takes precedence over this policy.
+  if (is.null(default_stan$chains)) default_stan$chains <- 4L
+  default_stan$cores <- .resolve_stan_cores(
+    stan_options = stan_options,
+    chains = default_stan$chains
+  )
 
   # Convenience: allow adapt_delta and max_treedepth at top level
   control_params <- c("adapt_delta", "max_treedepth")
@@ -661,6 +703,8 @@ bayes_est <- function(prices, quantities, margins,
   ))
 
   metadata <- package_provenance(df, prior_manifest, model_prior)
+  metadata$stan_chains <- as.integer(default_stan$chains)
+  metadata$stan_cores <- as.integer(default_stan$cores)
   metadata$likelihood <- likelihood
   metadata$share_likelihood <- likelihood_modes$share_likelihood
   metadata$margin_likelihood <- likelihood_modes$margin_likelihood

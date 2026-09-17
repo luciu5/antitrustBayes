@@ -199,7 +199,9 @@ posterior model odds are computed by \code{bayes_compare}.}
 
 \item{stan_options}{Named list of arguments passed to
 \code{\link[rstan]{sampling}} (e.g., \code{chains}, \code{iter},
-\code{warmup}, \code{cores}).}
+\code{warmup}, \code{cores}). If \code{cores} is omitted or
+\code{NULL}, it defaults to \code{min(chains, getOption("mc.cores", 1L))}.
+An explicit \code{cores} value is validated and used unchanged.}
 
 \item{margin_observed}{Optional logical vector (length \code{N}, one per
 row) indicating which observations have a usable margin. \code{NA} is
