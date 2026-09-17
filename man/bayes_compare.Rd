@@ -13,7 +13,8 @@ bayes_compare(
   bridge_maxiter = 5000L,
   bridge_repetitions = 3L,
   loo_unit = c("cluster", "period", "market", "observation"),
-  prior_weights = NULL
+  prior_weights = NULL,
+  universe = NULL
 )
 }
 \arguments{
@@ -48,6 +49,12 @@ cluster. Cluster uses the identifiers supplied to \code{bayes_est}.}
 Must be the same length as the number of models and sum to 1. If
 \code{NULL} (default), recorded \code{model_prior} values are used when
 all are available; otherwise equal probabilities are used.}
+
+\item{universe}{Optional \code{bayes_model_universe} descriptor. The named fits
+in \code{...} are its source fits and its explicit scientific prior is used.
+Alternatively, supply one named list of source fits.
+This route requires bridge-sampling evidence and cannot be combined with
+\code{restrictions} or a separate \code{prior_weights} argument.}
 }
 \value{
 With multiple fitted models, a data frame containing model name,

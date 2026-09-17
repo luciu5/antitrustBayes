@@ -95,6 +95,10 @@
 #'   The explicit legacy flags \code{use_s0_market_pool} and
 #'   \code{use_s0_market_year_pool} remain supported when \code{s0_pooling} is
 #'   omitted; supplying both interfaces together is ambiguous and errors.
+#' @param market_s0_parameterization Character string selecting the legacy or
+#'   market/outside-share rotated parameterization. The default is
+#'   \code{"legacy"}; \code{"rotated"} is active only for multi-market fits
+#'   and is a documented no-op for single-market fits.
 #' @param use_centered_alpha Logical. If \code{TRUE}, use the centered
 #'   parameterization for the selected market-level price-effect pool (Logit
 #'   price coefficients or CES structural elasticities). Default \code{FALSE}.
@@ -276,6 +280,7 @@ bayes_est <- function(prices, quantities, margins,
                       use_s0_market_year_pool = FALSE,
                       use_s0_market_pool = FALSE,
                       s0_pooling = c("auto", "none", "market", "market_year"),
+                      market_s0_parameterization = c("legacy", "rotated"),
                       use_centered_alpha = FALSE,
                       use_centered_s0_pool = FALSE,
                       use_hmt = FALSE,
@@ -429,6 +434,10 @@ bayes_est <- function(prices, quantities, margins,
   s0_pooling <- s0_resolution$resolved
   use_s0_market_pool <- s0_resolution$use_s0_market_pool
   use_s0_market_year_pool <- s0_resolution$use_s0_market_year_pool
+  market_s0_resolution <- .resolve_market_s0_parameterization(
+    market_s0_parameterization,
+    nlevels(droplevels(as.factor(market)))
+  )
   observed_margins <- if (is.null(margin_observed)) margins else margins[margin_observed]
   if (market_side == "output" && any(observed_margins >= 1)) {
     stop("Output-market Lerner indices must be strictly less than 1. ",
@@ -545,6 +554,7 @@ bayes_est <- function(prices, quantities, margins,
       use_alpha_market_pool = use_alpha_market_pool,
       use_s0_market_year_pool = use_s0_market_year_pool,
       use_s0_market_pool = use_s0_market_pool,
+      market_s0_parameterization = market_s0_resolution$requested,
       use_centered_alpha = use_centered_alpha,
       use_centered_s0_pool = use_centered_s0_pool,
       use_hmt      = use_hmt,
@@ -598,6 +608,7 @@ bayes_est <- function(prices, quantities, margins,
       use_alpha_market_pool = use_alpha_market_pool,
       use_s0_market_year_pool = use_s0_market_year_pool,
       use_s0_market_pool = use_s0_market_pool,
+      market_s0_parameterization = market_s0_resolution$requested,
       use_centered_alpha = use_centered_alpha,
       use_centered_s0_pool = use_centered_s0_pool,
       margin_observed = margin_observed,
@@ -627,6 +638,15 @@ bayes_est <- function(prices, quantities, margins,
   attr(stan_data, "s0_pooling_requested") <- s0_pooling_requested
   attr(stan_data, "s0_pooling_resolved") <- s0_pooling
   attr(stan_data, "s0_pooling_source") <- s0_resolution$source
+  attr(stan_data, "market_s0_parameterization") <-
+    market_s0_resolution$requested
+  attr(stan_data, "market_s0_parameterization_requested") <-
+    market_s0_resolution$requested
+  attr(stan_data, "market_s0_parameterization_effective") <-
+    market_s0_resolution$effective
+  attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+  attr(stan_data, "market_s0_coordinate_convention") <-
+    market_s0_resolution$coordinate_convention
 
   # Store the resolved market-year outside price on every observation so that
   # simulation and cross-demand comparison use the fitted normalization.
@@ -654,6 +674,12 @@ bayes_est <- function(prices, quantities, margins,
   metadata$s0_pooling_requested <- s0_pooling_requested
   metadata$s0_pooling_resolved <- s0_pooling
   metadata$s0_pooling_source <- s0_resolution$source
+  metadata$market_s0_parameterization <- market_s0_resolution$requested
+  metadata$market_s0_parameterization_requested <- market_s0_resolution$requested
+  metadata$market_s0_parameterization_effective <- market_s0_resolution$effective
+  metadata$market_s0_rotation_active <- market_s0_resolution$active
+  metadata$market_s0_coordinate_convention <-
+    market_s0_resolution$coordinate_convention
   metadata$structure <- structure
   metadata$structure_code <- as.integer(.stack_structure_code[[structure]])
   metadata$cutoff_scale <- cutoff_scale
@@ -680,6 +706,11 @@ bayes_est <- function(prices, quantities, margins,
     share_likelihood = likelihood_modes$share_likelihood,
     margin_likelihood = likelihood_modes$margin_likelihood,
     quality_parameterization = likelihood_modes$quality_parameterization,
+    market_s0_parameterization = market_s0_resolution$requested,
+    market_s0_parameterization_requested = market_s0_resolution$requested,
+    market_s0_parameterization_effective = market_s0_resolution$effective,
+    market_s0_rotation_active = market_s0_resolution$active,
+    market_s0_coordinate_convention = market_s0_resolution$coordinate_convention,
     s0_pooling = s0_pooling,
     s0_pooling_requested = s0_pooling_requested,
     s0_pooling_resolved = s0_pooling,

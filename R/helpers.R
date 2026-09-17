@@ -139,6 +139,36 @@ safe_sd <- function(x, floor = 1e-8) {
   )
 }
 
+## Resolve the market/outside-share coordinate convention.  The Stan data code
+## is deliberately stable: 1 = legacy coordinates, 2 = rotated coordinates.
+## The affine rotation is only active when there is more than one market;
+## single-market fits retain their historical normalization and dimensions.
+.resolve_market_s0_parameterization <- function(market_s0_parameterization =
+                                                 c("legacy", "rotated"),
+                                                 N_market = NULL) {
+  market_s0_parameterization <- match.arg(
+    market_s0_parameterization, c("legacy", "rotated")
+  )
+  if (!is.null(N_market) &&
+      (!is.numeric(N_market) || length(N_market) != 1L ||
+       !is.finite(N_market) || N_market < 1)) {
+    stop("'N_market' must be a positive numeric scalar.")
+  }
+  active <- identical(market_s0_parameterization, "rotated") &&
+    (is.null(N_market) || N_market > 1)
+  list(
+    requested = market_s0_parameterization,
+    code = if (identical(market_s0_parameterization, "legacy")) 1L else 2L,
+    effective = if (isTRUE(active)) "rotated" else "legacy",
+    active = isTRUE(active),
+    coordinate_convention = if (isTRUE(active)) {
+      "rotated_market_outside_share"
+    } else {
+      "legacy_market_outside_share"
+    }
+  )
+}
+
 bounded01 <- function(x, eps = 1e-6) {
   pmin(pmax(x, eps), 1 - eps)
 }
@@ -314,6 +344,9 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #' @param use_centered_alpha Logical.
 #' @param use_centered_s0_pool Logical. Select the centered parameterization
 #'   for either outside-share pooling mode.
+#' @param market_s0_parameterization Character string selecting the legacy or
+#'   market/outside-share rotated Stan coordinates. The rotation is a no-op for
+#'   single-market data.
 #' @param priors Named list of prior hyperparameters.
 #' @param X_s0 Optional model matrix for s0 covariates.
 #' @param outside_price Positive scalar or one value per market-year.
@@ -341,6 +374,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               use_s0_market_pool = FALSE,
                               use_centered_alpha = FALSE,
                               use_centered_s0_pool = FALSE,
+                              market_s0_parameterization = c("legacy", "rotated"),
                               priors = list(), X_s0 = NULL,
                               grainsize = 1L,
                               margin_observed = NULL,
@@ -452,6 +486,9 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   mky_f <- as.factor(mky_labels)
   mky_int <- as.integer(mky_f)
   N_market_year <- nlevels(mky_f)
+  market_s0_resolution <- .resolve_market_s0_parameterization(
+    market_s0_parameterization, N_market
+  )
   s0_resolution <- .resolve_s0_pooling(
     s0_pooling_supplied = FALSE,
     use_s0_market_pool = use_s0_market_pool,
@@ -629,6 +666,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       use_alpha_market_pool = as.integer(use_alpha_market_pool),
       use_s0_market_year_pool = as.integer(use_s0_market_year_pool),
       use_s0_market_pool = as.integer(use_s0_market_pool),
+      market_s0_parameterization = market_s0_resolution$code,
       use_centered_alpha = as.integer(use_centered_alpha),
       use_centered_s0_pool = as.integer(use_centered_s0_pool),
       use_hmt = as.integer(use_hmt),
@@ -664,6 +702,15 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
   attr(stan_data, "s0_pooling_resolved") <- s0_resolution$resolved
   attr(stan_data, "s0_pooling_source") <- s0_resolution$source
+  attr(stan_data, "market_s0_parameterization") <-
+    market_s0_resolution$requested
+  attr(stan_data, "market_s0_parameterization_requested") <-
+    market_s0_resolution$requested
+  attr(stan_data, "market_s0_parameterization_effective") <-
+    market_s0_resolution$effective
+  attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+  attr(stan_data, "market_s0_coordinate_convention") <-
+    market_s0_resolution$coordinate_convention
   if (resolved_structure$name == "stackelberg" ||
       (exact_structure && identical(resolved_structure$name, "fringe") &&
        identical(partition_prior, "ordered_k"))) {
@@ -702,6 +749,15 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
     attr(stan_data, "s0_pooling_resolved") <- s0_resolution$resolved
     attr(stan_data, "s0_pooling_source") <- s0_resolution$source
+    attr(stan_data, "market_s0_parameterization") <-
+      market_s0_resolution$requested
+    attr(stan_data, "market_s0_parameterization_requested") <-
+      market_s0_resolution$requested
+    attr(stan_data, "market_s0_parameterization_effective") <-
+      market_s0_resolution$effective
+    attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+    attr(stan_data, "market_s0_coordinate_convention") <-
+      market_s0_resolution$coordinate_convention
     attr(stan_data, "firm_market_ranking") <- ranking_metadata
     attr(stan_data, "partition_metadata") <- partition_metadata
   }
@@ -730,6 +786,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   use_s0_market_pool = FALSE,
                                   use_centered_alpha = FALSE,
                                   use_centered_s0_pool = FALSE,
+                                  market_s0_parameterization = c("legacy", "rotated"),
                                   margin_observed = NULL,
                                   outside_price = 1,
                                   likelihood_mode = 1L,
@@ -855,6 +912,9 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   mky_f <- as.factor(mky_labels)
   mky_int <- as.integer(mky_f)
   N_market_year <- nlevels(mky_f)
+  market_s0_resolution <- .resolve_market_s0_parameterization(
+    market_s0_parameterization, N_market
+  )
   s0_resolution <- .resolve_s0_pooling(
     s0_pooling_supplied = FALSE,
     use_s0_market_pool = use_s0_market_pool,
@@ -1038,6 +1098,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       use_alpha_market_pool = as.integer(use_alpha_market_pool),
       use_s0_market_year_pool = as.integer(use_s0_market_year_pool),
       use_s0_market_pool = as.integer(use_s0_market_pool),
+      market_s0_parameterization = market_s0_resolution$code,
       use_centered_alpha = as.integer(use_centered_alpha),
       use_centered_s0_pool = as.integer(use_centered_s0_pool),
       use_hmt = as.integer(use_hmt),
@@ -1074,6 +1135,15 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
   attr(stan_data, "s0_pooling_resolved") <- s0_resolution$resolved
   attr(stan_data, "s0_pooling_source") <- s0_resolution$source
+  attr(stan_data, "market_s0_parameterization") <-
+    market_s0_resolution$requested
+  attr(stan_data, "market_s0_parameterization_requested") <-
+    market_s0_resolution$requested
+  attr(stan_data, "market_s0_parameterization_effective") <-
+    market_s0_resolution$effective
+  attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+  attr(stan_data, "market_s0_coordinate_convention") <-
+    market_s0_resolution$coordinate_convention
   if (resolved_structure$name == "stackelberg" ||
       (exact_structure && identical(resolved_structure$name, "fringe") &&
        identical(partition_prior, "ordered_k"))) {
@@ -1113,6 +1183,15 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
     attr(stan_data, "s0_pooling_resolved") <- s0_resolution$resolved
     attr(stan_data, "s0_pooling_source") <- s0_resolution$source
+    attr(stan_data, "market_s0_parameterization") <-
+      market_s0_resolution$requested
+    attr(stan_data, "market_s0_parameterization_requested") <-
+      market_s0_resolution$requested
+    attr(stan_data, "market_s0_parameterization_effective") <-
+      market_s0_resolution$effective
+    attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+    attr(stan_data, "market_s0_coordinate_convention") <-
+      market_s0_resolution$coordinate_convention
     attr(stan_data, "firm_market_ranking") <- ranking_metadata
     attr(stan_data, "partition_metadata") <- partition_metadata
   }

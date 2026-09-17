@@ -43,6 +43,18 @@
 #' @param leadersPost Optional Stackelberg post-counterfactual leader override.
 #' @param corePost Optional exact-fringe post-counterfactual strategic-core
 #'   override. An empty vector gives a wholly MonCom post state.
+#' @param demand_anchoring Demand baseline for policy simulation. The default
+#'   \code{"observed"} retains the historical observed-share reconstruction.
+#'   \code{"latent_quality"} draws the fitted global quality state, normalizes
+#'   latent relative shares while retaining the posterior outside share, and
+#'   solves a new pre-policy equilibrium using the observed-share FOC cost
+#'   primitive. It supports output Logit/CES and input Logit. For input Logit,
+#'   the native positive dollar markdown is retained and the observed
+#'   value/procurement-price primitive is held fixed.
+#' @param draw_plan Optional object returned by
+#'   \code{\link{posterior_policy_draws}}. A plan fixes posterior draw,
+#'   quality, and exact-k role realizations so multiple scenarios can reuse one
+#'   fit-level draw plan.
 #' @param mc.cores Number of parallel fork workers. The default is the number
 #'   of detected cores capped at four; Windows always uses one.
 #' @param ... Additional arguments passed to \code{antitrust::simulate()}.
@@ -625,7 +637,8 @@ NULL
                                       insideSize, priceOutside, labels, market,
                                       year, mc.cores, role_mapping, fixed_k,
                                       role_offset, leadersPost, corePost, dots,
-                                      .call, setup, draws, draw_indices) {
+                                      demand_anchoring, draw_plan, .call, setup,
+                                      draws, draw_indices) {
   if (!requireNamespace("coordination", quietly = TRUE) ||
       utils::packageVersion("coordination") < "0.0.0.9003") {
     stop("native Bayesian reconstruction requires coordination >= 0.0.0.9003.")
@@ -656,10 +669,17 @@ NULL
       role_offset != as.integer(role_offset)) {
     stop("'role_offset' must be an integer scalar.", call. = FALSE)
   }
-  cache <- .stack_k_cache(object, draws, setup, draw_indices, role_mapping,
-                          fixed_k, role_offset)
+  cache <- if (!is.null(draw_plan)) draw_plan$k_cache else {
+    .stack_k_cache(object, draws, setup, draw_indices, role_mapping,
+                   fixed_k, role_offset)
+  }
+  if (is.null(cache)) {
+    stop("The native role draw plan did not contain exact-k realizations.",
+         call. = FALSE)
+  }
   all_sims <- price_pre <- price_post <- price_change <- list()
   shares_pre <- shares_post <- product_labels <- failures <- list()
+  latent_diagnostics <- list()
   n_valid <- integer(length(setup$info)); names(n_valid) <- setup$units$unit_id
   for (u in seq_along(setup$info)) {
     unit <- setup$info[[u]]; idx <- unit$idx; unit_id <- unit$unit_id
@@ -719,13 +739,29 @@ NULL
           insideSize = inside, priceOutside = p0, labels = labels_unit,
           draws = draws, dots = list()
         )
+        if (identical(demand_anchoring, "latent_quality")) {
+          params <- if (methods::is(object, "BayesSpecifiedFit")) {
+            object@params
+          } else {
+            .estimated_draw_params(object, draws, draw_index, unit)
+          }
+          score_info <- .lq_reference_score(
+            object, draws, draw_index, bridge_unit, draw_plan,
+            market_object, params
+          )
+          latent <- .lq_apply_to_native(native, score_info, draw_plan)
+          native <- latent$native
+          latent_metadata <- c(latent$metadata, list(k = as.integer(k)))
+        } else {
+          latent_metadata <- NULL
+        }
         sc <- .stack_native_scenario(
           native, scenario = scenario,
           owner_post = if (methods::is(scenario, "Counterfactual")) NULL else scenario,
           mc_delta = mc_delta_unit, subset = subset_unit,
           leaders_post = leaders_unit
         )
-        coordination::stackelberg_simulate(
+        result <- coordination::stackelberg_simulate(
           native, ownerPost = sc$ownerPost, leadersPost = sc$leadersPost,
           mcDelta = sc$mcDelta, subset = sc$subset
         )
@@ -736,15 +772,33 @@ NULL
           insideSize = inside, priceOutside = p0, labels = labels_unit,
           draws = draws, dots = list()
         )
+        if (identical(demand_anchoring, "latent_quality")) {
+          params <- if (methods::is(object, "BayesSpecifiedFit")) {
+            object@params
+          } else {
+            .estimated_draw_params(object, draws, draw_index, unit)
+          }
+          score_info <- .lq_reference_score(
+            object, draws, draw_index, bridge_unit, draw_plan,
+            market_object, params
+          )
+          latent <- .lq_apply_to_native(native, score_info, draw_plan)
+          native <- latent$native
+          latent_metadata <- c(latent$metadata, list(k = as.integer(k)))
+        } else {
+          latent_metadata <- NULL
+        }
         sc <- .core_native_scenario(
           native, scenario = scenario, mc_delta = mc_delta_unit,
           subset = subset_unit, core_post = core_unit
         )
-        coordination::core_fringe_simulate(
+        result <- coordination::core_fringe_simulate(
           native, ownerPost = sc$ownerPost, corePost = sc$corePost,
           mcDelta = sc$mcDelta, subset = sc$subset
         )
       }
+      if (!is.null(latent_metadata)) attr(result, "bayes_latent_quality") <- latent_metadata
+      result
     }
     run_safe <- function(draw_pos) {
       draw_index <- draw_indices[[draw_pos]]
@@ -765,6 +819,7 @@ NULL
     shares_post[[unit_id]] <- assembled$shares_post
     product_labels[[unit_id]] <- assembled$labels
     failures[[unit_id]] <- assembled$failures
+    latent_diagnostics[[unit_id]] <- assembled$latent_diagnostics
     n_valid[[unit_id]] <- assembled$n_valid
   }
   n_failed <- sum(vapply(failures, function(x) sum(!is.na(x)), integer(1)))
@@ -783,6 +838,9 @@ NULL
   metadata$posterior_draws_available <- .posterior_draw_count(object, draws)
   metadata$posterior_draws_requested <- length(draw_indices)
   metadata$draw_indices <- as.integer(draw_indices)
+  metadata$demand_anchoring <- demand_anchoring
+  metadata$draw_plan <- if (is.null(draw_plan)) NULL else draw_plan$metadata
+  metadata$latent_diagnostics <- latent_diagnostics
   methods::new("BayesSim", sims = all_sims, price_pre = price_pre,
                price_post = price_post, price_change = price_change,
                shares_pre = shares_pre, shares_post = shares_post,
@@ -823,7 +881,8 @@ NULL
   list(
     price_pre = price_pre, price_post = price_post,
     shares_pre = shares_pre, shares_post = shares_post,
-    labels = labels
+    labels = labels,
+    latent_quality = attr(result, "bayes_latent_quality", exact = TRUE)
   )
 }
 
@@ -875,6 +934,9 @@ NULL
     price_change = price_post / price_pre - 1,
     shares_pre = shares_pre,
     shares_post = shares_post,
+    latent_diagnostics = lapply(values, function(x) {
+      if (is.null(x)) NULL else x$latent_quality
+    }),
     n_valid = as.integer(sum(vapply(results, Negate(is.null), logical(1))))
   )
 }
@@ -886,7 +948,21 @@ NULL
                                 mc.cores = .default_mc_cores(),
                                 role_mapping = c("mixture", "map", "threshold"),
                                 fixed_k = NULL, role_offset = 0L,
-                                leadersPost = NULL, corePost = NULL, ..., .call) {
+                                leadersPost = NULL, corePost = NULL,
+                                demand_anchoring = c("observed", "latent_quality"),
+                                draw_plan = NULL, ..., .call) {
+  demand_anchoring <- match.arg(demand_anchoring)
+  if (identical(demand_anchoring, "latent_quality")) {
+    if (as.integer(object@supply_model) %in% c(4L, 5L)) {
+      stop("demand_anchoring = 'latent_quality' is unavailable for auction or bargaining conduct.",
+           call. = FALSE)
+    }
+    if (!identical(as.character(object@market_side), "output") &&
+        !identical(as.character(object@demand_model), "logit")) {
+      stop("demand_anchoring = 'latent_quality' currently supports input Logit and output CES/Logit markets only.",
+           call. = FALSE)
+    }
+  }
   mc.cores <- .validate_mc_cores(mc.cores)
   specified <- methods::is(object, "BayesSpecifiedFit")
   draws <- if (specified) NULL else rstan::extract(object@stanfit)
@@ -896,16 +972,38 @@ NULL
     .estimated_simulation_units(object, market, year)
   }
   n_total <- .posterior_draw_count(object, draws)
-  if (is.null(n_draws)) n_draws <- min(200L, n_total)
-  if (length(n_draws) != 1L || !is.finite(n_draws) || n_draws < 1 ||
-      n_draws != as.integer(n_draws)) {
-    stop("'n_draws' must be a positive integer.")
+  plan <- draw_plan
+  role_mapping_selected <- match.arg(role_mapping,
+                                      c("mixture", "map", "threshold"))
+  if (identical(demand_anchoring, "latent_quality") && is.null(plan) &&
+      (!is.null(fixed_k) || !identical(role_mapping_selected, "mixture") ||
+       !identical(as.integer(role_offset), 0L))) {
+    stop("latent-quality simulation currently supports only the automatic mixture role plan; fixed_k, non-mixture role_mapping, and role_offset are unsupported.",
+         call. = FALSE)
   }
-  n_draws <- min(as.integer(n_draws), n_total)
-  draw_indices <- if (n_total == 1L) {
-    1L
+  if (!is.null(plan)) {
+    plan <- .lq_validate_plan(object, plan, n_draws = n_draws,
+                              role_mapping = role_mapping,
+                              fixed_k = fixed_k, role_offset = role_offset,
+                              draws = draws)
+    draw_indices <- as.integer(plan$draw_indices)
+    n_draws <- length(draw_indices)
+  } else if (identical(demand_anchoring, "latent_quality")) {
+    plan <- posterior_policy_draws(object, n_draws = n_draws)
+    draw_indices <- as.integer(plan$draw_indices)
+    n_draws <- length(draw_indices)
   } else {
-    sample.int(n_total, n_draws)
+    if (is.null(n_draws)) n_draws <- min(200L, n_total)
+    if (length(n_draws) != 1L || !is.finite(n_draws) || n_draws < 1 ||
+        n_draws != as.integer(n_draws)) {
+      stop("'n_draws' must be a positive integer.")
+    }
+    n_draws <- min(as.integer(n_draws), n_total)
+    draw_indices <- if (n_total == 1L) {
+      1L
+    } else {
+      sample.int(n_total, n_draws)
+    }
   }
 
   native_structure <- .native_ordered_structure(object)
@@ -917,6 +1015,7 @@ NULL
       year = year, mc.cores = mc.cores, role_mapping = role_mapping,
       fixed_k = fixed_k, role_offset = role_offset, leadersPost = leadersPost,
       corePost = corePost, dots = list(...), .call = .call,
+      demand_anchoring = demand_anchoring, draw_plan = plan,
       setup = setup, draws = draws,
       draw_indices = draw_indices
     ))
@@ -924,6 +1023,7 @@ NULL
 
   all_sims <- price_pre <- price_post <- price_change <- list()
   shares_pre <- shares_post <- product_labels <- failures <- list()
+  latent_diagnostics <- list()
   n_valid <- integer(length(setup$info))
   names(n_valid) <- setup$units$unit_id
 
@@ -1064,13 +1164,24 @@ NULL
         subset = rep(TRUE, market_object$n_prod)
       )
       fit <- as_antitrust_fit(baseline)
-      if (is_counterfactual) {
+      latent_metadata <- NULL
+      if (identical(demand_anchoring, "latent_quality")) {
+        score_info <- .lq_reference_score(
+          object, draws, draw_index, unit, plan, market_object, params
+        )
+        latent <- .lq_apply_to_fit(fit, score_info, plan)
+        fit <- latent$fit
+        latent_metadata <- latent$metadata
+      }
+      result <- if (is_counterfactual) {
         antitrust::simulate(fit, scenario, ...)
       } else {
         antitrust::simulate(
           fit, scenario, mcDelta = mc_delta_unit, subset = subset_unit, ...
         )
       }
+      if (!is.null(latent_metadata)) attr(result, "bayes_latent_quality") <- latent_metadata
+      result
     }
     run_one_safe <- function(draw_index) {
       tryCatch(
@@ -1099,6 +1210,7 @@ NULL
     shares_post[[unit_id]] <- assembled$shares_post
     product_labels[[unit_id]] <- assembled$labels
     failures[[unit_id]] <- assembled$failures
+    latent_diagnostics[[unit_id]] <- assembled$latent_diagnostics
     n_valid[[unit_id]] <- assembled$n_valid
   }
 
@@ -1117,6 +1229,9 @@ NULL
   metadata$posterior_draws_available <- n_total
   metadata$posterior_draws_requested <- length(draw_indices)
   metadata$draw_indices <- as.integer(draw_indices)
+  metadata$demand_anchoring <- demand_anchoring
+  metadata$draw_plan <- if (is.null(draw_plan)) NULL else draw_plan$metadata
+  metadata$latent_diagnostics <- latent_diagnostics
 
   methods::new(
     "BayesSim",
@@ -1145,7 +1260,9 @@ setMethod(
            market = NULL, year = NULL,
            mc.cores = .default_mc_cores(),
            role_mapping = c("mixture", "map", "threshold"), fixed_k = NULL,
-           role_offset = 0L, leadersPost = NULL, corePost = NULL, ...) {
+           role_offset = 0L, leadersPost = NULL, corePost = NULL,
+           demand_anchoring = c("observed", "latent_quality"),
+           draw_plan = NULL, ...) {
     native_structure <- .native_ordered_structure(object)
     if (missing(ownerPost) && is.null(native_structure)) {
       stop("'ownerPost' must be supplied for simulate().")
@@ -1156,7 +1273,8 @@ setMethod(
       priceOutside = priceOutside, labels = labels, market = market,
       year = year, mc.cores = mc.cores, role_mapping = role_mapping,
       fixed_k = fixed_k, role_offset = role_offset, leadersPost = leadersPost,
-      corePost = corePost,
+      corePost = corePost, demand_anchoring = demand_anchoring,
+      draw_plan = draw_plan,
       ..., .call = match.call()
     )
   }
@@ -1171,7 +1289,9 @@ bayes_sim <- function(fit, ownerPost = NULL, n_draws = NULL, mcDelta = NULL,
                       mc.cores = .default_mc_cores(),
                       role_mapping = c("mixture", "map", "threshold"),
                       fixed_k = NULL, role_offset = 0L, leadersPost = NULL,
-                      corePost = NULL, ...) {
+                      corePost = NULL,
+                      demand_anchoring = c("observed", "latent_quality"),
+                      draw_plan = NULL, ...) {
   native_structure <- .native_ordered_structure(fit)
   if (missing(ownerPost) && is.null(native_structure)) {
     stop("'ownerPost' must be supplied for bayes_sim().")
@@ -1183,7 +1303,8 @@ bayes_sim <- function(fit, ownerPost = NULL, n_draws = NULL, mcDelta = NULL,
     market = market, year = year, mc.cores = mc.cores,
     role_mapping = role_mapping, fixed_k = fixed_k,
     role_offset = role_offset, leadersPost = leadersPost,
-    corePost = corePost, ...
+    corePost = corePost, demand_anchoring = demand_anchoring,
+    draw_plan = draw_plan, ...
   )
   result@call <- match.call()
   result

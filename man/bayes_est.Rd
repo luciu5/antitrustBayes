@@ -25,6 +25,7 @@ bayes_est(
   use_s0_market_year_pool = FALSE,
   use_s0_market_pool = FALSE,
   s0_pooling = c("auto", "none", "market", "market_year"),
+  market_s0_parameterization = c("legacy", "rotated"),
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
   use_hmt = FALSE,
@@ -156,6 +157,14 @@ direct outside share, while panels use one base outside share per market.
 The explicit legacy flags \code{use_s0_market_pool} and
 \code{use_s0_market_year_pool} remain supported when \code{s0_pooling} is
 omitted; supplying both interfaces together is ambiguous and errors.}
+
+\item{market_s0_parameterization}{Character string selecting the legacy or
+market/outside-share rotated Stan coordinates. The default
+\code{"legacy"} preserves the historical parameterization. With
+\code{"rotated"}, multi-market pooled outside-share fits use coordinates
+that reconstruct the original outside level as \eqn{q = v + b}; the mode is
+a documented no-op for single-market fits. The requested and effective modes
+and whether the rotation was active are recorded in fit metadata.}
 
 \item{use_centered_alpha}{Logical. If \code{TRUE}, use the centered
 parameterization for the selected market-level price-effect pool (Logit

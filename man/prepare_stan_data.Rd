@@ -22,6 +22,7 @@ prepare_stan_data(
   use_s0_market_pool = FALSE,
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
+  market_s0_parameterization = c("legacy", "rotated"),
   priors = list(),
   X_s0 = NULL,
   grainsize = 1L,
@@ -81,6 +82,12 @@ pooling mode is recorded in the returned list attributes.}
 
 \item{use_centered_s0_pool}{Logical. Select the centered parameterization
 for either outside-share pooling mode.}
+
+\item{market_s0_parameterization}{Character string selecting the legacy or
+market/outside-share rotated Stan coordinates. The default
+\code{"legacy"} preserves the historical parameterization;
+\code{"rotated"} is active only for multi-market fits and is a documented
+no-op for single-market fits.}
 
 \item{priors}{Named list of prior hyperparameters.}
 

@@ -23,6 +23,8 @@
   role_offset = 0L,
   leadersPost = NULL,
   corePost = NULL,
+  demand_anchoring = c("observed", "latent_quality"),
+  draw_plan = NULL,
   ...
 )
 
@@ -43,6 +45,8 @@ bayes_sim(
   role_offset = 0L,
   leadersPost = NULL,
   corePost = NULL,
+  demand_anchoring = c("observed", "latent_quality"),
+  draw_plan = NULL,
   ...
 )
 }
@@ -98,6 +102,17 @@ named by simulation unit). Fringe permits zero.}
 
 \item{corePost}{Optional exact-fringe post-counterfactual strategic-core
 override. An empty vector gives a wholly MonCom post state.}
+
+\item{demand_anchoring}{Demand baseline for policy simulation. The default
+\code{"observed"} retains observed-share reconstruction. \code{"latent_quality"}
+draws fitted global quality, normalizes relative latent shares while retaining
+the posterior outside share, and solves a new pre-policy equilibrium using the
+observed-share FOC cost primitive. It supports output Logit/CES and input Logit; input value primitives
+are held fixed unless changed by the counterfactual.}
+
+\item{draw_plan}{Optional object returned by
+\code{\link{posterior_policy_draws}}. It fixes posterior draw, quality, and
+exact-k role realizations for reuse across policy scenarios.}
 
 \item{...}{Additional arguments passed to \code{antitrust::simulate()}.}
 }

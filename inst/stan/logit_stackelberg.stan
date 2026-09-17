@@ -229,6 +229,7 @@ data {
   int<lower=0, upper=1> use_alpha_market_pool;
   int<lower=0, upper=1> use_s0_market_year_pool;
   int<lower=0, upper=1> use_s0_market_pool;
+  int<lower=1, upper=2> market_s0_parameterization;
   int<lower=0, upper=1> use_centered_alpha;
   int<lower=0, upper=1> use_centered_s0_pool;
   int<lower=0, upper=1> use_hmt;
@@ -309,6 +310,8 @@ transformed data {
   array[N_market_year] int mky_pos_in_market = rep_array(0, N_market_year);
   int any_paired = 0;
   int rho_active;
+  int market_s0_rotation_active =
+    (market_s0_parameterization == 2 && is_single_market == 0) ? 1 : 0;
   matrix[N_group, quality_parameterization == 1 ? N_group - 1 : 0] Q =
     rep_matrix(0.0, N_group, quality_parameterization == 1 ? N_group - 1 : 0);
   for (mky in 1:N_market_year) {
@@ -354,20 +357,30 @@ parameters {
   vector[(is_cournot == 0 && pool_alpha_by_market == 1 && use_centered_alpha == 1) ? N_market : 0] log_a_market_pool;
   vector[(is_cournot == 1 && pool_alpha_by_market == 0) ? 1 : 0] log_kappa_vec;
   vector[(is_cournot == 1 && pool_alpha_by_market == 1) ? N_market : 0] log_kappa_market;
-  vector[(use_s0_market_year_pool == 1 || use_s0_market_pool == 1) ? 0 : N_market_year] s0_logit;
+  vector[(use_s0_market_year_pool == 1 || use_s0_market_pool == 1 ||
+          market_s0_rotation_active == 1) ? 0 : N_market_year] s0_logit;
   vector[(use_s0_market_year_pool == 1 || use_s0_market_pool == 1) ? 1 : 0] mu_s0_pool_vec;
   vector<lower=0>[(use_s0_market_year_pool == 1 ||
                   (use_s0_market_pool == 1 && is_single_market == 0)) ? 1 : 0] sigma_s0_pool_vec;
-  vector[(use_s0_market_year_pool == 1 && use_centered_s0_pool == 0) ? N_market_year : 0] s0_pool_raw;
-  vector[(use_s0_market_year_pool == 1 && use_centered_s0_pool == 1) ? N_market_year : 0] eta_s0_pool;
+  vector[(use_s0_market_year_pool == 1 && use_centered_s0_pool == 0 &&
+          market_s0_rotation_active == 0) ? N_market_year : 0] s0_pool_raw;
+  vector[(use_s0_market_year_pool == 1 && use_centered_s0_pool == 1 &&
+          market_s0_rotation_active == 0) ? N_market_year : 0] eta_s0_pool;
   // Market-level s0 pooling: one outside share per market, shared across the
   // market's years (structurally parallel to a_market). Fed by N_market group
   // effects each identified by all of the market's observations, so its hyper-SD
   // is far better identified than the market-year pool's N_market_year effects.
   vector[(use_s0_market_pool == 1 && is_single_market == 0 &&
-          use_centered_s0_pool == 0) ? N_market : 0] s0_market_raw;
+          use_centered_s0_pool == 0 && market_s0_rotation_active == 0) ? N_market : 0] s0_market_raw;
   vector[(use_s0_market_pool == 1 && is_single_market == 0 &&
-          use_centered_s0_pool == 1) ? N_market : 0] eta_s0_market;
+          use_centered_s0_pool == 1 && market_s0_rotation_active == 0) ? N_market : 0] eta_s0_market;
+  vector[(market_s0_rotation_active == 1 &&
+          (use_centered_s0_pool == 1 ||
+           (use_s0_market_year_pool == 0 && use_s0_market_pool == 0)))
+         ? (use_s0_market_pool == 1 ? N_market : N_market_year) : 0] c_s0;
+  vector[(market_s0_rotation_active == 1 && use_centered_s0_pool == 0 &&
+          (use_s0_market_year_pool == 1 || use_s0_market_pool == 1))
+         ? (use_s0_market_pool == 1 ? N_market : N_market_year) : 0] c_s0_raw;
   vector[rho_active == 1 ? 1 : 0] rho_raw;
   real log_sigma_share;
   real log_sigma_margin;
@@ -391,6 +404,10 @@ transformed parameters {
   vector[N_market] log_a_market_derived = rep_vector(0.0, N_market);
   vector[N_market] b_market;
   vector[N_market] gamma_market;
+  vector[N_market_year] s0_base_reconstructed = rep_vector(0.0, N_market_year);
+  vector[N_market_year] s0_raw_reconstructed = rep_vector(0.0, N_market_year);
+  vector[N_market_year] c_unbounded_mky = rep_vector(0.0, N_market_year);
+  vector[N_market_year] c_effective_mky = rep_vector(0.0, N_market_year);
   vector[quality_parameterization == 1 ? N_group : 0] b_quality_all =
     rep_vector(0.0, quality_parameterization == 1 ? N_group : 0);
   vector[N] share_mean = rep_vector(0.0, N);
@@ -421,25 +438,62 @@ transformed parameters {
   }
   if (rho_active == 1) rho = 0.95 * tanh(rho_raw[1]);
 
+  // Reconstruct the unchanged market effect before applying the outside-share
+  // rotation. Single-market fits retain the historical zero normalization.
+  if (is_single_market == 1) {
+    b_market = rep_vector(0.0, N_market);
+    gamma_market = rep_vector(0.0, N_market);
+  } else {
+    b_market = mu_b_market_vec[1]
+      + sigma_b_market_vec[1] * b_market_raw;
+  }
+
   for (mky in 1:N_market_year) {
     real base_logit;
     real x_beta = K_s0 > 0 ? X_s0[mky] * beta_s0 : 0.0;
+    int m = mky_to_market[mky];
     if (use_s0_market_pool == 1) {
       // One s0 per market, applied to each of the market's market-years.
-      int m = mky_to_market[mky];
       if (is_single_market == 1) base_logit = mu_s0_pool_vec[1];
-      else base_logit = use_centered_s0_pool == 1
+      else if (market_s0_rotation_active == 1) {
+        if (use_centered_s0_pool == 1)
+          base_logit = c_s0[m] - b_market[m];
+        else {
+          real w = c_s0_raw[m];
+          base_logit = mu_s0_pool_vec[1] + sigma_s0_pool_vec[1] * w
+            - b_market[m];
+          s0_raw_reconstructed[mky] = w - b_market[m] / sigma_s0_pool_vec[1];
+        }
+      } else base_logit = use_centered_s0_pool == 1
         ? eta_s0_market[m]
         : mu_s0_pool_vec[1] + sigma_s0_pool_vec[1] * s0_market_raw[m];
     } else if (use_s0_market_year_pool == 1) {
-      base_logit = use_centered_s0_pool == 1
+      if (market_s0_rotation_active == 1) {
+        if (use_centered_s0_pool == 1)
+          base_logit = c_s0[mky] - b_market[m];
+        else {
+          real w = c_s0_raw[mky];
+          base_logit = mu_s0_pool_vec[1] + sigma_s0_pool_vec[1] * w
+            - b_market[m];
+          s0_raw_reconstructed[mky] = w - b_market[m] / sigma_s0_pool_vec[1];
+        }
+      } else base_logit = use_centered_s0_pool == 1
         ? eta_s0_pool[mky]
         : mu_s0_pool_vec[1] + sigma_s0_pool_vec[1] * s0_pool_raw[mky];
-    } else {
-      base_logit = s0_logit[mky];
+    } else base_logit = market_s0_rotation_active == 1
+      ? c_s0[mky] - b_market[m] : s0_logit[mky];
+    if (market_s0_rotation_active == 0) {
+      if (is_single_market == 0 && use_s0_market_pool == 1 &&
+          use_centered_s0_pool == 0)
+        s0_raw_reconstructed[mky] = s0_market_raw[m];
+      else if (use_s0_market_year_pool == 1 && use_centered_s0_pool == 0)
+        s0_raw_reconstructed[mky] = s0_pool_raw[mky];
     }
+    s0_base_reconstructed[mky] = base_logit;
     s0[mky] = base_logit + x_beta;
+    c_unbounded_mky[mky] = s0[mky] + b_market[m];
     s0_prob[mky] = bounded_inv_logit(s0[mky]);
+    c_effective_mky[mky] = logit(s0_prob[mky]) + b_market[m];
     mean_log_s0_market[mky_to_market[mky]] += log(s0_prob[mky]);
     mean_logit_s0_market[mky_to_market[mky]] += logit(s0_prob[mky]);
   }
@@ -448,25 +502,10 @@ transformed parameters {
     mean_logit_s0_market[m] /= n_mky_per_market[m];
   }
 
-  if (is_single_market == 1) {
-    // A single market has no cross-market intercept to speak of; normalize
-    // it to zero and let s0's level be identified directly off the share
-    // equation.
-    b_market = rep_vector(0.0, N_market);
-    gamma_market = rep_vector(0.0, N_market);
-  } else {
-    b_market = mu_b_market_vec[1]
-      + sigma_b_market_vec[1] * b_market_raw;
-    for (m in 1:N_market) {
-      if (n_mky_per_market[m] > 1) {
-        // Retain the historical rotated coordinate as a derived quantity;
-        // b_market itself is sampled noncentrally to avoid a scale funnel.
-        gamma_market[m] = b_market[m] + mean_logit_s0_market[m];
-      } else {
-        // With one market-year there is no outside-share rotation.
-        gamma_market[m] = b_market[m];
-      }
-    }
+  if (is_single_market == 0) for (m in 1:N_market) {
+    if (n_mky_per_market[m] > 1)
+      gamma_market[m] = b_market[m] + mean_logit_s0_market[m];
+    else gamma_market[m] = b_market[m];
   }
 
   if (is_cournot == 0) {
@@ -529,16 +568,41 @@ model {
     target += normal_lpdf(mu_s0_pool_vec | s0_prior_mean, s0_prior_sd);
     if (is_single_market == 0) {
       target += normal_lpdf(sigma_s0_pool_vec | 0, prior_sigma_s0_pool) - num_elements(sigma_s0_pool_vec) * normal_lccdf(0 | 0, prior_sigma_s0_pool);
-      if (use_centered_s0_pool == 1) {
+      if (market_s0_rotation_active == 1) {
+        if (use_centered_s0_pool == 1)
+          target += normal_lpdf(c_s0 - b_market | mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
+        else {
+          vector[N_market] z_s0 = c_s0_raw - b_market / sigma_s0_pool_vec[1];
+          target += std_normal_lpdf(z_s0);
+        }
+      } else if (use_centered_s0_pool == 1) {
         target += normal_lpdf(eta_s0_market | mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
       } else target += std_normal_lpdf(s0_market_raw);
     }
   } else if (use_s0_market_year_pool == 1) {
     target += normal_lpdf(mu_s0_pool_vec | s0_prior_mean, s0_prior_sd);
     target += normal_lpdf(sigma_s0_pool_vec | 0, prior_sigma_s0_pool) - num_elements(sigma_s0_pool_vec) * normal_lccdf(0 | 0, prior_sigma_s0_pool);
-    if (use_centered_s0_pool == 1) {
+    if (market_s0_rotation_active == 1) {
+      if (use_centered_s0_pool == 1) {
+        vector[N_market_year] v_s0;
+        for (mky in 1:N_market_year)
+          v_s0[mky] = c_s0[mky] - b_market[mky_to_market[mky]];
+        target += normal_lpdf(v_s0 | mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
+      } else {
+        vector[N_market_year] z_s0;
+        for (mky in 1:N_market_year)
+          z_s0[mky] = c_s0_raw[mky]
+            - b_market[mky_to_market[mky]] / sigma_s0_pool_vec[1];
+        target += std_normal_lpdf(z_s0);
+      }
+    } else if (use_centered_s0_pool == 1) {
       target += normal_lpdf(eta_s0_pool | mu_s0_pool_vec[1], sigma_s0_pool_vec[1]);
     } else target += std_normal_lpdf(s0_pool_raw);
+  } else if (market_s0_rotation_active == 1) {
+    vector[N_market_year] v_s0;
+    for (mky in 1:N_market_year)
+      v_s0[mky] = c_s0[mky] - b_market[mky_to_market[mky]];
+    target += normal_lpdf(v_s0 | s0_prior_mean, s0_prior_sd);
   } else target += normal_lpdf(s0_logit | s0_prior_mean, s0_prior_sd);
   target += normal_lpdf(beta_s0 | 0, prior_sigma_beta_s0);
   if (is_bargaining == 1) {

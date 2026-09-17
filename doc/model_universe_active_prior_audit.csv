@@ -1,0 +1,3 @@
+"check","fingerprint_equal","expected_equal"
+"active_Stan_prior_changed_stale_metadata",TRUE,FALSE
+"manifest_label_only_changed",FALSE,TRUE

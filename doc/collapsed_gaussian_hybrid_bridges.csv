@@ -1,0 +1,8 @@
+"case_id","bridge_status","bridge_log_marginal","bridge_error"
+"logit_bertrand_exact_271828__D","not_requested",,
+"logit_bertrand_noisy_271828__D","complete",25.3884294260849,"repetitions=3; logml_range=0.0225873529828107; niter=6/4/6"
+"logit_bertrand_noisy_314159__D","not_requested",,
+"logit_cournot_noisy_271828__D","not_requested",,
+"logit_BF_noisy_271828__D","not_requested",,
+"logit_BS_noisy_271828__D","not_requested",,
+"ces_bertrand_noisy_271828__D","not_requested",,
