@@ -319,8 +319,6 @@ transformed data {
   int rho_active;
   int market_s0_rotation_active =
     (market_s0_parameterization == 2 && is_single_market == 0) ? 1 : 0;
-  matrix[N_group, quality_parameterization == 1 ? N_group - 1 : 0] Q =
-    rep_matrix(0.0, N_group, quality_parameterization == 1 ? N_group - 1 : 0);
   for (mky in 1:N_market_year) {
     n_mky_per_market[mky_to_market[mky]] += 1;
   }
@@ -338,12 +336,6 @@ transformed data {
       reject("Stackelberg ordered-k support must be strictly positive");
   for (i in 1:N) {
     if (margin_obs[i] == 1) any_paired = 1;
-  }
-  if (quality_parameterization == 1 && N_group > 1) {
-    for (k in 1:(N_group - 1)) {
-      for (j in 1:k) Q[j, k] = 1.0 / sqrt(k * (k + 1.0));
-      Q[k + 1, k] = -k / sqrt(k * (k + 1.0));
-    }
   }
   if (quality_parameterization == 2 && share_likelihood == 2 &&
       margin_likelihood == 2 && use_rho == 1 && likelihood_mode == 1 &&
@@ -522,8 +514,17 @@ transformed parameters {
     a_market = exp(mu_log_a + sigma_log_a * r_market_a_raw);
   }
   gamma_structural_market = 1.0 + a_market / log_price_sd;
-  if (quality_parameterization == 1)
-    b_quality_all = Q * b_group_centered;
+  if (quality_parameterization == 1 && N_group > 1) {
+    real suffix = 0.0;
+    for (reverse_j in 1:(N_group - 1)) {
+      int j = N_group + 1 - reverse_j;
+      int k = j - 1;
+      real v_k = b_group_centered[k] / sqrt(1.0 * k * (k + 1.0));
+      b_quality_all[j] = suffix - k * v_k;
+      suffix += v_k;
+    }
+    b_quality_all[1] = suffix;
+  }
   for (i in 1:N) {
     int m = market[i];
     int mky = market_year_idx[i];
