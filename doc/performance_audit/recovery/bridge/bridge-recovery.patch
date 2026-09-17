@@ -1,0 +1,838 @@
+diff --git a/R/bma.R b/R/bma.R
+index 7843c64..7f08a5e 100644
+--- a/R/bma.R
++++ b/R/bma.R
+@@ -95,22 +95,286 @@ validate_comparison_contract <- function(fits) {
+       "6b1c2ca570bcb62a6b3765979e9af873aac531960382568680306e1654e4c521",
+     logit_supply =
+       "1c759485e68a549fbe754623a4c615a3c36afed577c8861a8632819c02fc5313"
++  ),
++  helmert = c(
++    ces_stackelberg =
++      "5906d0e9f7a00c6ec29da47cb9e870bddb65f8750f53855286b068aa24de73e6",
++    ces_supply =
++      "e4a759841324154c27bdfc2508cf0babae3a0daaba0c942aefc1289deaae3592",
++    logit_stackelberg =
++      "4e91beeba1f0155781d72a824bda92f9e1ad51b901d583f9700056b2bb3bcc76",
++    logit_supply =
++      "59cdf553449bfe192aa8e13398fd54bcaf9b3e991289e2e9fd2afc0e93994ff3"
+   )
+ )
+ 
+-.bayes_bridge_preserve_rng <- function(expr) {
++.bayes_bridge_rng_state <- function() {
+   had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+-  old_seed <- if (had_seed) get(".Random.seed", envir = .GlobalEnv) else NULL
+-  on.exit({
+-    if (had_seed) {
+-      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+-    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+-      rm(".Random.seed", envir = .GlobalEnv)
+-    }
+-  }, add = TRUE)
++  list(
++    kind = RNGkind(),
++    had_seed = had_seed,
++    seed = if (had_seed) get(".Random.seed", envir = .GlobalEnv) else NULL
++  )
++}
++
++.bayes_bridge_restore_rng <- function(state) {
++  if (!is.list(state) || !is.character(state$kind) ||
++      length(state$kind) != 3L || !is.logical(state$had_seed) ||
++      length(state$had_seed) != 1L) {
++    stop("Invalid saved RNG state.", call. = FALSE)
++  }
++  ## RNGkind() itself can create .Random.seed, so restore the generator first
++  ## and then restore the caller's exact seed presence/value.
++  do.call(RNGkind, as.list(state$kind))
++  if (isTRUE(state$had_seed)) {
++    assign(".Random.seed", state$seed, envir = .GlobalEnv)
++  } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
++    rm(".Random.seed", envir = .GlobalEnv)
++  }
++  invisible(TRUE)
++}
++
++.bayes_bridge_preserve_rng <- function(expr) {
++  state <- .bayes_bridge_rng_state()
++  on.exit(.bayes_bridge_restore_rng(state), add = TRUE)
+   force(expr)
+ }
+ 
++.bayes_bridge_validate_cores <- function(bridge_cores) {
++  if (length(bridge_cores) != 1L || !is.numeric(bridge_cores) ||
++      !is.finite(bridge_cores) || bridge_cores < 1 ||
++      bridge_cores > .Machine$integer.max ||
++      bridge_cores != floor(bridge_cores)) {
++    stop("'bridge_cores' must be a positive integer.", call. = FALSE)
++  }
++  as.integer(bridge_cores)
++}
++
++.bayes_bridge_validate_seed <- function(bridge_seed) {
++  if (is.null(bridge_seed)) return(NULL)
++  if (length(bridge_seed) != 1L || !is.numeric(bridge_seed) ||
++      !is.finite(bridge_seed) || bridge_seed != floor(bridge_seed) ||
++      bridge_seed < -2147483647 || bridge_seed > 2147483647) {
++    stop("'bridge_seed' must be a finite integer accepted by set.seed().",
++         call. = FALSE)
++  }
++  as.integer(bridge_seed)
++}
++
++.bayes_bridge_allocate_streams <- function(n_jobs, bridge_seed = NULL,
++                                           derive = FALSE) {
++  if (length(n_jobs) != 1L || !is.numeric(n_jobs) || !is.finite(n_jobs) ||
++      n_jobs < 1 || n_jobs != as.integer(n_jobs)) {
++    stop("The number of bridge jobs must be a positive integer.",
++         call. = FALSE)
++  }
++  n_jobs <- as.integer(n_jobs)
++  explicit <- !is.null(bridge_seed)
++  if (!explicit && !isTRUE(derive)) {
++    return(list(streams = NULL, realized_seed = NULL,
++                seed_source = "none", stream_kind = NULL,
++                caller_state_after_seed = NULL))
++  }
++
++  caller_state_after_seed <- NULL
++  if (explicit) {
++    bridge_seed <- .bayes_bridge_validate_seed(bridge_seed)
++    set.seed(bridge_seed)
++  } else {
++    ## A parallel request without an explicit seed still needs independent
++    ## fork streams.  Drawing one seed is the only intentional caller-RNG
++    ## consumption in this branch; dispatch restores the resulting state.
++    realized <- sample.int(.Machine$integer.max, size = 1L)
++    bridge_seed <- as.integer(realized)
++    caller_state_after_seed <- .bayes_bridge_rng_state()
++    on.exit(.bayes_bridge_restore_rng(caller_state_after_seed), add = TRUE)
++    set.seed(bridge_seed)
++  }
++  RNGkind("L'Ecuyer-CMRG")
++  set.seed(bridge_seed)
++  streams <- vector("list", n_jobs)
++  streams[[1L]] <- get(".Random.seed", envir = .GlobalEnv)
++  if (n_jobs > 1L) {
++    for (i in 2L:n_jobs) {
++      streams[[i]] <- parallel::nextRNGStream(streams[[i - 1L]])
++    }
++  }
++  list(streams = streams, realized_seed = bridge_seed,
++       seed_source = if (explicit) "explicit" else "caller",
++       stream_kind = RNGkind(), caller_state_after_seed = caller_state_after_seed)
++}
++
++.bayes_bridge_run_job <- function(job, bridge_maxiter,
++                                   bridge_fun = bridgesampling::bridge_sampler) {
++  if (!is.null(job$stream)) {
++    assign(".Random.seed", as.integer(job$stream), envir = .GlobalEnv)
++  }
++  tryCatch({
++    value <- bridge_fun(
++      job$context$samples, stanfit_model = job$context$stanfit_model,
++      silent = TRUE, maxiter = bridge_maxiter
++    )
++    if (!is.list(value) || length(value$logml) != 1L ||
++        !is.numeric(value$logml) || !is.finite(value$logml)) {
++      stop("bridge_sampler returned no finite log marginal likelihood.",
++           call. = FALSE)
++    }
++    list(model_index = job$model_index, model = job$model,
++         repetition = job$repetition, result = value, error = NULL,
++         stage = "bridge")
++  }, error = function(e) {
++    list(model_index = job$model_index, model = job$model,
++         repetition = job$repetition, result = NULL,
++         error = conditionMessage(e), stage = "bridge")
++  })
++}
++
++.bayes_bridge_dispatch <- function(contexts, context_errors, model_names,
++                                   bridge_repetitions, bridge_maxiter,
++                                   bridge_cores = 1L, bridge_seed = NULL,
++                                   bridge_fun = bridgesampling::bridge_sampler) {
++  n_models <- length(contexts)
++  n_jobs <- n_models * bridge_repetitions
++  bridge_cores <- .bayes_bridge_validate_cores(bridge_cores)
++  bridge_seed <- .bayes_bridge_validate_seed(bridge_seed)
++  unsupported <- identical(.Platform$OS.type, "windows")
++  effective_cores <- min(bridge_cores, n_jobs)
++  fallback <- bridge_cores > 1L && unsupported
++  if (fallback) effective_cores <- 1L
++  if (fallback) {
++    warning("'bridge_cores' > 1 is unsupported on this platform; using ",
++            "serial bridge execution.", call. = FALSE)
++  }
++
++  caller_state <- if (!is.null(bridge_seed)) .bayes_bridge_rng_state() else NULL
++  if (!is.null(caller_state)) {
++    on.exit(.bayes_bridge_restore_rng(caller_state), add = TRUE)
++  }
++  stream_plan <- if (!is.null(bridge_seed) || bridge_cores > 1L) {
++    .bayes_bridge_allocate_streams(
++      n_jobs, bridge_seed = bridge_seed, derive = bridge_cores > 1L
++    )
++  } else {
++    list(streams = NULL, realized_seed = NULL, seed_source = "none",
++         stream_kind = NULL, caller_state_after_seed = NULL)
++  }
++  if (is.null(caller_state) &&
++      !is.null(stream_plan$caller_state_after_seed)) {
++    ## Stream derivation should not leak its temporary L'Ecuyer state.  An
++    ## explicit seed restores the state from before dispatch; an implicit
++    ## parallel plan restores the state immediately after seed selection.
++    on.exit(.bayes_bridge_restore_rng(stream_plan$caller_state_after_seed),
++            add = TRUE)
++  }
++
++  jobs <- vector("list", n_jobs)
++  pos <- 0L
++  for (i in seq_len(n_models)) {
++    for (rep_id in seq_len(bridge_repetitions)) {
++      pos <- pos + 1L
++      jobs[[pos]] <- list(
++        model_index = i, model = model_names[[i]], repetition = rep_id,
++        context = contexts[[i]],
++        stream = if (is.null(stream_plan$streams)) NULL else
++          stream_plan$streams[[pos]]
++      )
++    }
++  }
++
++  run_one <- function(job) {
++    context_error <- context_errors[[job$model_index]]
++    if (is.null(job$context)) {
++      if (is.na(context_error) || !nzchar(context_error)) {
++        context_error <- "bridge context unavailable"
++      }
++      return(list(model_index = job$model_index, model = job$model,
++                  repetition = job$repetition, result = NULL,
++                  error = context_error,
++                  stage = "context"))
++    }
++    .bayes_bridge_run_job(job, bridge_maxiter, bridge_fun = bridge_fun)
++  }
++
++  raw <- tryCatch({
++    if (effective_cores > 1L) {
++      parallel::mclapply(
++        jobs, run_one, mc.cores = effective_cores,
++        mc.preschedule = TRUE, mc.set.seed = FALSE
++      )
++    } else {
++      lapply(jobs, run_one)
++    }
++  }, error = function(e) {
++    lapply(jobs, function(job) list(
++      model_index = job$model_index, model = job$model,
++      repetition = job$repetition, result = NULL,
++      error = conditionMessage(e), stage = "dispatch"
++    ))
++  })
++
++  if (length(raw) != length(jobs)) {
++    raw <- vector("list", length(jobs))
++    malformed <- rep(TRUE, length(jobs))
++  } else {
++    malformed <- !vapply(raw, function(value) {
++      is.list(value) && all(c("model_index", "model", "repetition",
++                              "result", "error", "stage") %in% names(value))
++    }, logical(1))
++  }
++  raw[malformed] <- lapply(jobs[malformed], function(job) list(
++    model_index = job$model_index, model = job$model,
++    repetition = job$repetition, result = NULL,
++    error = "worker process did not return a bridge result", stage = "dispatch"
++  ))
++
++  bridge_list <- lapply(seq_len(n_models), function(i) {
++    reps <- raw[vapply(raw, function(value) value$model_index == i, logical(1))]
++    reps <- reps[order(vapply(reps, `[[`, integer(1), "repetition"))]
++    lapply(reps, `[[`, "result")
++  })
++  failure_rows <- lapply(raw[vapply(raw, function(value) {
++    is.null(value$result) || !is.null(value$error)
++  }, logical(1))], function(value) data.frame(
++    model_index = as.integer(value$model_index), model = as.character(value$model),
++    repetition = as.integer(value$repetition), stage = as.character(value$stage),
++    error = as.character(value$error %||% "bridge result unavailable"),
++    stringsAsFactors = FALSE
++  ))
++  failures <- if (length(failure_rows)) do.call(rbind, failure_rows) else
++    data.frame(model_index = integer(0), model = character(0),
++               repetition = integer(0), stage = character(0),
++               error = character(0), stringsAsFactors = FALSE)
++  if (nrow(failures)) {
++    context_rows <- which(failures$stage == "context")
++    if (length(context_rows)) {
++      first <- context_rows[!duplicated(failures$model_index[context_rows])]
++      for (i in first) {
++        warning("Bridge context restoration failed for model ",
++                failures$model[[i]], "; evidence marked incomplete: ",
++                failures$error[[i]], call. = FALSE)
++      }
++    }
++    bridge_rows <- which(failures$stage != "context")
++    for (i in bridge_rows) {
++      warning("Bridge sampling failed for model ", failures$model[[i]],
++              ", repetition ", failures$repetition[[i]], ": ",
++              failures$error[[i]], call. = FALSE)
++    }
++  }
++  execution <- list(
++    requested_cores = bridge_cores,
++    effective_cores = effective_cores,
++    dispatch = if (effective_cores > 1L) "fork" else "serial",
++    fallback = if (fallback) "unsupported_platform" else NULL,
++    seed_source = stream_plan$seed_source,
++    realized_seed = stream_plan$realized_seed,
++    stream_kind = stream_plan$stream_kind,
++    n_jobs = n_jobs
++  )
++  list(bridge_list = bridge_list, failures = failures,
++       execution = execution)
++}
++
+ .bayes_bridge_read_hashes <- function(value) {
+   ## Kept as a small validator for diagnostics.  Runtime restoration uses the
+   ## package-owned allow-list above and never reads an operator-maintained file.
+@@ -125,15 +389,33 @@ validate_comparison_contract <- function(fits) {
+ }
+ 
+ .bayes_bridge_is_approved_migration <- function(saved_hash, current_hash,
+-                                                kernel, original, rotation) {
+-  is.character(saved_hash) && length(saved_hash) == 1L &&
++                                                kernel, original, rotation,
++                                                helmert = NULL) {
++  !is.null(.bayes_bridge_migration_geometry(
++    saved_hash, current_hash, kernel, original, rotation, helmert
++  ))
++}
++
++.bayes_bridge_migration_geometry <- function(saved_hash, current_hash,
++                                              kernel, original, rotation,
++                                              helmert = NULL) {
++  valid <- is.character(saved_hash) && length(saved_hash) == 1L &&
+     is.character(current_hash) && length(current_hash) == 1L &&
+     is.character(kernel) && length(kernel) == 1L &&
+     kernel %in% .bayes_bridge_kernel_names &&
+     is.character(original) && is.character(rotation) &&
+-    !is.null(names(original)) && !is.null(names(rotation)) &&
+-    identical(unname(original[[kernel]]), saved_hash) &&
++    kernel %in% names(original) && kernel %in% names(rotation)
++  if (!valid || identical(saved_hash, current_hash)) return(NULL)
++  old_to_rotation <- identical(unname(original[[kernel]]), saved_hash) &&
+     identical(unname(rotation[[kernel]]), current_hash)
++  new_helmert <- is.character(helmert) && kernel %in% names(helmert) &&
++    identical(unname(helmert[[kernel]]), current_hash)
++  if (old_to_rotation || (new_helmert &&
++      identical(unname(original[[kernel]]), saved_hash))) return("legacy")
++  if (new_helmert && identical(unname(rotation[[kernel]]), saved_hash)) {
++    return("preserve")
++  }
++  NULL
+ }
+ 
+ .bayes_bridge_code_contract <- function(stanfit) {
+@@ -167,20 +449,23 @@ validate_comparison_contract <- function(fits) {
+                                  serialize = FALSE)
+   same_code <- identical(saved_hash, current_hash)
+   migration <- FALSE
++  migration_geometry <- NULL
+   if (!same_code) {
+     original <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$original)
+     rotation <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$rotation)
+-    migration <- .bayes_bridge_is_approved_migration(
+-      saved_hash, current_hash, kernel, original, rotation
++    helmert <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$helmert)
++    migration_geometry <- .bayes_bridge_migration_geometry(
++      saved_hash, current_hash, kernel, original, rotation, helmert
+     )
++    migration <- !is.null(migration_geometry)
+     if (!migration) {
+       stop("Saved and installed Stan code hashes differ for ", kernel,
+-           "; no approved original-to-rotation pair matches.", call. = FALSE)
++           "; no approved saved-to-current kernel pair matches.", call. = FALSE)
+     }
+   }
+   list(kernel = kernel, current_model = current, saved_hash = saved_hash,
+        current_hash = current_hash, same_code = same_code,
+-       migration = migration)
++       migration = migration, migration_geometry = migration_geometry)
+ }
+ 
+ .bayes_bridge_canonicalize_data <- function(data) {
+@@ -225,13 +510,27 @@ validate_comparison_contract <- function(fits) {
+ .bayes_bridge_private_data <- function(fit, contract) {
+   data <- .bayes_bridge_canonicalize_data(fit@stan_data)
+   if (isTRUE(contract$migration)) {
+-    if ("market_s0_parameterization" %in% names(data) &&
+-        !identical(as.integer(data$market_s0_parameterization), 1L)) {
+-      stop("Approved bridge migration requires a legacy private data flag of 1.",
++    if (identical(contract$migration_geometry, "legacy")) {
++      flag <- data$market_s0_parameterization
++      if ("market_s0_parameterization" %in% names(data) &&
++          (!is.numeric(flag) || length(flag) != 1L || !is.finite(flag) ||
++           flag != 1)) {
++        stop("Approved original-kernel migration requires a legacy private data flag of 1.",
++             call. = FALSE)
++      }
++      ## Only a pre-rotation source has this implicit legacy coordinate system.
++      data$market_s0_parameterization <- 1L
++    } else if (identical(contract$migration_geometry, "preserve")) {
++      flag <- data$market_s0_parameterization
++      if (!is.numeric(flag) || length(flag) != 1L || !is.finite(flag) ||
++          !flag %in% c(1, 2)) {
++        stop("Approved performance migration requires its saved private data flag of 1 or 2.",
++             call. = FALSE)
++      }
++    } else {
++      stop("Approved bridge migration has no validated coordinate policy.",
+            call. = FALSE)
+     }
+-    ## Copy-on-write keeps the serialized fit and its stan_data untouched.
+-    data$market_s0_parameterization <- 1L
+   }
+   data
+ }
+@@ -582,6 +881,17 @@ validate_comparison_contract <- function(fits) {
+ #'   Default 5000.
+ #' @param bridge_repetitions Number of independently initialized bridge runs
+ #'   per model. The reported log marginal likelihood is their median.
++#' @param bridge_cores Positive integer number of bridge jobs to run in
++#'   parallel. The default \code{1} preserves serial execution. Fork
++#'   execution is used on supported platforms; unsupported platforms fall
++#'   back to serial execution and record that fallback in diagnostics.
++#' @param bridge_seed Optional integer seed. With an explicit seed, one
++#'   independent L'Ecuyer-CMRG stream is allocated to each model/repetition
++#'   job before dispatch, so serial and fork execution are reproducible and
++#'   the caller's RNG kind and seed are restored. When \code{bridge_cores > 1}
++#'   and this is \code{NULL}, one seed is drawn from the caller RNG and used
++#'   to derive independent job streams; the caller RNG is restored to the
++#'   state immediately after that seed draw.
+ #' @param loo_unit Natural predictive unit: observation, period, market, or
+ #'   cluster. Cluster uses the identifiers supplied to \code{bayes_est}.
+ #' @param prior_weights Optional numeric vector of prior model probabilities.
+@@ -599,6 +909,9 @@ validate_comparison_contract <- function(fits) {
+ #'   posterior model probabilities. With \code{restrictions}, a
+ #'   \code{bayes_restriction_comparison} table containing prior and posterior
+ #'   restriction masses and encompassing-prior Bayes factors.
++#'   Bridge results retain model/repetition failures in the
++#'   \code{bridge_failure_records} attribute and execution details, including
++#'   any realized seed and serial fallback, in \code{bridge_execution}.
+ #'
+ #' @details
+ #' Four model comparison approaches are provided:
+@@ -645,9 +958,12 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
+                           restriction_draws = NULL,
+                           bridge = TRUE, bridge_maxiter = 5000L,
+                           bridge_repetitions = 3L,
++                          bridge_cores = 1L, bridge_seed = NULL,
+                           loo_unit = c("cluster", "period", "market", "observation"),
+                           prior_weights = NULL, universe = NULL) {
+   args <- list(...)
++  bridge_cores <- .bayes_bridge_validate_cores(bridge_cores)
++  bridge_seed <- .bayes_bridge_validate_seed(bridge_seed)
+   if (!is.null(universe)) {
+     # Accept a named collection as well as named fits in ... for this route.
+     if (length(args) == 1L && is.list(args[[1L]]) &&
+@@ -665,7 +981,8 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
+     return(.bayes_compare_universe(
+       args, universe = universe, bridge = bridge,
+       bridge_maxiter = bridge_maxiter,
+-      bridge_repetitions = bridge_repetitions, loo_unit = loo_unit
++      bridge_repetitions = bridge_repetitions, bridge_cores = bridge_cores,
++      bridge_seed = bridge_seed, loo_unit = loo_unit
+     ))
+   }
+   if (!is.null(restrictions)) {
+@@ -751,6 +1068,8 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
+   loo_list  <- vector("list", length(fits))
+   waic_list <- vector("list", length(fits))
+   bridge_list <- list()
++  bridge_contexts <- vector("list", length(fits))
++  bridge_context_errors <- rep(NA_character_, length(fits))
+   bridge_context_info <- vector("list", length(fits))
+   parameter_name <- switch(loo_unit,
+     observation = "log_lik",
+@@ -782,29 +1101,13 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
+       bridge_context <- tryCatch(
+         .bayes_bridge_restore_context(fit),
+         error = function(e) {
+-          warning("Bridge context restoration failed for model ", nms[i],
+-                  "; evidence marked incomplete: ", conditionMessage(e),
+-                  call. = FALSE)
++          bridge_context_errors[[i]] <<- conditionMessage(e)
+           NULL
+         }
+       )
+       if (is.null(bridge_context)) {
+-        bridge_list[[i]] <- rep(list(NULL), bridge_repetitions)
+         bridge_context_info[[i]] <- list(status = "incomplete")
+       } else {
+-        bridge_list[[i]] <- lapply(seq_len(bridge_repetitions), function(rep_id) {
+-          tryCatch(
+-            bridgesampling::bridge_sampler(
+-              bridge_context$samples, stanfit_model = bridge_context$stanfit_model,
+-              silent = TRUE, maxiter = bridge_maxiter
+-            ),
+-            error = function(e) {
+-              warning("Bridge sampling failed for model ", nms[i],
+-                      ", repetition ", rep_id, ": ", conditionMessage(e))
+-              NULL
+-            }
+-          )
+-        })
+         bridge_context_info[[i]] <- list(
+           status = "validated", source = bridge_context$source,
+           kernel = bridge_context$kernel,
+@@ -815,11 +1118,30 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
+           target_check = bridge_context$target_check
+         )
+       }
++      ## Preserve the model slot when context restoration fails with NULL.
++      ## `[[i]] <- NULL` removes a list element and shifts all later models.
++      bridge_contexts[i] <- list(bridge_context)
+     }
+   }
+ 
++  bridge_failure_records <- data.frame(
++    model_index = integer(0), model = character(0), repetition = integer(0),
++    stage = character(0), error = character(0), stringsAsFactors = FALSE
++  )
++  bridge_execution_info <- NULL
++  if (bridge) {
++    dispatched <- .bayes_bridge_dispatch(
++      bridge_contexts, bridge_context_errors, nms,
++      bridge_repetitions = bridge_repetitions, bridge_maxiter = bridge_maxiter,
++      bridge_cores = bridge_cores, bridge_seed = bridge_seed
++    )
++    bridge_list <- dispatched$bridge_list
++    bridge_failure_records <- dispatched$failures
++    bridge_execution_info <- dispatched$execution
++    names(bridge_list) <- nms
++  }
++
+   names(loo_list) <- names(waic_list) <- nms
+-  if (bridge) names(bridge_list) <- nms
+   if (loo_available) {
+     comp <- loo::loo_compare(loo_list)
+     weights_stacking <- loo::loo_model_weights(loo_list, method = "stacking")
+@@ -879,13 +1201,17 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
+ 
+     finite <- is.finite(logml)
+     diff_logml <- bf_vs_best <- post_prob <- rep(NA_real_, length(logml))
++    positive_prior_missing <- any(prior_weights > 0 & !finite)
+     if (any(finite)) {
+       max_logml <- max(logml[finite])
+       diff_logml[finite] <- logml[finite] - max_logml
+       bf_vs_best[finite] <- exp(diff_logml[finite])
+-      unnorm <- exp(diff_logml[finite]) * prior_weights[finite]
+-      if (sum(unnorm) > 0) {
+-        post_prob[finite] <- unnorm / sum(unnorm)
++      if (!positive_prior_missing) {
++        unnorm <- exp(diff_logml[finite]) * prior_weights[finite]
++        if (sum(unnorm) > 0) {
++          post_prob[finite] <- unnorm / sum(unnorm)
++        }
++        post_prob[prior_weights == 0] <- 0
+       }
+     }
+ 
+@@ -899,7 +1225,11 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
+ 
+   attr(result, "loo_compare") <- comp
+   attr(result, "loo_list") <- loo_list
+-  if (bridge) attr(result, "bridge_list") <- bridge_list
++  if (bridge) {
++    attr(result, "bridge_list") <- bridge_list
++    attr(result, "bridge_failure_records") <- bridge_failure_records
++    attr(result, "bridge_execution") <- bridge_execution_info
++  }
+   if (bridge) attr(result, "bridge_context_info") <- bridge_context_info
+   attr(result, "prior_weights") <- prior_weights
+   attr(result, "loo_unit") <- loo_unit
+diff --git a/R/model_universe.R b/R/model_universe.R
+index 256c320..2f4ef56 100644
+--- a/R/model_universe.R
++++ b/R/model_universe.R
+@@ -769,7 +769,8 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
+ }
+ 
+ .bayes_compare_universe <- function(args, universe, bridge, bridge_maxiter,
+-                                    bridge_repetitions, loo_unit) {
++                                    bridge_repetitions, bridge_cores = 1L,
++                                    bridge_seed = NULL, loo_unit) {
+   descriptor <- .mu_validate_descriptor(universe)
+   if (!isTRUE(bridge)) {
+     stop("Model-universe comparison requires bridge = TRUE so every retained ",
+@@ -784,7 +785,8 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
+   ordinary_args <- c(fits, list(
+     restrictions = NULL, reference = NULL, restriction_draws = NULL,
+     bridge = bridge, bridge_maxiter = bridge_maxiter,
+-    bridge_repetitions = bridge_repetitions, loo_unit = loo_unit,
++    bridge_repetitions = bridge_repetitions, bridge_cores = bridge_cores,
++    bridge_seed = bridge_seed, loo_unit = loo_unit,
+     prior_weights = NULL, universe = NULL
+   ))
+   source_evidence <- do.call(bayes_compare, ordinary_args)
+diff --git a/tests/testthat/test-bridge-performance-recovery.R b/tests/testthat/test-bridge-performance-recovery.R
+new file mode 100644
+index 0000000..ab271ee
+--- /dev/null
++++ b/tests/testthat/test-bridge-performance-recovery.R
+@@ -0,0 +1,252 @@
++test_that("bridge RNG helpers preserve seed presence and validate seed types", {
++  before <- .bayes_bridge_rng_state()
++  on.exit(.bayes_bridge_restore_rng(before), add = TRUE)
++
++  value <- .bayes_bridge_preserve_rng({
++    set.seed(731)
++    stats::rnorm(3L)
++  })
++  expect_length(value, 3L)
++  expect_identical(.bayes_bridge_rng_state(), before)
++
++  expect_identical(.bayes_bridge_validate_seed(731), 731L)
++  expect_null(.bayes_bridge_validate_seed(NULL))
++  expect_error(.bayes_bridge_validate_seed("731"), "finite integer")
++  expect_error(.bayes_bridge_validate_seed(7.5), "finite integer")
++  expect_error(.bayes_bridge_validate_seed(NA_real_), "finite integer")
++  expect_error(.bayes_bridge_validate_cores(1.5), "positive integer")
++  expect_identical(.bayes_bridge_validate_cores(2), 2L)
++})
++
++test_that("explicit bridge streams are independent and deterministic", {
++  before <- .bayes_bridge_rng_state()
++  on.exit(.bayes_bridge_restore_rng(before), add = TRUE)
++
++  first <- .bayes_bridge_preserve_rng(
++    .bayes_bridge_allocate_streams(3L, bridge_seed = 1729L)
++  )
++  second <- .bayes_bridge_preserve_rng(
++    .bayes_bridge_allocate_streams(3L, bridge_seed = 1729L)
++  )
++  expect_identical(first, second)
++  expect_length(first$streams, 3L)
++  expect_true(all(vapply(first$streams, is.integer, logical(1))))
++  expect_identical(first$seed_source, "explicit")
++  expect_identical(first$stream_kind[[1L]], "L'Ecuyer-CMRG")
++})
++
++test_that("bridge dispatch records worker errors and restores caller RNG", {
++  contexts <- list(
++    list(samples = list(), stanfit_model = NULL),
++    list(samples = list(), stanfit_model = NULL)
++  )
++  before <- .bayes_bridge_rng_state()
++  on.exit(.bayes_bridge_restore_rng(before), add = TRUE)
++
++  expect_warning(
++    dispatched <- .bayes_bridge_dispatch(
++      contexts, rep(NA_character_, 2L), c("a", "b"),
++      bridge_repetitions = 2L, bridge_maxiter = 17L,
++      bridge_cores = 1L, bridge_seed = 1729L,
++      bridge_fun = function(...) stop("synthetic bridge failure")
++    ),
++    "Bridge sampling failed"
++  )
++  expect_identical(.bayes_bridge_rng_state(), before)
++  expect_equal(nrow(dispatched$failures), 4L)
++  expect_identical(dispatched$failures$model,
++                   rep(c("a", "b"), each = 2L))
++  expect_identical(dispatched$failures$repetition, rep(1:2, 2L))
++  expect_true(all(vapply(dispatched$bridge_list, function(x) {
++    length(x) == 2L && all(vapply(x, is.null, logical(1)))
++  }, logical(1))))
++})
++
++test_that("parallel explicit streams restore caller RNG on worker errors", {
++  skip_on_os("windows")
++  contexts <- list(
++    list(samples = list(), stanfit_model = NULL),
++    list(samples = list(), stanfit_model = NULL)
++  )
++  before <- .bayes_bridge_rng_state()
++  on.exit(.bayes_bridge_restore_rng(before), add = TRUE)
++
++  expect_warning(
++    dispatched <- .bayes_bridge_dispatch(
++      contexts, rep(NA_character_, 2L), c("a", "b"),
++      bridge_repetitions = 2L, bridge_maxiter = 17L,
++      bridge_cores = 2L, bridge_seed = 1729L,
++      bridge_fun = function(...) stop("synthetic parallel bridge failure")
++    ),
++    "Bridge sampling failed"
++  )
++  expect_identical(.bayes_bridge_rng_state(), before)
++  expect_identical(dispatched$execution$dispatch, "fork")
++  expect_identical(dispatched$execution$requested_cores, 2L)
++  expect_identical(dispatched$execution$effective_cores, 2L)
++  expect_identical(dispatched$execution$seed_source, "explicit")
++  expect_identical(dispatched$execution$stream_kind[[1L]], "L'Ecuyer-CMRG")
++  expect_equal(nrow(dispatched$failures), 4L)
++})
++
++test_that("serial NULL-seed dispatch retains the legacy execution path", {
++  contexts <- list(list(samples = list(), stanfit_model = NULL))
++  dispatched <- .bayes_bridge_dispatch(
++    contexts, NA_character_, "a", bridge_repetitions = 1L,
++    bridge_maxiter = 17L, bridge_cores = 1L, bridge_seed = NULL,
++    bridge_fun = function(...) list(logml = 1)
++  )
++  expect_identical(dispatched$execution$dispatch, "serial")
++  expect_identical(dispatched$execution$requested_cores, 1L)
++  expect_identical(dispatched$execution$effective_cores, 1L)
++  expect_identical(dispatched$execution$seed_source, "none")
++  expect_null(dispatched$execution$stream_kind)
++  expect_true(is.finite(dispatched$bridge_list[[1L]][[1L]]$logml))
++})
++
++.make_bridge_recovery_fit <- function(label, fail = FALSE, prior = 1) {
++  stan_data <- list(
++    shareIn = c(.4, .6), clr_shareIn = c(-.2, .2),
++    marginNormInv = c(2, 2), log_marginNormInv = log(c(2, 2)),
++    margin_obs = c(1L, 1L), market_year_idx = c(1L, 1L),
++    cluster = c(1L, 1L), likelihood_mode = 1L,
++    use_s0_market_pool = 0L, use_s0_market_year_pool = 0L, use_hmt = 0L
++  )
++  attr(stan_data, "model_spec_version") <- 9L
++  new("BayesLogit", stanfit = NULL,
++      data = data.frame(
++        prices = c(1, 2), quantities = c(4, 6), margins = c(.25, .2),
++        market = c("m", "m"), year = c("1", "1"), group = c("a", "b"),
++        loo_cluster = c("m", "m"), margin_observed = c(TRUE, TRUE),
++        outside_price = c(1, 1)
++      ),
++      stan_data = stan_data, price_sd = 1, supply_model = 1L,
++      demand_model = "logit", market_side = "output", call = call("fake"),
++      metadata = list(
++        prior_manifest = "baseline",
++        resolved_priors = list(prior_alpha_sd = 1),
++        prior_normalization = list(mode = "native_stan_normalized",
++                                   model_spec_version = 9L),
++        quality_parameterization = "collapsed",
++        bayes_is_collapsed_quality = TRUE,
++        model_prior = prior, bridge_id = label, bridge_fail = fail
++      ))
++}
++
++.mock_bridge_dispatch_for_recovery <- function(contexts, context_errors,
++                                                model_names,
++                                                bridge_repetitions, ...) {
++  testthat::expect_length(contexts, 3L)
++  testthat::expect_length(context_errors, 3L)
++  testthat::expect_length(model_names, 3L)
++  bridge_list <- lapply(seq_along(contexts), function(i) {
++    if (is.null(contexts[[i]])) return(rep(list(NULL), bridge_repetitions))
++    lapply(seq_len(bridge_repetitions), function(rep_id) {
++      list(logml = 10 + i + rep_id / 10)
++    })
++  })
++  failed <- which(vapply(contexts, is.null, logical(1)))
++  rows <- lapply(failed, function(i) data.frame(
++    model_index = i, model = model_names[[i]],
++    repetition = seq_len(bridge_repetitions), stage = "context",
++    error = context_errors[[i]], stringsAsFactors = FALSE
++  ))
++  failures <- if (length(rows)) do.call(rbind, rows) else
++    data.frame(model_index = integer(0), model = character(0),
++               repetition = integer(0), stage = character(0),
++               error = character(0), stringsAsFactors = FALSE)
++  for (i in failed) {
++    warning("Bridge context restoration failed for model ", model_names[[i]],
++            "; evidence marked incomplete: ", context_errors[[i]],
++            call. = FALSE)
++  }
++  list(
++    bridge_list = bridge_list, failures = failures,
++    execution = list(requested_cores = 1L, effective_cores = 1L,
++                     dispatch = "serial", fallback = NULL,
++                     seed_source = "none", realized_seed = NULL,
++                     stream_kind = NULL, n_jobs = 3L * bridge_repetitions)
++  )
++}
++
++.run_public_bridge_recovery <- function(failed, prior_weights = rep(1 / 3, 3L)) {
++  fits <- lapply(seq_len(3L), function(i) {
++    .make_bridge_recovery_fit(
++      c("first", "middle", "last")[[i]],
++      fail = identical(i, failed), prior = prior_weights[[i]]
++    )
++  })
++  names(fits) <- c("first", "middle", "last")
++  testthat::local_mocked_bindings(
++    .bayes_bridge_restore_context = function(fit) {
++      if (isTRUE(fit@metadata$bridge_fail)) {
++        stop("synthetic restoration failure for ", fit@metadata$bridge_id)
++      }
++      list(samples = list(), stanfit_model = NULL,
++           source = "test", kernel = "logit_supply",
++           saved_hash = "saved", current_hash = "current",
++           migration = FALSE, zero_width_fields_added = character(0L),
++           target_check = TRUE)
++    },
++    .bayes_bridge_dispatch = .mock_bridge_dispatch_for_recovery,
++    .package = "antitrustBayes"
++  )
++  result <- NULL
++  expect_warning(
++    result <- do.call(bayes_compare, c(fits, list(
++      bridge = TRUE, bridge_repetitions = 2L, bridge_cores = 1L
++    ))),
++    "Bridge context restoration failed"
++  )
++  result
++}
++
++test_that("public bridge comparison retains failed model slots and repetitions", {
++  for (failed in c(1L, 2L, 3L)) {
++    comp <- .run_public_bridge_recovery(failed)
++    expect_identical(comp$model, c("first", "middle", "last"))
++    expect_equal(comp$logml[failed], NA_real_)
++    expect_true(all(is.finite(comp$logml[-failed])))
++    bridge_list <- attr(comp, "bridge_list")
++    expect_length(bridge_list, 3L)
++    expect_true(all(vapply(bridge_list, length, integer(1)) == 2L))
++    expect_true(all(vapply(bridge_list[[failed]], is.null, logical(1))))
++    expect_true(all(vapply(bridge_list[-failed], function(reps) {
++      all(vapply(reps, function(x) is.list(x) && is.finite(x$logml), logical(1)))
++    }, logical(1))))
++    failures <- attr(comp, "bridge_failure_records")
++    expect_equal(failures$model, rep(c("first", "middle", "last")[[failed]], 2L))
++    expect_identical(failures$repetition, 1:2)
++    expect_true(all(is.na(comp$post_prob)))
++  }
++})
++
++test_that("zero-prior missing bridge evidence remains a zero posterior", {
++  comp <- .run_public_bridge_recovery(2L, prior_weights = c(.5, 0, .5))
++  expect_true(all(is.finite(comp$post_prob[c(1L, 3L)])))
++  expect_identical(comp$post_prob[[2L]], 0)
++  expect_equal(sum(comp$post_prob), 1)
++})
++
++test_that("public universe comparison forwards bridge execution controls", {
++  fit <- .make_bridge_recovery_fit("source")
++  universe <- bayes_model_universe(list(H = "source"), c(H = 1))
++  testthat::local_mocked_bindings(
++    .bayes_compare_universe = function(args, universe, bridge, bridge_maxiter,
++                                        bridge_repetitions, bridge_cores,
++                                        bridge_seed, loo_unit) {
++      list(bridge_repetitions = bridge_repetitions,
++           bridge_cores = bridge_cores, bridge_seed = bridge_seed,
++           loo_unit = loo_unit)
++    },
++    .package = "antitrustBayes"
++  )
++  got <- bayes_compare(
++    source = fit, universe = universe, bridge_repetitions = 4L,
++    bridge_cores = 2L, bridge_seed = 23L
++  )
++  expect_identical(got$bridge_repetitions, 4L)
++  expect_identical(got$bridge_cores, 2L)
++  expect_identical(got$bridge_seed, 23L)
++  expect_identical(got$loo_unit, "cluster")
++})

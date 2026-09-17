@@ -1,0 +1,3 @@
+attempt,stage,exit_code,cause,repair,economic_changes
+1,reference library load,1,antitrustBayes absent from dependency-only library,added trusted Bayes library to R_LIBS,none
+2,source unit-test harness,1,mock S4 class registration reached locked namespace,used namespace binding copy in writable test environment parented by globalenv,none

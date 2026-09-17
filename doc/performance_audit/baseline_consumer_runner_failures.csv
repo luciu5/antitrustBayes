@@ -1,0 +1,3 @@
+attempt,stage,exit_code,cause,repair,economic_changes
+1,copy consumer into integration clone,1,local Git clone was still running,waited for clone exit 0 before copying,none
+1,install integration clone,1,attempted before clone checkout completed,reran after completed checkout and successful copy,none

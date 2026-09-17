@@ -1,0 +1,6 @@
+role=baseline
+package=0.2.0 models=ces_stackelberg,ces_supply,logit_stackelberg,logit_supply
+loaded=TRUE,TRUE,TRUE,TRUE
+role=candidate
+package=0.2.0 models=ces_stackelberg,ces_supply,logit_stackelberg,logit_supply
+loaded=TRUE,TRUE,TRUE,TRUE

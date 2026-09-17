@@ -1,0 +1,29 @@
+started_utc=2026-09-17T13:19:51Z
+repo_root=/mnt/d/projects/antitrustbayes
+recovery=/mnt/d/projects/antitrustbayes/doc/statistical_toolkit_runs/20260916/performance-audit/recovery
+R=/usr/bin/R
+R version 4.6.1 (2026-06-24) -- "Happy Hop"
+Copyright (C) 2026 The R Foundation for Statistical Computing
+R_LIBS_USER=/mnt/d/projects/antitrustbayes/doc/statistical_toolkit_runs/20260916/performance-audit/recovery/Rlib:/home/ctaragin/R/x86_64-pc-linux-gnu-library/4.6
+MAKEFLAGS=-j1
+CC=cc
+CXX=g++ -std=gnu++20
+CXX17=g++
+CXXFLAGS=-g -O2 -ffile-prefix-map=/build/r-base-iLJhrH/r-base-4.6.1=. -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2
+compiler=/usr/bin/gcc
+/usr/bin/x86_64-linux-gnu-gcc-11
+821af3c74506283c179ca413bb33e6b528805a4dd8a5c09df125e5ad560a9e89  /usr/bin/x86_64-linux-gnu-gcc-11
+gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+compiler=/usr/bin/g++
+/usr/bin/x86_64-linux-gnu-g++-11
+2360901d864cf10bfd6296e261cb2c14053552a80377761ab07146ec9ec9a2c0  /usr/bin/x86_64-linux-gnu-g++-11
+g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+selected_cxx_path=/usr/bin/x86_64-linux-gnu-g++-11
+selected_cxx_sha256=2360901d864cf10bfd6296e261cb2c14053552a80377761ab07146ec9ec9a2c0
+flags_hash=ca488275b6fe249adf16fa2d4dc6b7c9b08a2a1f851828482f423987a70b67cf
+dependency_manifest=/mnt/d/projects/antitrustbayes/doc/statistical_toolkit_runs/20260916/performance-audit/recovery/dependency-manifest.txt
+dependency_manifest_sha256=4e0e63b3941d1efd27b25a2a6efff3a8c95094927875f9487a19b3343ad57ead
+
+commands (identical flags; role-specific source/library only):
+generate headers before fingerprinting; R CMD INSTALL --no-configure --library="$ROLELIB" --no-multiarch "$SOURCE"
+completed_utc=2026-09-17T13:20:18Z

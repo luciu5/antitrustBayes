@@ -1,0 +1,2 @@
+case,N,G,u_dim,baseline_setup_seconds,optimized_setup_seconds,baseline_target_seconds,optimized_target_seconds,baseline_gradient_seconds,optimized_gradient_seconds,baseline_target,optimized_target,target_abs_diff,baseline_grad_l2,optimized_grad_l2,grad_l2_abs_diff,baseline_mode,optimized_mode,baseline_elapsed_wall,optimized_elapsed_wall,baseline_peak_rss_kib,optimized_peak_rss_kib
+logit_supply_sampled,10000,10000,10004,1.067,0.246,0.045,0.007,0.085,0.011,-456924.8966413812,-456924.8966413812,0.0,853459.5024762977,853459.5024762977,0.0,0,0,0:06.59,0:05.58,1332104,554920

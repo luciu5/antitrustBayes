@@ -1,0 +1,4 @@
+stage,target,exit_code,cause,repair,economic_changes
+temporary clone,antitrust refactor,128,cross-device hard-link failure,retried in separate temporary path with --no-hardlinks,none
+temporary clone,trade refactor,128,cross-device hard-link failure,retried in separate temporary path with --no-hardlinks,none
+temporary diff check,trade namespace,2,new CRLF additions flagged as trailing whitespace,preserved original bytes and used LF only for the two added lines,none

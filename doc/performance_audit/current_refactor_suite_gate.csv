@@ -1,0 +1,4 @@
+"package","version","suite_exit_code","skip_count","warning_count","scope"
+"antitrust","0.99.40.9000",0,77,122,"temporary reconciliation only; antitrust external promotion patch plus lifecycle; trade6609e28 plus lifecycle; unchanged Bayes native kernels"
+"trade","0.8.8.9000",0,0,71,"temporary reconciliation only; antitrust external promotion patch plus lifecycle; trade6609e28 plus lifecycle; unchanged Bayes native kernels"
+"antitrustBayes","0.2.0",0,12,13,"temporary reconciliation only; antitrust external promotion patch plus lifecycle; trade6609e28 plus lifecycle; unchanged Bayes native kernels"

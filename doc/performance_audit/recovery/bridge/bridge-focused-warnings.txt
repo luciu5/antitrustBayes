@@ -1,0 +1,14 @@
+Intentional warnings captured/displayed by the focused suite:
+
+serial worker error: model a repetition 1, synthetic bridge failure
+serial worker error: model a repetition 2, synthetic bridge failure
+serial worker error: model b repetition 1, synthetic bridge failure
+serial worker error: model b repetition 2, synthetic bridge failure
+parallel worker error: model a repetition 1, synthetic parallel bridge failure
+parallel worker error: model a repetition 2, synthetic parallel bridge failure
+parallel worker error: model b repetition 1, synthetic parallel bridge failure
+parallel worker error: model b repetition 2, synthetic parallel bridge failure
+
+The first warning in each expect_warning block is captured by testthat, so the
+terminal summary displays the remaining three serial and three parallel
+warnings. No unexpected warnings or test failures occurred.

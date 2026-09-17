@@ -1,0 +1,6 @@
+"file","kernel","checked_rows","max_normalized_target_difference","restored_flag","added_zero_width_fields","rng_preserved","fit_immutable","raw_schema","scope"
+"logit_bertrand_noisy_271828__D.rds","logit_supply",20,0,1,"c_s0;c_s0_raw",TRUE,TRUE,"PASS","archived normalized target restoration; not a bridge evidence estimate"
+"ces_bertrand_noisy_271828__D.rds","ces_supply",20,0,1,"c_s0;c_s0_raw",TRUE,TRUE,"PASS","archived normalized target restoration; not a bridge evidence estimate"
+"logit_BF_noisy_271828__D.rds","logit_stackelberg",20,0,1,"c_s0;c_s0_raw",TRUE,TRUE,"PASS","archived normalized target restoration; not a bridge evidence estimate"
+"logit_BS_noisy_271828__D.rds","logit_stackelberg",20,0,1,"c_s0;c_s0_raw",TRUE,TRUE,"PASS","archived normalized target restoration; not a bridge evidence estimate"
+"logit_cournot_noisy_271828__D.rds","logit_supply",20,0,1,"c_s0;c_s0_raw",TRUE,TRUE,"PASS","archived normalized target restoration; not a bridge evidence estimate"

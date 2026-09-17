@@ -1,5 +1,24 @@
 # Performance audit results
 
+Execution resumed after an environment reset on September 17. Workspace
+sources and the compact evidence below survive; the latest `/tmp`-only paired
+vectorization HMC arrays do not. Their comparison is incomplete and establishes
+no sampler speedup. Recovery and retained partial telemetry are documented in
+`recovery_status.md`.
+
+The subsequent September 17 recovery now builds and verifies the four Helmert
+kernels. The main Stan/header files match the tested candidate and have been
+applied after the ordinary installed suite passes (13 skips, 13 warnings;
+the added skip is the optional antitrust lifecycle absent from recovery deps).
+Seven final boundary fixtures have matching targets, full gradients, schemas,
+outputs and nonvacuous quality-centering checks. The original central-difference
+gate is 6/7: one cancellation failure is retained and resolved separately with
+fourth-order differences agreeing with each kernel's analytic derivative within
+8.87e-12, under the same 1e-10 threshold. See
+`recovery/native_review/fd_resolution.md` and its original/resolved CSVs.
+The older chronological candidate-hold statements below describe earlier stages.
+This establishes numerical equivalence, not a new HMC ESS/second improvement.
+
 ## Independent chain scheduling
 
 The first accepted unit resolves the default process count after merging user
@@ -80,8 +99,18 @@ The first 200-fixed-draw small-fixture benchmark has extraction times .008 to
 2.630 to 2.956 seconds in this single pair, with all 200 draws valid and identical
 draw indices, prices, shares and failure records. Peak process RSS is essentially
 unchanged, 576,564 versus 577,392 KiB. This establishes a copied-array reduction,
-not an end-to-end speedup or a welfare comparison. Warmed repetitions, further
-conduct fixtures, welfare checks and larger extraction-only probes are pending.
+not an end-to-end speedup or a welfare comparison.
+
+The subsequent independent benchmark completed 36 paired policy rows across
+ordinary Logit, ordinary CES, exact BF and exact BS: 200 fixed draw positions,
+three policies and three warmed repetitions per fixture. Prices, shares, CV,
+producer surplus, total welfare, draw identities and failure records match
+exactly; every draw is valid. End-to-end gains remain inconsistent. A separate
+200-row collapsed-quality Fixed_param extraction stress test at N=10,000 has
+.834 versus .025 second extraction, 112,186,080 versus 19,336 copied bytes,
+and peak RSS 881,796 versus 772,632 KiB. These are serialization measurements,
+not HMC evidence. Compact results and the retained runner failure are in
+`selective_extraction/`.
 
 Shared baseline construction, threading, counterfactual scheduling and optional
 parallel bridge evidence remain active audit units. Their speedups and
@@ -102,7 +131,80 @@ timing comparison remain required.
 An earlier candidate report described compiler flags as matched, but clarification
 established that the trusted old binary's flags were not verified. Those timings
 are retained as unmatched-build measurements and do not establish a causal
-speed ratio. No candidate Stan source has been applied to the main working files.
+speed ratio.
+
+A subsequent matched rebuild uses identical GCC 11.4/R 4.6.1 compiler commands
+and flags. Twenty full-vector fixed gates have target/output differences zero
+and maximum gradient difference 4.02e-13. At N=G=10,000, target evaluation is
+.045 versus .007 seconds, gradient .085 versus .011 seconds, and process peak
+RSS 1,332,104 versus 554,920 KiB; target and gradient norm match. This is one
+fixed-point large probe, not an HMC ESS/second comparison. Raw-schema checks
+match for six fixtures. Canonical migration metadata uses installed Stan
+`model_code` digests; file-byte digests are only labels. Independent panel/rho
+coverage and saved-fit restoration still gate integration. No candidate Stan
+source has been applied to the main working files.
+
+A fresh independent reviewer now verifies all eighteen saved panel probes:
+normalized and raw target differences zero; maximum full gradient, raw-gradient
+and TP/GQ differences 3.55e-15; raw schemas, coordinate vectors, names, shapes,
+finite patterns and finite-difference vectors match. Coverage includes sampled
+and collapsed Logit/CES, missing-margin rho, legacy/rotated pooling, centered
+and noncentered hierarchies, `X_s0`, and BF/CF/BS/CS. Additional combinations,
+large-G nonzero stability and saved-fit compatibility still gate integration.
+See `native_profile/helmert_independent_panel_comparison.csv`.
+
+Saved-fit compatibility is independently reviewed and its helper is applied
+to the main working files, with 106 focused checks passing. It explicitly
+preserves rotation-era private coordinate flags instead of forcing legacy
+coordinates. Forty saved rows across four kernels and both flags agree within
+1.07e-14; 100 rows across five original-kernel archived fits agree exactly.
+One short normalization fixture retains a divergence, so this is target
+restoration evidence rather than an HMC or bridge-convergence claim. Native
+source integration remains held for the final boundary gates. See
+`kernel_compatibility.md` and `kernel_migration_*.csv`.
+
+## Public baseline consumer
+
+The Bayes consumer now selects `baseline = "observed"` only when the public
+`antitrust::specify()` exposes that option; an explicit user option wins and
+older antitrust installations retain their existing path. The integrated
+installed R-only Bayes suite passes against the reviewed lifecycle candidate,
+with twelve opt-in skips and thirteen expected warnings. It uses the unchanged
+trusted native Bayes library. Counterfactual/state checks and solve counters
+were executed separately.
+
+The paired runtime comparison now completes 27 policy rows per path: Logit
+Bertrand, Logit Cournot and CES Bertrand; merger, +10% cost shock and both;
+three warmed repetitions, each with 200 matched posterior draw positions.
+Prices, shares, CV, producer surplus, total welfare, draw identities and failure
+records match exactly, with all draws valid. Construction price/solver calls
+fall from 200 to zero per row; actual policy solver calls, iterations and
+function evaluations agree. The unchanged baseline solves have zero iterations
+on these fixtures, so removing them does not save a difficult nonlinear solve.
+Median whole-policy speed ratios range from .772 to 1.217, including regressions;
+no general wall-time gain is established. Peak process RSS is 607,900 versus
+609,044 KiB over each complete nine-policy-batch process, not per policy.
+The architecture separates baseline realization from policy solving, but the
+performance evidence does not justify a claim of large startup savings. Compact
+paired counts and numerical gates are in `baseline_consumer_*.csv`, reproduced
+by `run_baseline_consumer_posterior_benchmark.R` and
+`compare_baseline_consumer.R`. Two initial runner setup failures remain recorded.
+
+The current trade branch advanced to `6609e28` during the audit, adding fitted
+model promotion and requiring antitrust >=0.99.40. The earlier lifecycle
+candidate installs were validated on the previous trade base. Its patch must
+be reconciled with the newer code and dependencies before source integration;
+neither actual cross-package worktree has been changed by this audit.
+The user reports another modifying session may exist. Cross-package reconciliation
+is therefore tested in temporary clones; actual working branches remain untouched.
+The temporary current-base reconciliation installs successfully and its ordinary
+suites exit zero: antitrust (77 documented extended/nightly tier skips, 122
+warnings), trade (no skips, 71 warnings, including promotion tests), and Bayes
+(12 opt-in skips, 13 warnings). It includes the pre-existing external antitrust
+promotion patch as a separate compatibility prerequisite. Lifecycle development
+versions preserve that newer dependency at antitrust 0.99.40.9000 and trade
+0.8.8.9000. `current_refactor_suite_gate.csv` records this scope; it is not a
+fresh 200-draw timing on the combined current-base tree.
 
 Full firm ownership is economically block sparse, but legacy `ownerToMatrix()`
 materializes a dense product matrix. Firm/block calculations are candidates

@@ -1,0 +1,7 @@
+"model","structure","quality","N","G","target_baseline","target_optimized","target_abs_diff","mode_baseline","mode_optimized"
+"logit_supply","simultaneous","sampled",3,3,-20.0622580059153,-20.0622580059153,0,0,0
+"logit_supply","simultaneous","collapsed",3,1,-18.4175281200659,-18.4175281200659,0,0,0
+"ces_supply","simultaneous","sampled",3,3,-20.218894885624,-20.218894885624,0,0,0
+"ces_supply","simultaneous","collapsed",3,1,-18.1652928847483,-18.1652928847483,0,0,0
+"logit_stackelberg","fringe","sampled",3,3,-19.909339425761,-19.909339425761,0,0,0
+"ces_stackelberg","fringe","sampled",3,3,-20.1456999925982,-20.1456999925982,0,0,0

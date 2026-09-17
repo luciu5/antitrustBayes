@@ -1,0 +1,5 @@
+fixture,seed,N,G,share_likelihood,quality_parameterization,margin_likelihood,wall_seconds,divergences,treedepth_hits,min_BFMI_rounded,max_Rhat_all_outputs_rounded,verification_scope
+logit_exact_share_stress,61001,100,20,student_t,sampled,student_t,23.618,0,0,0.0721,1.1284,"retrieved scalar summary before reset; original posterior unavailable; no bulk/tail ESS or paired gate"
+logit_exact_share_stress,61002,100,20,student_t,sampled,student_t,22.42,0,0,0.0680,1.1042,"retrieved scalar summary before reset; original posterior unavailable; no bulk/tail ESS or paired gate"
+ces_exact_share_stress,61001,100,20,gaussian,collapsed,student_t,204.136,0,0,0.9162,1.0069,"retrieved scalar summary before reset; original posterior unavailable; no bulk/tail ESS or paired gate"
+ces_exact_share_stress,61002,100,20,gaussian,collapsed,student_t,204.369,0,0,0.9273,1.0020,"retrieved scalar summary before reset; original posterior unavailable; no bulk/tail ESS or paired gate"

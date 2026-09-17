@@ -1,0 +1,17 @@
+test_case,failed_model_index,model,repetition,stage,error,post_prob_policy
+serial_worker_error,1,a,1,bridge,synthetic bridge failure,bridge_list NULL
+serial_worker_error,1,a,2,bridge,synthetic bridge failure,bridge_list NULL
+serial_worker_error,2,b,1,bridge,synthetic bridge failure,bridge_list NULL
+serial_worker_error,2,b,2,bridge,synthetic bridge failure,bridge_list NULL
+parallel_worker_error,1,a,1,bridge,synthetic parallel bridge failure,bridge_list NULL
+parallel_worker_error,1,a,2,bridge,synthetic parallel bridge failure,bridge_list NULL
+parallel_worker_error,2,b,1,bridge,synthetic parallel bridge failure,bridge_list NULL
+parallel_worker_error,2,b,2,bridge,synthetic parallel bridge failure,bridge_list NULL
+public_context_failure_first,1,first,1,context,synthetic restoration failure,positive prior => all post_prob NA
+public_context_failure_first,1,first,2,context,synthetic restoration failure,positive prior => all post_prob NA
+public_context_failure_middle,2,middle,1,context,synthetic restoration failure,positive prior => all post_prob NA
+public_context_failure_middle,2,middle,2,context,synthetic restoration failure,positive prior => all post_prob NA
+public_context_failure_last,3,last,1,context,synthetic restoration failure,positive prior => all post_prob NA
+public_context_failure_last,3,last,2,context,synthetic restoration failure,positive prior => all post_prob NA
+public_context_failure_zero_prior,2,middle,1,context,synthetic restoration failure,zero prior => post_prob 0
+public_context_failure_zero_prior,2,middle,2,context,synthetic restoration failure,zero prior => post_prob 0

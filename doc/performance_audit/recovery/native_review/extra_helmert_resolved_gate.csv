@@ -1,0 +1,8 @@
+"case","central_v1_pass","resolved_pass","fd_validation","normalized_target_abs","full_gradient_abs","tp_gq_abs","central_fd_abs","refined_fd_abs","refined_analytic_error_max","quality_len","quality_centering_ok"
+"ces_g1000_repeated_panel",TRUE,TRUE,"central 1e-5",0,9.09494701772928e-13,3.5527136788005e-14,0,NA,NA,1000,TRUE
+"ces_sampled_margin_only_panel",TRUE,TRUE,"central 1e-5",0,0,2.77555756156289e-17,0,NA,NA,5,TRUE
+"ces_second_score_auction",FALSE,TRUE,"fourth-order Richardson 1e-3; both analytic errors <=1e-10",0,8.88178419700125e-16,2.77555756156289e-17,7.105427357601e-10,0,8.86224427176785e-12,5,TRUE
+"logit_bargaining",TRUE,TRUE,"central 1e-5",0,3.33066907387547e-16,1.77635683940025e-15,0,NA,NA,5,TRUE
+"logit_g1000_single_product",TRUE,TRUE,"central 1e-5",0,1.37667655053519e-14,3.5527136788005e-14,0,NA,NA,1000,TRUE
+"logit_sampled_share_only_panel",TRUE,TRUE,"central 1e-5",0,3.33066907387547e-16,8.88178419700125e-16,0,NA,NA,5,TRUE
+"logit_smooth_cutoff_hmt",TRUE,TRUE,"central 1e-5",0,2.22044604925031e-16,1.77635683940025e-15,0,NA,NA,5,TRUE

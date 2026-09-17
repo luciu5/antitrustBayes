@@ -48,3 +48,9 @@ tmp_lib/
 # Full rotation and follow-up posteriors, reference failures, and logs are local.
 /doc/market_s0_rotation_runs/
 /doc/statistical_toolkit_runs/
+
+# Recovery scripts and compact tables are versioned; raw execution artifacts are local.
+/doc/performance_audit/recovery/**/*.log
+/doc/performance_audit/recovery/**/*.rds
+/doc/performance_audit/recovery/**/.artifacts/
+/doc/performance_audit/recovery/**/__pycache__/
