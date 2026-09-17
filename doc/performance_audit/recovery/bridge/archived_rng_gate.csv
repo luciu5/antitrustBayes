@@ -1,0 +1,5 @@
+"seed","model","default_public_columns_identical","default_rng_identical","seeded_serial_fork_rng_identical","original_default_maxiter","bridge_repetitions","scope"
+707101,"BF",TRUE,TRUE,TRUE,5000,3,"separate-model public comparison; no cross-DGP Bayes factor"
+707101,"BS",TRUE,TRUE,TRUE,5000,3,"separate-model public comparison; no cross-DGP Bayes factor"
+707102,"BF",TRUE,TRUE,TRUE,5000,3,"separate-model public comparison; no cross-DGP Bayes factor"
+707102,"BS",TRUE,TRUE,TRUE,5000,3,"separate-model public comparison; no cross-DGP Bayes factor"

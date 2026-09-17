@@ -66,8 +66,22 @@ for (phase in c("setup", "target", "gradient")) {
     h[[paste0("optimized_", phase, "_seconds")]][1L],
     h$optimized_peak_rss_kib[1L] / h$baseline_peak_rss_kib[1L], h$target_abs_diff[1L],
     "finite; same target and gradient norm at fixed point; not HMC",
-    "hold integration for independent panel/rho and saved-fit compatibility gates",
+    "accepted after panel/rho, saved-fit and installed-suite gates; no HMC speedup claim",
     "whole probe process peak RSS, not isolated phase", "matched-compiler fixed-point native probe")
+}
+bridge_file <- file.path(out_dir, "recovery/bridge/archived_benchmark_summary.csv")
+if (file.exists(bridge_file)) {
+  b <- read.csv(bridge_file)
+  for (i in seq_len(nrow(b))) {
+    stopifnot(isTRUE(as.logical(b$iterations_identical[i])),
+              isTRUE(as.logical(b$input_fits_immutable[i])))
+    add(b$change[i], b$benchmark[i], b$old_wall_seconds[i], b$new_wall_seconds[i],
+      b$memory_ratio[i], b$max_logml_difference[i],
+      sprintf("bridge failures %d/%d; warnings %d/%d; no new HMC", b$old_failures[i],
+        b$new_failures[i], b$old_warnings[i], b$new_warnings[i]),
+      b$recommendation[i], "process-tree peak PSS, 0.25-second polling",
+      "matched archived posterior bridge jobs; different DGPs evaluated separately", b$seed[i])
+  }
 }
 result <- do.call(rbind, rows)
 write.csv(result, file.path(out_dir, "summary.csv"), row.names = FALSE, na = "")

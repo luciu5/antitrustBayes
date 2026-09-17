@@ -19,6 +19,16 @@ fourth-order differences agreeing with each kernel's analytic derivative within
 The older chronological candidate-hold statements below describe earlier stages.
 This establishes numerical equivalence, not a new HMC ESS/second improvement.
 
+The user committed and pushed the four reviewed source/report units; main and
+the locally recorded origin/main now match ea29e96. The working tree was clean
+before this next audit unit. Optional parallel bridge execution remains outside
+production: eight archived benchmark jobs (48 bridge estimates, 16 separate
+public comparisons) have exact paired evidence and iteration counts, but only
+1.137–1.184 speed ratios with 1.783–1.784 peak PSS ratios. The candidate warning
+loss was reproduced and repaired in isolation, with 13 passing assertions and
+a fresh Luna read-only review. Current serial defaults and economic targets
+remain unchanged. See recovery/bridge/archived_benchmark_results.md.
+
 ## Independent chain scheduling
 
 The first accepted unit resolves the default process count after merging user

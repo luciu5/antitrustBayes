@@ -1,5 +1,15 @@
 # Execution-environment recovery
 
+Current checkpoint: the user committed and pushed the reviewed compatibility,
+baseline-consumer, linear-time Helmert and recovery-report units on main.
+HEAD and the locally recorded origin/main match ea29e96. Current native gates
+and installed-suite results are documented in results.md. The optional bridge
+candidate has fresh review and eight completed performance jobs; its speed gain
+is modest and memory cost substantial, so it remains out of production. The
+original NULL-slot and newly reproduced fork-warning defects are repaired in
+the isolated candidate. See recovery/bridge/archived_benchmark_results.md.
+The older interrupted-state observations below remain as a chronological record.
+
 The execution environment became unavailable during a filesystem/status call
 on September 17, 2026. After execution resumed, the prior `/tmp` working copies,
 native libraries and agent sessions were absent. Workspace source changes,
@@ -34,15 +44,15 @@ bulk/tail ESS, posterior comparisons and warning text cannot be reconstructed
 from that summary. The equal-share fixture is an artificial stress case, not
 a recovery DGP. These rows are not an acceptance gate.
 
-The bridge implementation's first/middle/last context-failure regression was
+At the original interruption, the bridge implementation's first/middle/last context-failure regression was
 not completed with retained evidence. Root review found that assigning a NULL
 context with double brackets deletes its list entry. The candidate remains
 unintegrated pending a list-preserving repair, tests and fresh review.
 
 ## Recovery policy
 
-Luna workers are reconstructing isolated dependencies/native builds and the
-bridge repair from durable source snapshots. New executable scripts and
+Recovery uses isolated source snapshots, verified native manifests and Luna
+workers for bounded reconstruction, verification and fresh review. New executable scripts and
 compact results must be saved in the workspace before long runs; heavy native
 objects and fit arrays use the ignored workspace recovery directory. Rebuilt
 comparisons will be labeled as new executions. Priors, economic equations,

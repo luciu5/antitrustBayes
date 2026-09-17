@@ -16,7 +16,15 @@ to obtain better benchmarks. Use Luna xhigh for bounded work and fresh review.
    the unchanged 1e-10 threshold. See `native_review/fd_resolution.md`.
    Main working Stan/header files now match the verified candidate exactly
    after newline normalization. No HMC speedup is established by this gate.
-3. Run the recovered bridge helper/public failure tests once the baseline
+3. The reviewed source units have been committed and pushed by the user;
+   main and the locally recorded origin/main match ea29e96. The optional bridge
+   candidate has fresh review, repaired warning retention and eight archived
+   benchmark jobs with identical paired evidence. Hold integration: speed
+   ratios 1.137–1.184 cost peak-PSS ratios 1.783–1.784 on these small fixtures.
+   Current-source R-only installation and focused tests pass; the full suite
+   was not rerun for this held candidate. See
+   bridge/archived_benchmark_results.md. The earlier recovery plan follows:
+   run the recovered bridge helper/public failure tests once the baseline
    package is available. Repair source is in the durable ignored bridge
    worktree; actual production bridge dispatch is unchanged. Fresh review and
    real serial/parallel archived-fit runs precede acceptance. Keep the public

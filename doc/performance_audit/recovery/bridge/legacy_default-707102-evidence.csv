@@ -1,0 +1,7 @@
+"mode","seed","model","repetition","logml","niter","method","fit_immutable"
+"legacy_default",707102,"BF",1,23.6965450495319,6,"normal",TRUE
+"legacy_default",707102,"BF",2,23.6839977198777,6,"normal",TRUE
+"legacy_default",707102,"BF",3,23.6835093358151,5,"normal",TRUE
+"legacy_default",707102,"BS",1,25.3266045425105,4,"normal",TRUE
+"legacy_default",707102,"BS",2,25.3205560644561,5,"normal",TRUE
+"legacy_default",707102,"BS",3,25.3408029458153,7,"normal",TRUE

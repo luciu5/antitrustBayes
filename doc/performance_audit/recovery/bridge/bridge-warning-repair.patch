@@ -1,0 +1,97 @@
+--- a/R/bma.R
++++ b/R/bma.R
+@@ -209,7 +209,8 @@
+   if (!is.null(job$stream)) {
+     assign(".Random.seed", as.integer(job$stream), envir = .GlobalEnv)
+   }
+-  tryCatch({
++  job_warnings <- character()
++  tryCatch(withCallingHandlers({
+     value <- bridge_fun(
+       job$context$samples, stanfit_model = job$context$stanfit_model,
+       silent = TRUE, maxiter = bridge_maxiter
+@@ -221,11 +222,14 @@
+     }
+     list(model_index = job$model_index, model = job$model,
+          repetition = job$repetition, result = value, error = NULL,
+-         stage = "bridge")
+-  }, error = function(e) {
++         stage = "bridge", warnings = job_warnings)
++  }, warning = function(w) {
++    job_warnings <<- c(job_warnings, conditionMessage(w))
++    invokeRestart("muffleWarning")
++  }), error = function(e) {
+     list(model_index = job$model_index, model = job$model,
+          repetition = job$repetition, result = NULL,
+-         error = conditionMessage(e), stage = "bridge")
++         error = conditionMessage(e), stage = "bridge", warnings = job_warnings)
+   })
+ }
+ 
+@@ -326,6 +330,22 @@
+     repetition = job$repetition, result = NULL,
+     error = "worker process did not return a bridge result", stage = "dispatch"
+   ))
++
++  ## Fork warnings cannot reach the parent's condition handlers. Capture them
++  ## in each job, retain their model/repetition, and emit them once here for
++  ## the same caller-visible behavior in serial and fork execution.
++  warning_rows <- lapply(raw, function(value) {
++    messages <- value$warnings %||% character()
++    if (!length(messages)) return(NULL)
++    data.frame(model_index = as.integer(value$model_index), model = as.character(value$model),
++      repetition = as.integer(value$repetition), message = as.character(messages),
++      stringsAsFactors = FALSE)
++  })
++  warning_rows <- Filter(Negate(is.null), warning_rows)
++  warnings <- if (length(warning_rows)) do.call(rbind, warning_rows) else
++    data.frame(model_index = integer(), model = character(), repetition = integer(),
++      message = character(), stringsAsFactors = FALSE)
++  for (message in warnings$message) warning(message, call. = FALSE)
+ 
+   bridge_list <- lapply(seq_len(n_models), function(i) {
+     reps <- raw[vapply(raw, function(value) value$model_index == i, logical(1))]
+@@ -371,7 +391,7 @@
+     stream_kind = stream_plan$stream_kind,
+     n_jobs = n_jobs
+   )
+-  list(bridge_list = bridge_list, failures = failures,
++  list(bridge_list = bridge_list, failures = failures, warnings = warnings,
+        execution = execution)
+ }
+ 
+@@ -910,7 +930,8 @@
+ #'   \code{bayes_restriction_comparison} table containing prior and posterior
+ #'   restriction masses and encompassing-prior Bayes factors.
+ #'   Bridge results retain model/repetition failures in the
+-#'   \code{bridge_failure_records} attribute and execution details, including
++#'   \code{bridge_failure_records} attribute, worker warnings in
++#'   \code{bridge_warning_records}, and execution details, including
+ #'   any realized seed and serial fallback, in \code{bridge_execution}.
+ #'
+ #' @details
+@@ -1129,6 +1150,8 @@
+     stage = character(0), error = character(0), stringsAsFactors = FALSE
+   )
+   bridge_execution_info <- NULL
++  bridge_warning_records <- data.frame(model_index = integer(), model = character(),
++    repetition = integer(), message = character(), stringsAsFactors = FALSE)
+   if (bridge) {
+     dispatched <- .bayes_bridge_dispatch(
+       bridge_contexts, bridge_context_errors, nms,
+@@ -1137,6 +1160,7 @@
+     )
+     bridge_list <- dispatched$bridge_list
+     bridge_failure_records <- dispatched$failures
++    bridge_warning_records <- dispatched$warnings %||% bridge_warning_records
+     bridge_execution_info <- dispatched$execution
+     names(bridge_list) <- nms
+   }
+@@ -1228,6 +1252,7 @@
+   if (bridge) {
+     attr(result, "bridge_list") <- bridge_list
+     attr(result, "bridge_failure_records") <- bridge_failure_records
++    attr(result, "bridge_warning_records") <- bridge_warning_records
+     attr(result, "bridge_execution") <- bridge_execution_info
+   }
+   if (bridge) attr(result, "bridge_context_info") <- bridge_context_info

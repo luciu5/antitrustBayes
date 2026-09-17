@@ -1,0 +1,7 @@
+stage,attempt,status,reason,resolution
+metadata,first-library-load,FAILED,R_LIBS_USER omitted existing standard user library so Rcpp was unavailable,Added existing library path without installing or modifying dependencies
+preflight,first-combined-comparison,FAILED,Archived BF and BS fits have different DGP observations and same-data validation correctly rejected them,Preserved original runner plan and log; version2 benchmarks each public comparison separately without changing data or comparison contract
+independent-review,worker-resume,PENDING,Existing Luna review worker remains pending_init after WSL failures,No new review or integration is claimed
+report-generation,first-summary-regeneration,FAILED,Python CSV booleans True were read as text by R so the strict boolean assertion rejected the summary,Explicit strict logical conversion before the same assertions; numerical gates unchanged
+independent-review,resumed-worker,COMPLETE,Fresh Luna reviewed warning repair RNG handling ordering error retention migration and universe forwarding,No remaining substantive defect reported; updated-source package verification separate
+worker-warnings,original-fork-candidate,FAILED,Two synthetic warnings reached the serial caller but zero reached the fork caller with no returned warning records,Collected worker warnings with model/repetition and re-emitted once in parent; 13 new assertions pass
