@@ -297,9 +297,7 @@ posterior_k <- function(fit, level = 0.95, draws = NULL) {
     if (!is.numeric(n_draw) || length(n_draw) != 1L || !is.finite(n_draw) || n_draw < 1L ||
         n_draw != as.integer(n_draw)) n_draw <- NULL
     if (is.null(draws)) {
-      draws <- rstan::extract(fit@stanfit, pars = c(
-        "posterior_component_prob", "prior_component_prob"
-      ))
+      draws <- .posterior_extract(fit, "posterior_k")
     }
     posterior <- .posterior_k_draw_matrix(
       draws$posterior_component_prob, n_component,

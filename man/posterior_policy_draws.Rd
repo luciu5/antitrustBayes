@@ -26,4 +26,9 @@ counterfactuals can be evaluated from one fit-level draw plan.
 The plan binds quality and role states to their selected posterior rows.
 Reuse it intact across interventions. Changing its indices or latent states
 requires constructing a new plan with this function; fitting again is unnecessary.
+
+New plans also bind a version-2 canonical, name-ordered economic draw
+fingerprint. Unversioned historical plans are validated through their
+version-1 unrestricted-draw fingerprint as an explicit compatibility path;
+they are not reinterpreted as version-2 plans.
 }

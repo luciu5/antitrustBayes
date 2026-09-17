@@ -52,6 +52,7 @@ Collate:
     'decisions.R'
     'estimate.R'
     'helpers.R'
+    'posterior_draw_contract.R'
     'latent_quality_simulation.R'
     'methods.R'
     'model_universe.R'

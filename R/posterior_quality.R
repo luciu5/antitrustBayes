@@ -150,7 +150,7 @@
   as.numeric(x)
 }
 
-.posterior_quality_draws <- function(fit, draws) {
+.posterior_quality_draws <- function(fit, draws, conditioning = "auto") {
   stan_data <- fit@stan_data
   required <- c("group", "log_shareIn")
   missing <- setdiff(required, names(stan_data))
@@ -206,11 +206,7 @@
          call. = FALSE)
   }
   if (is.null(draws)) {
-    if (is.null(fit@stanfit)) {
-      stop("'draws' must be supplied when fit@stanfit is NULL.", call. = FALSE)
-    }
-    draws <- rstan::extract(fit@stanfit,
-                            pars = c("share_mean", "sigma_b_strat", "sigma_share"))
+    draws <- .posterior_extract(fit, "posterior_quality", conditioning)
   }
   if (!is.list(draws)) {
     stop("'draws' must be a list containing share_mean, sigma_b_strat, and sigma_share.",
@@ -284,7 +280,9 @@
          "for the explicitly share-only conditional distribution.", call. = FALSE)
   }
   needed <- c("rho", "sigma_margin", "pred_marginNormInv")
-  if (is.null(draws)) draws <- rstan::extract(fit@stanfit, pars = needed)
+  ## The public caller extracts the complete quality/joint union once.  Keep
+  ## this fallback for internal callers that explicitly invoke the helper.
+  if (is.null(draws)) draws <- .posterior_extract(fit, "posterior_quality", conditioning)
   missing <- setdiff(needed, names(draws))
   if (length(missing)) stop("Joint quality recovery is missing draw field(s): ",
     paste(missing, collapse = ", "), ".", call. = FALSE)
@@ -367,7 +365,8 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
        seed != floor(seed) || seed < 0 || seed > .Machine$integer.max)) {
     stop("'seed' must be a nonnegative integer.", call. = FALSE)
   }
-  parsed <- .posterior_quality_draws(fit, draws)
+  if (is.null(draws)) draws <- .posterior_extract(fit, "posterior_quality", conditioning)
+  parsed <- .posterior_quality_draws(fit, draws, conditioning)
   joint <- .posterior_quality_joint_draws(fit, parsed, draws, conditioning)
   n_available <- parsed$n_draw
   n_use <- if (is.null(n_draws)) n_available else as.integer(n_draws)

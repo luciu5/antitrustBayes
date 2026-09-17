@@ -69,25 +69,19 @@
   stan_data <- fit@stan_data
   value <- .lq_or(fit@metadata$quality_parameterization,
                   attr(stan_data, "quality_parameterization", exact = TRUE))
+  if (is.null(value)) value <- stan_data$quality_parameterization
   if (is.numeric(value) && length(value) == 1L) {
     value <- if (value == 1) "sampled" else if (value == 2) "collapsed" else NULL
   }
   if (is.character(value) && length(value) == 1L && value %in% c("sampled", "collapsed")) return(value)
   if (isTRUE(fit@metadata$bayes_is_collapsed_quality)) return("collapsed")
-  if (identical(stan_data$quality_parameterization, 1L)) return("sampled")
-  if (identical(stan_data$quality_parameterization, 2L)) return("collapsed")
   stop("Unable to resolve the fitted quality parameterization.", call. = FALSE)
 }
 
 .lq_draw_count <- function(fit, draws = NULL) {
   if (methods::is(fit, "BayesSpecifiedFit")) return(as.integer(fit@params$n_draws))
-  if (is.null(draws)) draws <- rstan::extract(fit@stanfit)
-  x <- draws$a_market
-  n <- if (is.null(dim(x))) length(x) else dim(x)[[1L]]
-  if (length(n) != 1L || !is.finite(n) || n < 1L || n != as.integer(n)) {
-    stop("The fitted object contains no posterior draws.", call. = FALSE)
-  }
-  as.integer(n)
+  if (is.null(draws)) draws <- .posterior_extract(fit, "simulation")
+  .posterior_draw_count_from_draws(draws, fit)
 }
 
 .lq_subset_draws <- function(draws, indices, n_total) {
@@ -183,7 +177,25 @@
                  role_mapping = "mixture", fixed_k = NULL, role_offset = 0L)
 }
 
-.lq_fit_fingerprint <- function(fit, draws = NULL) {
+.lq_fit_fingerprint <- function(fit, draws = NULL, version = 2L) {
+  if (length(version) != 1L || !is.numeric(version) ||
+      !is.finite(version) || version != as.integer(version) ||
+      !version %in% c(1L, 2L)) {
+    stop("Unsupported latent-quality fit fingerprint version.", call. = FALSE)
+  }
+  version <- as.integer(version)
+  if (version == 1L && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
+    if (is.null(fit@stanfit)) stop("Cannot validate a legacy plan without its Stan fit.", call. = FALSE)
+    draws <- rstan::extract(fit@stanfit)
+  }
+  if (version == 2L && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
+    draws <- .posterior_extract(fit, "policy_plan")
+  }
+  canonical_draws <- if (version == 1L || methods::is(fit, "BayesSpecifiedFit")) {
+    draws
+  } else {
+    .posterior_canonical_draws(draws, fit, "policy_plan")
+  }
   payload <- list(
     data = fit@data,
     demand_model = as.character(fit@demand_model),
@@ -193,20 +205,22 @@
     stan_data = if (methods::is(fit, "BayesSpecifiedFit")) NULL else fit@stan_data,
     params = if (methods::is(fit, "BayesSpecifiedFit")) fit@params else NULL,
     market = if (methods::is(fit, "BayesSpecifiedFit")) fit@market else NULL,
-    draws = if (methods::is(fit, "BayesSpecifiedFit")) NULL else draws
+    draws = if (methods::is(fit, "BayesSpecifiedFit")) NULL else canonical_draws
   )
+  if (version == 2L) payload$fit_signature_version <- 2L
   digest::digest(payload, algo = "xxhash64", serialize = TRUE)
 }
 
 .lq_plan_signature <- function(fit, groups, n_total, mode, draws = NULL) {
   list(
+    fit_signature_version = 2L,
     demand_model = as.character(fit@demand_model),
     market_side = as.character(fit@market_side),
     posterior_draws = as.integer(n_total),
     group_labels = as.character(groups),
     quality_mode = mode,
     structure = as.character(.lq_or(fit@metadata$structure, "simultaneous")),
-    fit_fingerprint = .lq_fit_fingerprint(fit, draws)
+    fit_fingerprint = .lq_fit_fingerprint(fit, draws, version = 2L)
   )
 }
 
@@ -217,22 +231,11 @@
                  algo = "xxhash64", serialize = TRUE)
 }
 
-#' Build a reusable posterior draw plan for policy simulation
-#'
-#' The plan samples posterior indices once and, for collapsed fits, draws one
-#' conditional global quality vector per selected parameter draw. Exact native
-#' ordered-k fits also receive one role realization per market and draw. Reuse
-#' the returned object in observed-anchor and latent-quality simulations.
-#'
-#' @param fit A \code{BayesFit}.
-#' @param n_draws Number of posterior draws, defaulting to at most 200.
-#' @param seed Optional nonnegative integer random seed.
-#' @return A reusable object of class \code{bayes_policy_draw_plan}.
-#' @export
-posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
+#' Internal draw-plan constructor.  `draws` is the policy-plan contract union;
+#' the public wrapper below performs one selected extraction and delegates here.
+.lq_make_policy_plan <- function(fit, draws, n_draws = NULL, seed = NULL) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.", call. = FALSE)
   seed <- .lq_validate_seed(seed)
-  draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else rstan::extract(fit@stanfit)
   n_total <- .lq_draw_count(fit, draws)
   if (is.null(n_draws)) n_draws <- min(200L, n_total)
   if (length(n_draws) != 1L || !is.finite(n_draws) || n_draws < 1L ||
@@ -246,32 +249,47 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
   role_seed <- if (is.null(seed)) NULL else as.integer((as.double(seed) + 2) %% .Machine$integer.max)
   k_cache <- .lq_with_seed(role_seed, function() .lq_role_cache(fit, draws, draw_indices))
   plan <- structure(list(
-    draw_indices = as.integer(draw_indices),
-    quality_draws = quality$draws,
-    quality_source = quality$source,
-    quality_conditioning = quality$conditioning,
-    quality_mode = quality$mode,
-    group_labels = quality$group_labels,
-    k_cache = k_cache,
-    role_mapping = "mixture",
-    fixed_k = NULL,
+    draw_indices = as.integer(draw_indices), quality_draws = quality$draws,
+    quality_source = quality$source, quality_conditioning = quality$conditioning,
+    quality_mode = quality$mode, group_labels = quality$group_labels,
+    k_cache = k_cache, role_mapping = "mixture", fixed_k = NULL,
     role_offset = 0L,
     fit_signature = .lq_plan_signature(fit, quality$group_labels, n_total,
                                        quality$mode, draws = draws),
     metadata = list(
       posterior_draws_available = as.integer(n_total),
       posterior_draws_requested = as.integer(length(draw_indices)),
-      draw_indices = as.integer(draw_indices),
-      quality_source = quality$source,
+      draw_indices = as.integer(draw_indices), quality_source = quality$source,
       quality_conditioning = quality$conditioning,
-      quality_parameterization = quality$mode,
-      group_labels = quality$group_labels,
-      role_mapping = "mixture", role_offset = 0L,
-      exact_k = !is.null(k_cache)
+      quality_parameterization = quality$mode, group_labels = quality$group_labels,
+      role_mapping = "mixture", role_offset = 0L, exact_k = !is.null(k_cache)
     )
   ), class = c("bayes_policy_draw_plan", "list"))
   plan$fit_signature$latent_state_fingerprint <- .lq_plan_state_fingerprint(plan)
   plan
+}
+
+#' Build a reusable posterior draw plan for policy simulation
+#'
+#' The plan samples posterior indices once and, for collapsed fits, draws one
+#' conditional global quality vector per selected parameter draw. Exact native
+#' ordered-k fits also receive one role realization per market and draw. Reuse
+#' the returned object in observed-anchor and latent-quality simulations.
+#'
+#' @param fit A \code{BayesFit}.
+#' @param n_draws Number of posterior draws, defaulting to at most 200.
+#' @param seed Optional nonnegative integer random seed.
+#' @return A reusable object of class \code{bayes_policy_draw_plan}.
+#' @details New plans bind a version-2 canonical, name-ordered economic draw
+#' fingerprint. Unversioned historical plans are validated through their
+#' version-1 unrestricted-draw fingerprint as an explicit compatibility path;
+#' they are not reinterpreted as version-2 plans.
+#' @export
+posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
+  if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.", call. = FALSE)
+  draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else
+    .posterior_extract(fit, "policy_plan")
+  .lq_make_policy_plan(fit, draws, n_draws = n_draws, seed = seed)
 }
 
 .lq_validate_plan <- function(fit, plan, n_draws = NULL,
@@ -281,8 +299,15 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
     stop("'draw_plan' must be created by posterior_policy_draws().", call. = FALSE)
   }
   groups <- .lq_group_levels(fit)
-  draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else {
-    if (is.null(draws)) rstan::extract(fit@stanfit) else draws
+  signature_version <- if (is.list(plan$fit_signature) &&
+                           !is.null(plan$fit_signature$fit_signature_version))
+    as.integer(plan$fit_signature$fit_signature_version) else 1L
+  if (signature_version == 1L && !methods::is(fit, "BayesSpecifiedFit")) {
+    ## Explicit compatibility path: v1 hashes the old unrestricted extract.
+    if (is.null(fit@stanfit)) stop("Cannot validate a legacy plan without its Stan fit.", call. = FALSE)
+    draws <- rstan::extract(fit@stanfit)
+  } else if (!methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
+    draws <- .posterior_extract(fit, "policy_plan")
   }
   n_total <- .lq_draw_count(fit, draws)
   sig <- plan$fit_signature
@@ -292,8 +317,10 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
       !identical(as.character(sig$market_side), as.character(fit@market_side)) ||
       !identical(as.character(sig$quality_mode), as.character(.lq_quality_mode(fit))) ||
       !identical(as.character(sig$structure), as.character(.lq_or(fit@metadata$structure, "simultaneous"))) ||
-      !identical(as.character(sig$fit_fingerprint),
-                 as.character(.lq_fit_fingerprint(fit, draws)))) {
+      !identical(as.character(sig$fit_fingerprint), as.character(
+        .lq_fit_fingerprint(fit, draws, version = signature_version))) ||
+      !identical(as.integer(signature_version), as.integer(
+        if (is.null(sig$fit_signature_version)) 1L else sig$fit_signature_version))) {
     stop("'draw_plan' was created for a different fit or group map.", call. = FALSE)
   }
   di <- as.integer(plan$draw_indices)

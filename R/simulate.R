@@ -965,7 +965,19 @@ NULL
   }
   mc.cores <- .validate_mc_cores(mc.cores)
   specified <- methods::is(object, "BayesSpecifiedFit")
-  draws <- if (specified) NULL else rstan::extract(object@stanfit)
+  legacy_plan <- !is.null(draw_plan) &&
+    (!is.list(draw_plan) || !is.list(draw_plan$fit_signature) ||
+     is.null(draw_plan$fit_signature$fit_signature_version) ||
+     as.integer(draw_plan$fit_signature$fit_signature_version) == 1L)
+  draws <- if (specified) NULL else if (legacy_plan) {
+    ## Version-1 plans hash the old unrestricted extract.  This is the one
+    ## deliberate compatibility exception to the selective draw contract.
+    rstan::extract(object@stanfit)
+  } else .posterior_extract(
+    object,
+    if (!is.null(draw_plan) || identical(demand_anchoring, "latent_quality"))
+      "policy_plan" else "simulation"
+  )
   setup <- if (specified) {
     .specified_simulation_units(object, market, year)
   } else {
@@ -989,7 +1001,7 @@ NULL
     draw_indices <- as.integer(plan$draw_indices)
     n_draws <- length(draw_indices)
   } else if (identical(demand_anchoring, "latent_quality")) {
-    plan <- posterior_policy_draws(object, n_draws = n_draws)
+    plan <- .lq_make_policy_plan(object, draws, n_draws = n_draws)
     draw_indices <- as.integer(plan$draw_indices)
     n_draws <- length(draw_indices)
   } else {

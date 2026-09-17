@@ -1,0 +1,256 @@
+## Central contract for extracting posterior quantities used by policy code.
+## Keeping this in one place makes the amount of data pulled from rstan
+## explicit, and gives callers a common missing-field/alias failure.
+
+.posterior_fit_draw_names <- function(fit) {
+  if (methods::is(fit, "BayesSpecifiedFit") || is.null(fit@stanfit)) {
+    return(character())
+  }
+  st <- fit@stanfit
+  slots <- methods::slotNames(st)
+  ## `model_pars` describes everything compiled into the Stan model. The
+  ## retained `sim$pars_oi` list is authoritative for a serialized fit:
+  ## compiled fields can be absent from the retained draws.
+  if ("sim" %in% slots && is.list(st@sim) &&
+      is.character(st@sim$pars_oi) && length(st@sim$pars_oi)) {
+    return(unique(as.character(st@sim$pars_oi)))
+  }
+  if ("model_pars" %in% slots && is.character(st@model_pars)) {
+    return(unique(as.character(st@model_pars)))
+  }
+  character()
+}
+
+.posterior_contract_structure <- function(fit) {
+  md <- fit@metadata
+  sd <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else fit@stan_data
+  value <- md$structure %||% attr(sd, "structure", exact = TRUE)
+  if (is.null(value) && !is.null(sd) && isTRUE(sd$use_cutoff == 1L)) value <- "fringe"
+  if (is.null(value)) value <- "simultaneous"
+  as.character(value[[1L]])
+}
+
+.posterior_contract_partition <- function(fit) {
+  md <- fit@metadata
+  sd <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else fit@stan_data
+  value <- md$partition_prior %||% attr(sd, "partition_prior", exact = TRUE)
+  if (is.null(value)) value <- "cutoff"
+  as.character(value[[1L]])
+}
+
+.posterior_contract_quality <- function(fit) {
+  if (methods::is(fit, "BayesSpecifiedFit")) return("none")
+  stan_value <- fit@stan_data$quality_parameterization
+  value <- fit@metadata$quality_parameterization %||%
+    attr(fit@stan_data, "quality_parameterization", exact = TRUE) %||%
+    stan_value
+  if (is.numeric(value) && length(value) == 1L) {
+    value <- if (value == 1) "sampled" else if (value == 2) "collapsed" else NA_character_
+  }
+  if (is.character(value) && length(value) == 1L &&
+      value %in% c("sampled", "collapsed")) return(value)
+  if (isTRUE(fit@metadata$bayes_is_collapsed_quality)) return("collapsed")
+  "none"
+}
+
+.posterior_contract_rho_active <- function(fit) {
+  if (methods::is(fit, "BayesSpecifiedFit")) return(FALSE)
+  isTRUE(fit@stan_data$use_rho == 1L) &&
+    isTRUE(fit@stan_data$likelihood_mode == 1L) &&
+    length(fit@stan_data$margin_idx) > 0L
+}
+
+.posterior_contract_native <- function(fit) {
+  structure <- .posterior_contract_structure(fit)
+  identical(structure, "stackelberg") ||
+    (identical(structure, "fringe") &&
+       identical(.posterior_contract_partition(fit), "ordered_k"))
+}
+
+## Return canonical names and the actual Stan names available for this fit.
+## `optional` fields are requested when present, preserving old fixtures that
+## predate an optional leader-prior generated quantity.
+.posterior_contract <- function(fit,
+                                purpose = c("simulation", "policy_plan",
+                                            "native_model", "posterior_quality",
+                                            "cutoff_summary", "posterior_k"),
+                                conditioning = "auto") {
+  purpose <- match.arg(purpose)
+  if (methods::is(fit, "BayesSpecifiedFit")) {
+    return(list(canonical = character(), actual = character(),
+                aliases = character(), purpose = purpose))
+  }
+  structure <- .posterior_contract_structure(fit)
+  partition <- .posterior_contract_partition(fit)
+  native <- .posterior_contract_native(fit)
+  quality <- .posterior_contract_quality(fit)
+  required <- character()
+  optional <- character()
+  if (purpose %in% c("simulation", "policy_plan", "native_model")) {
+    required <- c(required, "a_market", "s0_prob")
+    if (structure %in% c("fringe", "stackelberg") &&
+        identical(partition, "cutoff")) required <- c(required, "cutoff_share")
+    if (native) required <- c(required, "posterior_component_prob")
+    if (length(fit@supply_model) == 1L && as.integer(fit@supply_model) == 5L)
+      required <- c(required, "bargaining_power")
+    if (purpose == "policy_plan") {
+      if (quality == "sampled") {
+        required <- c(required, "share_mean")
+        ## One global group is deterministically centered at zero and the
+        ## historical recovery path intentionally accepts no b_quality_all.
+        n_group <- fit@stan_data$N_group %||%
+          if (!is.null(fit@stan_data$group)) max(fit@stan_data$group) else NA_integer_
+        if (length(n_group) == 1L && is.finite(n_group) && n_group > 1L)
+          required <- c(required, "b_quality_all")
+      }
+      if (quality == "collapsed") {
+        required <- c(required, "share_mean", "sigma_b_strat", "sigma_share")
+        if (.posterior_contract_rho_active(fit) &&
+            identical(conditioning, "auto") &&
+            !(native || identical(partition, "ordered_k"))) {
+          required <- c(required, "rho", "sigma_margin", "pred_marginNormInv")
+        }
+      }
+    }
+  }
+  if (purpose == "posterior_quality") {
+    if (!identical(quality, "collapsed")) {
+      stop("posterior_quality extraction requires a collapsed-quality fit.", call. = FALSE)
+    }
+    required <- c("share_mean", "sigma_b_strat", "sigma_share")
+    if (.posterior_contract_rho_active(fit) && identical(conditioning, "auto") &&
+        !(native || identical(partition, "ordered_k"))) {
+      required <- c(required, "rho", "sigma_margin", "pred_marginNormInv")
+    }
+  }
+  if (purpose == "posterior_k") {
+    if (!native || !identical(partition, "ordered_k")) {
+      stop("posterior_k extraction requires an exact ordered-k fit.", call. = FALSE)
+    }
+    required <- c("posterior_component_prob", "prior_component_prob")
+  }
+  if (purpose == "cutoff_summary") {
+    if (structure %in% c("stackelberg", "fringe") &&
+        identical(partition, "ordered_k")) {
+      required <- c("posterior_component_prob", "prior_component_prob",
+                    "firm_leader_prob", "s0_prob")
+      optional <- c(optional, "prior_firm_leader_prob")
+      ## A direct ordered-k Stackelberg fit has no cutoff parameter.  The
+      ## stackelberg summary only uses cutoff_share for a cutoff-prior fit.
+    } else if (identical(structure, "stackelberg")) {
+      ## Historical Stackelberg cutoff fits include both the smooth cutoff
+      ## quantities and the component/leader probabilities used by the
+      ## summary. Preserve that supported contract even though new fitting
+      ## APIs prefer direct ordered-k Stackelberg specifications.
+      required <- c("posterior_component_prob", "prior_component_prob",
+                    "firm_leader_prob", "cutoff_share", "s0_prob")
+    } else {
+      required <- c("cutoff_share", "s0_prob")
+    }
+    if (identical(as.character(fit@demand_model), "ces"))
+      required <- c(required, "R0_prob")
+  }
+  required <- unique(required)
+  optional <- setdiff(unique(optional), required)
+  available <- .posterior_fit_draw_names(fit)
+  alternatives <- list(s0_prob = c("s0_prob", "s0", "s0_logit"))
+  resolve <- function(canonical, optional = FALSE) {
+    candidates <- alternatives[[canonical]] %||% canonical
+    hit <- candidates[candidates %in% available]
+    if (length(hit)) return(hit[[1L]])
+    if (optional) return(NA_character_)
+    ## Test doubles and a few old serialized objects do not expose model_pars;
+    ## request the canonical name and validate the returned list below.
+    if (!length(available)) return(canonical)
+    stop("Estimated fit is missing required posterior draw field(s): ",
+         paste(canonical, collapse = ", "), ".", call. = FALSE)
+  }
+  actual_required <- vapply(required, resolve, character(1), optional = FALSE)
+  actual_optional <- if (length(optional)) {
+    vapply(optional, resolve, character(1), optional = TRUE)
+  } else character()
+  keep_optional <- !is.na(actual_optional)
+  actual <- c(actual_required, actual_optional[keep_optional])
+  canonical <- c(required, optional[keep_optional])
+  names(actual) <- canonical
+  list(canonical = canonical, actual = unname(actual), aliases = actual_required,
+       required = required, optional = optional[keep_optional], purpose = purpose)
+}
+
+.posterior_normalize_draw_names <- function(draws, contract) {
+  if (!is.list(draws)) stop("Posterior extraction did not return a draw list.", call. = FALSE)
+  out <- vector("list", length(contract$canonical))
+  names(out) <- contract$canonical
+  for (i in seq_along(contract$canonical)) {
+    canonical <- contract$canonical[[i]]
+    actual <- contract$actual[[i]]
+    candidates <- if (identical(canonical, "s0_prob"))
+      c(canonical, "s0", "s0_logit") else canonical
+    value <- NULL
+    source_name <- NULL
+    ## Test doubles sometimes return a legacy alias even when the contract
+    ## requested the canonical name. Prefer the requested retained name, then
+    ## use a returned alias for the same compatibility behavior as simulate().
+    returned <- unique(c(actual, candidates))
+    returned <- returned[!is.na(returned) & returned %in% names(draws)]
+    for (candidate in returned) {
+      if (!is.null(draws[[candidate]])) {
+        value <- draws[[candidate]]
+        source_name <- candidate
+        break
+      }
+    }
+    if (is.null(value) || length(value) == 0L) {
+      if (canonical %in% contract$optional) {
+        out[i] <- list(NULL)
+        next
+      }
+      stop("Posterior extraction is missing required field(s): ", canonical, ".",
+           call. = FALSE)
+    }
+    ## `s0` and `s0_logit` were historically saved on the logit scale. Only
+    ## the alias-to-canonical rename is transformed; native `s0_prob` remains
+    ## untouched. plogis preserves vector/matrix dimensions.
+    if (identical(canonical, "s0_prob") &&
+        source_name %in% c("s0", "s0_logit")) {
+      value <- stats::plogis(value)
+    }
+    out[[i]] <- value
+  }
+  out
+}
+
+.posterior_extract <- function(fit, purpose = "simulation", conditioning = "auto") {
+  if (methods::is(fit, "BayesSpecifiedFit")) return(NULL)
+  contract <- .posterior_contract(fit, purpose, conditioning)
+  ## A NULL Stan slot is only useful for test doubles, where rstan::extract is
+  ## mocked.  A real object still fails in rstan itself; returned fields are
+  ## validated below in either case.
+  raw <- rstan::extract(fit@stanfit, pars = contract$actual)
+  .posterior_normalize_draw_names(raw, contract)
+}
+
+.posterior_draw_count_from_draws <- function(draws, fit = NULL) {
+  if (!is.list(draws) || !length(draws)) {
+    stop("The fitted object contains no posterior draws.", call. = FALSE)
+  }
+  ## The first dimension of retained `a_market` is the historical draw axis.
+  ## Metadata can describe the original fit rather than a selected/subset
+  ## draw list, so it must not override the actual array dimensions.
+  fields <- unique(c("a_market", names(draws)))
+  for (field in fields) {
+    x <- draws[[field]]
+    if (is.null(x)) next
+    d <- dim(x)
+    n <- if (is.null(d)) length(x) else d[[1L]]
+    if (length(n) == 1L && is.finite(n) && n >= 1L && n == as.integer(n))
+      return(as.integer(n))
+  }
+  stop("The fitted object contains no posterior draws.", call. = FALSE)
+}
+
+.posterior_canonical_draws <- function(draws, fit,
+                                       purpose = "policy_plan") {
+  contract <- .posterior_contract(fit, purpose)
+  .posterior_normalize_draw_names(draws, contract)
+}

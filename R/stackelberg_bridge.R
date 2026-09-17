@@ -132,7 +132,7 @@
       k_scope = p$k_scope, supply_model = p$supply_model
     ))
   }
-  dr <- if (is.null(draws)) rstan::extract(fit@stanfit) else draws
+  dr <- if (is.null(draws)) .posterior_extract(fit, "native_model") else draws
   p <- .estimated_draw_params(fit, dr, draw, unit)
   list(
     alpha = p$alpha[[1L]], gamma = p$gamma[[1L]], s0 = p$s0[[1L]],
@@ -202,7 +202,7 @@
     } else d$mky_to_partition_unit[unit$market_year_index]
     cs <- d$partition_unit_start[pu]
     ce <- cs + d$partition_unit_count[pu] - 1L
-    dr <- if (is.null(draws)) rstan::extract(fit@stanfit) else draws
+    dr <- if (is.null(draws)) .posterior_extract(fit, "native_model") else draws
     if (is.null(dr$a_market)) {
       stop("Estimated fit is missing the demand-draw index needed for Stackelberg reconstruction.",
            call. = FALSE)
@@ -311,9 +311,8 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     stop("native Bayesian reconstruction requires coordination >= 0.0.0.9003.")
   }
   unit <- .stack_bridge_units(fit, market, year)
-  draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else {
-    rstan::extract(fit@stanfit)
-  }
+  draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else
+    .posterior_extract(fit, "native_model")
   .stack_bridge_model_draw(
     fit = fit, unit = unit, draw = as.integer(draw),
     role_mapping = role_mapping, fixed_k = fixed_k, role_offset = role_offset,
@@ -459,9 +458,8 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     stop("native Bayesian reconstruction requires coordination >= 0.0.0.9003.")
   }
   unit <- .stack_bridge_units(fit, market, year)
-  draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else {
-    rstan::extract(fit@stanfit)
-  }
+  draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else
+    .posterior_extract(fit, "native_model")
   .core_fringe_bridge_model_draw(
     fit = fit, unit = unit, draw = as.integer(draw),
     role_mapping = role_mapping, fixed_k = fixed_k, role_offset = role_offset,
@@ -608,17 +606,8 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
   draws <- NULL
   ndraw <- NULL
   if (estimated) {
-    gq_pars <- if (direct || stack) {
-      c("posterior_component_prob", "prior_component_prob",
-        "firm_leader_prob", "prior_firm_leader_prob", "s0_prob")
-    } else {
-      c("cutoff_share", "s0_prob")
-    }
-    if (stack && !direct) gq_pars <- c(gq_pars, "cutoff_share")
-    if (identical(fit@demand_model, "ces")) gq_pars <- c(gq_pars, "R0_prob")
-    draws <- rstan::extract(fit@stanfit, pars = gq_pars)
-    a_market <- rstan::extract(fit@stanfit, pars = "a_market")$a_market
-    ndraw <- if (is.null(dim(a_market))) length(a_market) else dim(a_market)[1L]
+    draws <- .posterior_extract(fit, "cutoff_summary")
+    ndraw <- .posterior_draw_count_from_draws(draws, fit)
     if (!is.finite(ndraw) || ndraw < 1L) stop("The fitted object contains no posterior draws.")
   }
 

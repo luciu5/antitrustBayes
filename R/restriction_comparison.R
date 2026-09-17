@@ -180,9 +180,7 @@
   if (length(n_draw) != 1L || !is.numeric(n_draw) || !is.finite(n_draw) ||
       n_draw < 1 || n_draw != as.integer(n_draw)) n_draw <- NULL
   if (is.null(draws)) {
-    draws <- rstan::extract(fit@stanfit, pars = c(
-      "posterior_component_prob", "prior_component_prob"
-    ))
+    draws <- .posterior_extract(fit, "posterior_k")
   }
   if (!is.list(draws)) {
     stop("'draws' must be a list containing generated ordered-k probabilities.",
