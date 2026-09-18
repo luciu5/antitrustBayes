@@ -51,6 +51,13 @@
 #'   primitive. It supports output Logit/CES and input Logit. For input Logit,
 #'   the native positive dollar markdown is retained and the observed
 #'   value/procurement-price primitive is held fixed.
+#' @param price_domain Counterfactual rate domain. The default
+#'   \code{"positive"} retains existing solvers. \code{"real"} permits
+#'   finite negative or zero solved rates for input Logit Cournot native exact
+#'   fringe or Stackelberg models, using coordination >= 0.0.0.9004. It is an
+#'   explicit domain extension, not a rate-floor model, and leaves the fitted
+#'   posterior unchanged. Unsupported combinations are rejected. Percentage
+#'   changes from zero baseline rates are undefined; use level-rate changes.
 #' @param draw_plan Optional object returned by
 #'   \code{\link{posterior_policy_draws}}. A plan fixes posterior draw,
 #'   quality, and exact-k role realizations so multiple scenarios can reuse one
@@ -638,11 +645,12 @@ NULL
                                       year, mc.cores, role_mapping, fixed_k,
                                       role_offset, leadersPost, corePost, dots,
                                       demand_anchoring, draw_plan, .call, setup,
-                                      draws, draw_indices) {
+                                      draws, draw_indices, price_domain = "positive") {
   if (!requireNamespace("coordination", quietly = TRUE) ||
       utils::packageVersion("coordination") < "0.0.0.9003") {
     stop("native Bayesian reconstruction requires coordination >= 0.0.0.9003.")
   }
+  .require_real_rate_coordination(price_domain)
   if (length(dots)) {
     stop("Unsupported native hard-role simulation argument(s): ",
          paste(names(dots), collapse = ", "), call. = FALSE)
@@ -679,7 +687,8 @@ NULL
   }
   all_sims <- price_pre <- price_post <- price_change <- list()
   shares_pre <- shares_post <- product_labels <- failures <- list()
-  latent_diagnostics <- list()
+  latent_diagnostics <- failure_details <- undefined_relative_change <- list()
+  signed_relative_change <- list()
   n_valid <- integer(length(setup$info)); names(n_valid) <- setup$units$unit_id
   for (u in seq_along(setup$info)) {
     unit <- setup$info[[u]]; idx <- unit$idx; unit_id <- unit$unit_id
@@ -730,14 +739,14 @@ NULL
       leadersPost, idx, unit_id, unit$market_id, nrow(setup$data), arg = "leadersPost")
     core_unit <- if (is.null(corePost)) NULL else .select_unit_arg(
       corePost, idx, unit_id, unit$market_id, nrow(setup$data), arg = "corePost")
-    run_one <- function(draw_index, draw_pos) {
+    run_one <- function(draw_index, draw_pos, context) {
       k <- cache[[draw_pos]][[unit_id]]
       if (identical(structure_name, "stackelberg")) {
         native <- .stack_bridge_model_draw(
           object, unit = bridge_unit, draw = draw_index,
           fixed_k = k, role_mapping = "map", role_offset = 0L,
           insideSize = inside, priceOutside = p0, labels = labels_unit,
-          draws = draws, dots = list()
+          draws = draws, dots = list(), price_domain = price_domain
         )
         if (identical(demand_anchoring, "latent_quality")) {
           params <- if (methods::is(object, "BayesSpecifiedFit")) {
@@ -749,18 +758,21 @@ NULL
             object, draws, draw_index, bridge_unit, draw_plan,
             market_object, params
           )
+          context$stage <- "latent_pre_equilibrium"
           latent <- .lq_apply_to_native(native, score_info, draw_plan)
           native <- latent$native
           latent_metadata <- c(latent$metadata, list(k = as.integer(k)))
         } else {
           latent_metadata <- NULL
         }
+        context$stage <- "scenario_construction"
         sc <- .stack_native_scenario(
           native, scenario = scenario,
           owner_post = if (methods::is(scenario, "Counterfactual")) NULL else scenario,
           mc_delta = mc_delta_unit, subset = subset_unit,
           leaders_post = leaders_unit
         )
+        context$stage <- "post_equilibrium"
         result <- coordination::stackelberg_simulate(
           native, ownerPost = sc$ownerPost, leadersPost = sc$leadersPost,
           mcDelta = sc$mcDelta, subset = sc$subset
@@ -770,7 +782,7 @@ NULL
           object, unit = bridge_unit, draw = draw_index,
           fixed_k = k, role_mapping = "map", role_offset = 0L,
           insideSize = inside, priceOutside = p0, labels = labels_unit,
-          draws = draws, dots = list()
+          draws = draws, dots = list(), price_domain = price_domain
         )
         if (identical(demand_anchoring, "latent_quality")) {
           params <- if (methods::is(object, "BayesSpecifiedFit")) {
@@ -782,16 +794,19 @@ NULL
             object, draws, draw_index, bridge_unit, draw_plan,
             market_object, params
           )
+          context$stage <- "latent_pre_equilibrium"
           latent <- .lq_apply_to_native(native, score_info, draw_plan)
           native <- latent$native
           latent_metadata <- c(latent$metadata, list(k = as.integer(k)))
         } else {
           latent_metadata <- NULL
         }
+        context$stage <- "scenario_construction"
         sc <- .core_native_scenario(
           native, scenario = scenario, mc_delta = mc_delta_unit,
           subset = subset_unit, core_post = core_unit
         )
+        context$stage <- "post_equilibrium"
         result <- coordination::core_fringe_simulate(
           native, ownerPost = sc$ownerPost, corePost = sc$corePost,
           mcDelta = sc$mcDelta, subset = sc$subset
@@ -802,15 +817,30 @@ NULL
     }
     run_safe <- function(draw_pos) {
       draw_index <- draw_indices[[draw_pos]]
-      tryCatch(list(result = run_one(draw_index, draw_pos), error = NA_character_),
-               error = function(e) list(result = NULL, error = conditionMessage(e)))
+      context <- new.env(parent = emptyenv())
+      context$stage <- "baseline_construction"
+      tryCatch(list(result = run_one(draw_index, draw_pos, context),
+                    error = NA_character_, failure_detail = NULL),
+               error = function(e) list(result = NULL, error = conditionMessage(e),
+                 failure_detail = .bayes_sim_failure_detail(
+                   e, context$stage, draw_index)))
     }
     raw <- if (length(draw_indices) == 1L || mc.cores == 1L) {
       lapply(seq_along(draw_indices), run_safe)
     } else {
       parallel::mclapply(seq_along(draw_indices), run_safe, mc.cores = mc.cores)
     }
-    assembled <- .assemble_unit(raw, market_object)
+    malformed <- !vapply(raw, function(x) {
+      is.list(x) && all(c("result", "error") %in% names(x)) &&
+        is.character(x$error) && length(x$error) == 1L
+    }, logical(1))
+    for (i in which(malformed)) {
+      message <- "worker process did not return a result"
+      raw[[i]] <- list(result = NULL, error = message,
+        failure_detail = .bayes_sim_failure_detail(
+          simpleError(message), "worker_process", draw_indices[[i]]))
+    }
+    assembled <- .assemble_unit(raw, market_object, draw_indices)
     all_sims[[unit_id]] <- assembled$results
     price_pre[[unit_id]] <- assembled$price_pre
     price_post[[unit_id]] <- assembled$price_post
@@ -820,6 +850,9 @@ NULL
     product_labels[[unit_id]] <- assembled$labels
     failures[[unit_id]] <- assembled$failures
     latent_diagnostics[[unit_id]] <- assembled$latent_diagnostics
+    failure_details[[unit_id]] <- assembled$failure_details
+    undefined_relative_change[[unit_id]] <- assembled$undefined_relative_change
+    signed_relative_change[[unit_id]] <- assembled$signed_relative_change
     n_valid[[unit_id]] <- assembled$n_valid
   }
   n_failed <- sum(vapply(failures, function(x) sum(!is.na(x)), integer(1)))
@@ -832,6 +865,17 @@ NULL
   } else {
     "coordination::core_fringe_simulate"
   }
+  metadata$price_domain <- price_domain
+  metadata$nonpositive_rates <- list(
+    pre = lapply(price_pre, function(x) is.finite(x) & x <= 0),
+    post = lapply(price_post, function(x) is.finite(x) & x <= 0))
+  metadata$failure_details <- failure_details
+  metadata$undefined_relative_price_change <- undefined_relative_change
+  metadata$signed_relative_price_change <- signed_relative_change
+  metadata$price_level_change <- Map(`-`, price_post, price_pre)
+  metadata$policy_distribution_conditioning <- if (n_failed) {
+    "successful_draws_only"
+  } else "all_requested_draws"
   metadata$role_mapping <- role_mapping
   metadata$role_offset <- as.integer(role_offset)
   metadata$k_cache <- cache
@@ -886,29 +930,35 @@ NULL
   )
 }
 
-.assemble_unit <- function(raw, market_object) {
+.assemble_unit <- function(raw, market_object, draw_indices = NULL) {
   results <- lapply(raw, `[[`, "result")
   failures <- vapply(raw, `[[`, character(1), "error")
+  failure_details <- lapply(raw, function(x) x$failure_detail)
   values <- vector("list", length(results))
   reference_labels <- NULL
+  assembly_failure <- function(error, i) .bayes_sim_failure_detail(
+    error, "result_assembly",
+    if (is.null(draw_indices)) NA_integer_ else draw_indices[[i]])
 
   for (i in seq_along(results)) {
     if (is.null(results[[i]])) next
-    values[[i]] <- tryCatch(
+    values[i] <- list(tryCatch(
       .result_values(results[[i]], market_object$labels),
       error = function(e) {
         failures[[i]] <<- conditionMessage(e)
-        results[[i]] <<- NULL
+        failure_details[[i]] <<- assembly_failure(e, i)
+        results[i] <<- list(NULL)
         NULL
       }
-    )
+    ))
     if (is.null(values[[i]])) next
     if (is.null(reference_labels)) {
       reference_labels <- values[[i]]$labels
     } else if (!identical(values[[i]]$labels, reference_labels)) {
       failures[[i]] <- "The simulated result has inconsistent product labels or dimensions."
-      results[[i]] <- NULL
-      values[[i]] <- NULL
+      failure_details[[i]] <- assembly_failure(simpleError(failures[[i]]), i)
+      results[i] <- list(NULL)
+      values[i] <- list(NULL)
     }
   }
 
@@ -925,13 +975,20 @@ NULL
     shares_pre[i, ] <- values[[i]]$shares_pre
     shares_post[i, ] <- values[[i]]$shares_post
   }
+  relative_change <- price_post / price_pre - 1
+  undefined_relative_change <- is.finite(price_pre) & price_pre == 0 &
+    is.finite(price_post)
+  relative_change[undefined_relative_change] <- NA_real_
   list(
     results = results,
-    failures = failures,
+    failures = failures, failure_details = failure_details,
+    undefined_relative_change = undefined_relative_change,
+    signed_relative_change = is.finite(price_pre) & price_pre < 0 &
+      is.finite(price_post),
     labels = reference_labels,
     price_pre = price_pre,
     price_post = price_post,
-    price_change = price_post / price_pre - 1,
+    price_change = relative_change,
     shares_pre = shares_pre,
     shares_post = shares_post,
     latent_diagnostics = lapply(values, function(x) {
@@ -950,7 +1007,10 @@ NULL
                                 fixed_k = NULL, role_offset = 0L,
                                 leadersPost = NULL, corePost = NULL,
                                 demand_anchoring = c("observed", "latent_quality"),
-                                draw_plan = NULL, ..., .call) {
+                                draw_plan = NULL,
+                                price_domain = c("positive", "real"), ..., .call) {
+  price_domain <- .validate_simulation_price_domain(object, price_domain)
+  .require_real_rate_coordination(price_domain)
   demand_anchoring <- match.arg(demand_anchoring)
   if (identical(demand_anchoring, "latent_quality")) {
     if (as.integer(object@supply_model) %in% c(4L, 5L)) {
@@ -1029,7 +1089,7 @@ NULL
       corePost = corePost, dots = list(...), .call = .call,
       demand_anchoring = demand_anchoring, draw_plan = plan,
       setup = setup, draws = draws,
-      draw_indices = draw_indices
+      draw_indices = draw_indices, price_domain = price_domain
     ))
   }
 
@@ -1213,7 +1273,7 @@ NULL
       result = NULL, error = "worker process did not return a result"
     ))
 
-    assembled <- .assemble_unit(raw, market_object)
+    assembled <- .assemble_unit(raw, market_object, draw_indices)
     all_sims[[unit_id]] <- assembled$results
     price_pre[[unit_id]] <- assembled$price_pre
     price_post[[unit_id]] <- assembled$price_post
@@ -1236,6 +1296,7 @@ NULL
   }
   metadata <- object@metadata
   metadata$simulation_route <- "antitrust::simulate"
+  metadata$price_domain <- price_domain
   metadata$fit_class <- class(object)[[1L]]
   metadata$source_supply_model <- object@supply_model
   metadata$posterior_draws_available <- n_total
@@ -1274,7 +1335,7 @@ setMethod(
            role_mapping = c("mixture", "map", "threshold"), fixed_k = NULL,
            role_offset = 0L, leadersPost = NULL, corePost = NULL,
            demand_anchoring = c("observed", "latent_quality"),
-           draw_plan = NULL, ...) {
+           draw_plan = NULL, price_domain = c("positive", "real"), ...) {
     native_structure <- .native_ordered_structure(object)
     if (missing(ownerPost) && is.null(native_structure)) {
       stop("'ownerPost' must be supplied for simulate().")
@@ -1286,7 +1347,7 @@ setMethod(
       year = year, mc.cores = mc.cores, role_mapping = role_mapping,
       fixed_k = fixed_k, role_offset = role_offset, leadersPost = leadersPost,
       corePost = corePost, demand_anchoring = demand_anchoring,
-      draw_plan = draw_plan,
+      draw_plan = draw_plan, price_domain = price_domain,
       ..., .call = match.call()
     )
   }
@@ -1303,7 +1364,7 @@ bayes_sim <- function(fit, ownerPost = NULL, n_draws = NULL, mcDelta = NULL,
                       fixed_k = NULL, role_offset = 0L, leadersPost = NULL,
                       corePost = NULL,
                       demand_anchoring = c("observed", "latent_quality"),
-                      draw_plan = NULL, ...) {
+                      draw_plan = NULL, price_domain = c("positive", "real"), ...) {
   native_structure <- .native_ordered_structure(fit)
   if (missing(ownerPost) && is.null(native_structure)) {
     stop("'ownerPost' must be supplied for bayes_sim().")
@@ -1316,7 +1377,7 @@ bayes_sim <- function(fit, ownerPost = NULL, n_draws = NULL, mcDelta = NULL,
     role_mapping = role_mapping, fixed_k = fixed_k,
     role_offset = role_offset, leadersPost = leadersPost,
     corePost = corePost, demand_anchoring = demand_anchoring,
-    draw_plan = draw_plan, ...
+    draw_plan = draw_plan, price_domain = price_domain, ...
   )
   result@call <- match.call()
   result

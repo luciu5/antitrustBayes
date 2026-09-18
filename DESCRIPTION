@@ -53,6 +53,7 @@ Collate:
     'estimate.R'
     'helpers.R'
     'posterior_draw_contract.R'
+    'price_domain.R'
     'latent_quality_simulation.R'
     'methods.R'
     'model_universe.R'

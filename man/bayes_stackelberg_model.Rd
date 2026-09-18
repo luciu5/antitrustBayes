@@ -15,6 +15,7 @@ bayes_stackelberg_model(
   insideSize = NULL,
   priceOutside = NULL,
   labels = NULL,
+  price_domain = c("positive", "real"),
   ...
 )
 }
@@ -30,6 +31,11 @@ bayes_stackelberg_model(
 \code{"threshold"}.}
 
 \item{fixed_k}{Optional explicit leader count.}
+
+\item{price_domain}{\code{"positive"} (default) or \code{"real"}.
+Real rates are an explicit input Logit Cournot counterfactual domain extension
+and require coordination >= 0.0.0.9004. The fitted posterior, observed
+calibration prices, and role semantics are unchanged.}
 
 \item{role_offset}{Integer adjacent-partition sensitivity offset.}
 

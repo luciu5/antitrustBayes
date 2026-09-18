@@ -25,6 +25,7 @@
   corePost = NULL,
   demand_anchoring = c("observed", "latent_quality"),
   draw_plan = NULL,
+  price_domain = c("positive", "real"),
   ...
 )
 
@@ -47,6 +48,7 @@ bayes_sim(
   corePost = NULL,
   demand_anchoring = c("observed", "latent_quality"),
   draw_plan = NULL,
+  price_domain = c("positive", "real"),
   ...
 )
 }
@@ -110,6 +112,14 @@ relative latent shares while retaining
 the posterior outside share, and solves a new pre-policy equilibrium using the
 observed-share FOC cost primitive. It supports output Logit/CES and input Logit; input value primitives
 are held fixed unless changed by the counterfactual.}
+
+\item{price_domain}{Counterfactual rate domain. The default
+\code{"positive"} retains existing solvers. \code{"real"} permits finite
+negative or zero solved rates for input Logit Cournot native exact fringe or
+Stackelberg models, using coordination >= 0.0.0.9004. It is an explicit domain
+extension, not a rate-floor model, and leaves the fitted posterior unchanged.
+Unsupported combinations are rejected. Percentage changes from zero baseline
+rates are undefined; use level-rate changes.}
 
 \item{draw_plan}{Optional object returned by
 \code{\link{posterior_policy_draws}}. It fixes posterior draw, quality, and

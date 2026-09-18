@@ -284,6 +284,10 @@
 #' @param role_mapping One of \code{"mixture"}, \code{"map"}, or
 #'   \code{"threshold"}.
 #' @param fixed_k Optional explicit leader count.
+#' @param price_domain \code{"positive"} (default) or \code{"real"}.
+#'   Real rates are an explicit input Logit Cournot counterfactual domain
+#'   extension and require coordination >= 0.0.0.9004. The fitted posterior,
+#'   observed calibration prices, and role semantics are unchanged.
 #' @param role_offset Integer adjacent-partition sensitivity offset.
 #' @param insideSize Bayesian inside quantity convention.
 #' @param priceOutside Outside-good price override.
@@ -300,8 +304,11 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                                     role_mapping = c("mixture", "map", "threshold"),
                                     fixed_k = NULL, role_offset = 0L,
                                     insideSize = NULL, priceOutside = NULL,
-                                    labels = NULL, ...) {
+                                    labels = NULL,
+                                    price_domain = c("positive", "real"), ...) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.")
+  price_domain <- .validate_simulation_price_domain(fit, price_domain)
+  .require_real_rate_coordination(price_domain)
   structure_name <- .stack_bridge_or(fit@metadata$structure,
     if (isTRUE(fit@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous")
   if (!identical(structure_name, "stackelberg")) stop("fit@metadata$structure must be 'stackelberg'.")
@@ -317,7 +324,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     fit = fit, unit = unit, draw = as.integer(draw),
     role_mapping = role_mapping, fixed_k = fixed_k, role_offset = role_offset,
     insideSize = insideSize, priceOutside = priceOutside, labels = labels,
-    draws = draws, dots = list(...)
+    draws = draws, dots = list(...), price_domain = price_domain
   )
 }
 
@@ -328,7 +335,8 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
 .stack_bridge_model_draw <- function(fit, unit, draw,
                                      role_mapping, fixed_k, role_offset,
                                      insideSize, priceOutside, labels,
-                                     draws = NULL, dots = list()) {
+                                     draws = NULL, dots = list(),
+                                     price_domain = "positive") {
   structure_name <- .stack_bridge_or(fit@metadata$structure,
     if (isTRUE(fit@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous")
   if (!identical(structure_name, "stackelberg")) {
@@ -383,6 +391,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                  normIndex = NA, priceOutside = p0, alpha = params$alpha,
                  labels = labels, control.equ = list(implicitCheck = FALSE))
   }
+  if (identical(price_domain, "real")) args$price_domain <- "real"
   if (length(dots)) {
     dup <- intersect(names(dots), names(args)); if (length(dup)) stop("argument(s) supplied more than once: ", paste(dup, collapse = ", "))
     args <- c(args, dots)
@@ -429,6 +438,10 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
 #' @param market,year Optional selectors; exactly one market-year is required.
 #' @param role_mapping One of \code{"mixture"} or \code{"map"}.
 #' @param fixed_k Optional explicit strategic-core count, including zero.
+#' @param price_domain \code{"positive"} (default) or \code{"real"}.
+#'   Real rates are an explicit input Logit Cournot counterfactual domain
+#'   extension and require coordination >= 0.0.0.9004. The fitted posterior,
+#'   observed calibration prices, and role semantics are unchanged.
 #' @param role_offset Integer adjacent-partition sensitivity offset.
 #' @param insideSize Bayesian inside quantity convention.
 #' @param priceOutside Outside-good price override.
@@ -441,8 +454,11 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                                     role_mapping = c("mixture", "map"),
                                     fixed_k = NULL, role_offset = 0L,
                                     insideSize = NULL, priceOutside = NULL,
-                                    labels = NULL, ...) {
+                                    labels = NULL,
+                                    price_domain = c("positive", "real"), ...) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.")
+  price_domain <- .validate_simulation_price_domain(fit, price_domain)
+  .require_real_rate_coordination(price_domain)
   structure_name <- .stack_bridge_or(
     fit@metadata$structure,
     if (isTRUE(fit@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous"
@@ -464,14 +480,15 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     fit = fit, unit = unit, draw = as.integer(draw),
     role_mapping = role_mapping, fixed_k = fixed_k, role_offset = role_offset,
     insideSize = insideSize, priceOutside = priceOutside, labels = labels,
-    draws = draws, dots = list(...)
+    draws = draws, dots = list(...), price_domain = price_domain
   )
 }
 
 .core_fringe_bridge_model_draw <- function(fit, unit, draw,
                                            role_mapping, fixed_k, role_offset,
                                            insideSize, priceOutside, labels,
-                                           draws = NULL, dots = list()) {
+                                           draws = NULL, dots = list(),
+                                     price_domain = "positive") {
   structure_name <- .stack_bridge_or(fit@metadata$structure, "simultaneous")
   partition_prior <- .stack_bridge_or(fit@metadata$partition_prior, "cutoff")
   if (!identical(structure_name, "fringe") ||
@@ -538,6 +555,7 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
       labels = labels
     )
   }
+  if (identical(price_domain, "real")) args$price_domain <- "real"
   if (length(dots)) {
     dup <- intersect(names(dots), names(args))
     if (length(dup)) {

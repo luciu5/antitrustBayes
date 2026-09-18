@@ -15,6 +15,7 @@ bayes_core_fringe_model(
   insideSize = NULL,
   priceOutside = NULL,
   labels = NULL,
+  price_domain = c("positive", "real"),
   ...
 )
 }
@@ -29,6 +30,11 @@ bayes_core_fringe_model(
 \item{role_mapping}{One of \code{"mixture"} or \code{"map"}.}
 
 \item{fixed_k}{Optional explicit strategic-core count, including zero.}
+
+\item{price_domain}{\code{"positive"} (default) or \code{"real"}.
+Real rates are an explicit input Logit Cournot counterfactual domain extension
+and require coordination >= 0.0.0.9004. The fitted posterior, observed
+calibration prices, and role semantics are unchanged.}
 
 \item{role_offset}{Integer adjacent-partition sensitivity offset.}
 

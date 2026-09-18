@@ -517,9 +517,11 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
   t <- exp(score - max(score)); t <- t / sum(t)
   shares <- (1 - s0) * t
   delta <- log(shares / s0)
+  real_rates <- .model_uses_real_rate_domain(model)
   old_price <- as.numeric(model@pricePre)
-  if (length(old_price) != n || any(!is.finite(old_price)) || any(old_price <= 0)) {
-    stop("Latent-quality preservation requires initialized positive baseline prices.",
+  if (length(old_price) != n || any(!is.finite(old_price)) ||
+      (!real_rates && any(old_price <= 0))) {
+    stop("Latent-quality preservation requires initialized prices valid for its domain.",
          call. = FALSE)
   }
   old_mkt_size <- if ("mktSize" %in% methods::slotNames(model)) {
@@ -582,7 +584,8 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
   foc_reference <- foc(prices_reference, reference_markup)
   ## This is deliberately the native/antitrust price root, not calcMC().
   solved <- calcPrices(model, preMerger = TRUE)
-  if (length(solved) != n || any(!is.finite(solved)) || any(solved <= 0)) stop("Latent-quality pre-policy equilibrium returned invalid prices.", call. = FALSE)
+  if (length(solved) != n || any(!is.finite(solved)) ||
+      (!real_rates && any(solved <= 0))) stop("Latent-quality pre-policy equilibrium returned invalid prices.", call. = FALSE)
   if (!identical(as.numeric(model@mcPre), old_mc)) {
     stop("Latent-quality pre-policy solve modified the preserved mcPre cost primitive.",
          call. = FALSE)
@@ -659,6 +662,8 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
     mkt_size_budget = info$mkt_size,
     reference_price = info$reference_price,
     latent_pre_price = info$solved_price,
+    price_domain = if (.model_uses_real_rate_domain(info$model)) "real" else "positive",
+    nonpositive_pre_rate = info$solved_price <= 0,
     pre_price_discrepancy = info$price_discrepancy,
     mc_pre = info$mc_pre,
     foc_at_reference = info$foc_reference,
