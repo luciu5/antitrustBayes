@@ -1,0 +1,45 @@
+run,kind,outcome,passed,failed,errors,note
+baseline-trade,full-tests,suite-pass/harness-fail,1189,0,0,CSV list-column error after saved test RDS; summary recovered without rerun
+bayes-install-01,install,failed,0,0,1,snapshot copy incomplete before install; undefined new export
+bayes-install-02,install,passed,0,0,0,R-only; reused byte-identical unchanged Stan library
+bayes-focused-02,focused-tests,failed,74,12,2,names differences and test harness atomic-cache/unexported-helper references
+bayes-focused-03,focused-tests,failed,203,16,0,price names mismatch only; compare unname without relaxing numerical tolerance
+bayes-focused-04,focused-tests,passed,219,0,0,canonical6/native8; anchors/k/failure positions/immutability
+bayes-full-01,full-tests,failed,1504,1,105,test_dir lacked installed package namespace
+root-oracle-recheck,independent-reference,passed,88,0,0,payoffs/FOCs/conditional one-firm responses; not full Stackelberg equilibria
+bayes-focused-05,focused-tests,failed,235,0,1,specified metadata partial matching selected structure_code; exact lookup fixed
+bayes-full-02,full-tests,passed,2185,0,0,13 pre-existing opt-in/dependency skips
+bayes-full-03,full-tests,passed,2205,0,0,13 pre-existing opt-in/dependency skips
+bayes-install-05,install,failed,0,0,1,relative R_LIBS loaded older antitrust; previous installation restored
+bayes-install-06,install,passed,0,0,0,absolute validated dependency library paths; no Stan compilation
+bayes-full-04,full-tests,passed,2212,0,0,39.21s; 13 pre-existing skips;17 fixture warnings
+realization-smoke-01,saved-fit-compatibility,blocked,0,0,1,v9 cached fit rejected by unchanged v10 gate; no metadata override
+realization-smoke-02,saved-posterior-realization,passed,4800,0,0,200draws x6units x2seeds x2anchors; fits/plans unchanged
+trade-install-01,install,passed,0,0,0,candidate checkpoint superseded
+trade-full-01,full-tests,failed,0,0,1,root test reserved R variable repeat; syntax corrected
+trade-matrix-01,integration-tests,failed,15,4,3,test info argument plus reporting/exit/role defects; fixes tested
+trade-install-02,install,passed,0,0,0,R/Rd parse and package loading passed
+trade-full-02,full-tests,failed,1736,4,0,four test names mismatches;14game matrix passed; explicit naming assertions added
+stackelberg-reference-initial,independent-reference,invalidated,24,0,0,leader trials overwritten; flat objective/spurious passes rejected; raw CSV overwritten before archival
+stackelberg-reference-corrected,independent-reference,failed,26,6,0,nonconstant leader response restored; failed checks archived
+stackelberg-reference-common-profile,independent-reference,failed,15,17,0,pointwise comparisons corrected; strict gates retained; failed checks archived
+run-ledger-write,result-assembly,failed,0,0,1,schema field outcome/status mismatch; summary restored from recorded results and raw logs
+trade-full-03,full-tests,passed,1743,0,0,1 skip;123 fixture warnings;116.182s; explicit names assertions
+trade-install-03,install,passed,0,0,0,checkpoint03; absolute validated R_LIBS; zero Stan compilation
+trade-full-04,full-tests,passed,1745,0,0,NULL cost-shock retain/reset fix;1 skip;123 warnings;108.966s
+independent-follower-foc,independent-reference,passed,16,0,0,Logit/CES price/quantity own derivatives vs physical profit FD; max error8.19e-10
+posterior-pilot-5,saved-posterior-policies,passed,240,0,0,240 actual plus240 reference;19.05s; peak804324KiB; promotion repeated by policy
+posterior-pilot-5-cached,saved-posterior-policies,passed,240,0,0,identical plans/results;14.23s; peak824568KiB; promotion reused
+posterior-seed314159-200,saved-posterior-policies,passed,9600,0,0,200draws x6units x2anchors x4policies;169.77s; peak836848KiB
+posterior-seed271828-200,saved-posterior-policies,passed,9600,0,0,200draws x6units x2anchors x4policies;161.84s; peak873872KiB
+trade-install-04,install,passed,0,0,0,final frozen checkpoint04; R/Rd parse and package loading passed
+trade-full-05,full-tests,passed,1768,0,0,recorded-basis guards and multiproduct followers;1 skip;123 warnings;105.433s
+posterior-sampled-seed314159-5,saved-posterior-policies,passed,240,0,0,5draws x6units x2anchors x4policies;13.05s; peak828432KiB; not new HMC
+stackelberg-reference-final,independent-reference,passed,32,0,0,fourcases; returned-profile followerFOC<=1.18e-11; leadergrad<=4.18e-6; unchanged strict gates
+stackelberg-root-optimized-recheck,independent-reference,passed,32,0,0,root immutable checkpoint of optimized scalar-inverse reference;0failures
+stackelberg-root-original-inverse-recheck,independent-reference,passed,32,0,0,root rerun published180-bisection CES inverse instead of optimized Newton; all32pass
+paired-anchor-key-check,result-validation,passed,8,0,0,complete identicaluid/index/product keysets;7200matches each of8fixture-policy comparisons
+trade-patch-application,integration,blocked,0,0,1,escalated apply failed Read-only file system; target checked unchanged; manual application remains
+trade-patch-whitespace,source-validation,passed,1,0,0,one trailing space removed; identical parsed R syntax trees; finalpatch apply--check whitespaceerrorallpassed
+final-trade-scope-documentation,documentation,passed,1,0,0,existing strictly positive-cost limitation made explicit; Rd parsed; production R syntax identical; regeneratedpatch cleanapplycheck
+trade-manual-integration,integration,passed,16,0,0,User applied patch; all16normalizedSHA256matchfinaltestedcandidate; refactorbranch; preexistingartifactpreserved

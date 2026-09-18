@@ -1,0 +1,33 @@
+case,demand,mode,check,max_error,scale,tolerance,pass,detail
+one_leader_two_followers_multiproduct_leader,logit,B,leader_trial_passthrough_and_sensitivity,0,2.52667825102,2.52667825102e-12,1,follower_change=1.01047e-05; profit_change=1.68918e-07
+one_leader_two_followers_multiproduct_leader,logit,B,leader_reduced_action_equivalence,8.25317236774e-09,2.52667825102,2.52667825102e-05,1,"A owns products 1,2; physical sweeps=4; effective sweeps=4"
+one_leader_two_followers_multiproduct_leader,logit,B,follower_nash_action_equivalence,1.25547572338e-10,2.52667825102,2.52667825102e-05,1,"B,C solved by repeated actual best responses at every leader trial"
+one_leader_two_followers_multiproduct_leader,logit,B,physical_follower_nash_residual,1.60982338571e-14,1,1e-10,1,final independent physical-payoff best-response residual
+one_leader_two_followers_multiproduct_leader,logit,B,effective_follower_nash_residual,1.97619698383e-14,1,1e-10,1,final independent effective-cost best-response residual
+one_leader_two_followers_multiproduct_leader,logit,B,leader_reduced_foc_residual,5.01047603068e-08,1,1e-05,1,absolute finite-difference own-choice gradient at reduced optimum
+one_leader_two_followers_multiproduct_leader,logit,B,leader_reduced_foc_scaling,4.24753557438e-14,1,1e-05,1,d reduced physical payoff = r_A d reduced effective payoff
+one_leader_two_followers_multiproduct_leader,logit,B,follower_reaction_derivative_equivalence,1.82903345247e-12,1,1e-05,1,finite difference of fully re-solved follower Nash actions
+one_leader_two_followers_multiproduct_leader,logit,C,leader_trial_passthrough_and_sensitivity,0,1.53369803848,1.53369803848e-12,1,follower_change=4.7204e-05; profit_change=2.71932e-08
+one_leader_two_followers_multiproduct_leader,logit,C,leader_reduced_action_equivalence,0,1.53369803848,1.53369803848e-05,1,"A owns products 1,2; physical sweeps=5; effective sweeps=5"
+one_leader_two_followers_multiproduct_leader,logit,C,follower_nash_action_equivalence,0,1.53369803848,1.53369803848e-05,1,"B,C solved by repeated actual best responses at every leader trial"
+one_leader_two_followers_multiproduct_leader,logit,C,physical_follower_nash_residual,9.81192904703e-12,1,1e-10,1,final independent physical-payoff best-response residual
+one_leader_two_followers_multiproduct_leader,logit,C,effective_follower_nash_residual,1.18216547662e-11,1,1e-10,1,final independent effective-cost best-response residual
+one_leader_two_followers_multiproduct_leader,logit,C,leader_reduced_foc_residual,4.17645866405e-06,1,1e-05,1,absolute finite-difference own-choice gradient at reduced optimum
+one_leader_two_followers_multiproduct_leader,logit,C,leader_reduced_foc_scaling,5.82326333624e-14,1,1e-05,1,d reduced physical payoff = r_A d reduced effective payoff
+one_leader_two_followers_multiproduct_leader,logit,C,follower_reaction_derivative_equivalence,1.44775857969e-12,1,1e-05,1,finite difference of fully re-solved follower Nash actions
+one_leader_two_followers_multiproduct_leader,ces,B,leader_trial_passthrough_and_sensitivity,0,2.24309559604,2.24309559604e-12,1,follower_change=5.36472e-06; profit_change=7.76236e-08
+one_leader_two_followers_multiproduct_leader,ces,B,leader_reduced_action_equivalence,1.33539135305e-08,2.24309559604,2.24309559604e-05,1,"A owns products 1,2; physical sweeps=3; effective sweeps=3"
+one_leader_two_followers_multiproduct_leader,ces,B,follower_nash_action_equivalence,1.72433622936e-10,2.24309559604,2.24309559604e-05,1,"B,C solved by repeated actual best responses at every leader trial"
+one_leader_two_followers_multiproduct_leader,ces,B,physical_follower_nash_residual,1.11022302463e-16,1,1e-10,1,final independent physical-payoff best-response residual
+one_leader_two_followers_multiproduct_leader,ces,B,effective_follower_nash_residual,3.33066907388e-16,1,1e-10,1,final independent effective-cost best-response residual
+one_leader_two_followers_multiproduct_leader,ces,B,leader_reduced_foc_residual,2.09469103732e-08,1,1e-05,1,absolute finite-difference own-choice gradient at reduced optimum
+one_leader_two_followers_multiproduct_leader,ces,B,leader_reduced_foc_scaling,5.84192487232e-14,1,1e-05,1,d reduced physical payoff = r_A d reduced effective payoff
+one_leader_two_followers_multiproduct_leader,ces,B,follower_reaction_derivative_equivalence,2.13729034471e-12,1,1e-05,1,finite difference of fully re-solved follower Nash actions
+one_leader_two_followers_multiproduct_leader,ces,C,leader_trial_passthrough_and_sensitivity,0,1.26720349451,1.26720349451e-12,1,follower_change=2.39761e-05; profit_change=1.09037e-08
+one_leader_two_followers_multiproduct_leader,ces,C,leader_reduced_action_equivalence,0,1.26720349451,1.26720349451e-05,1,"A owns products 1,2; physical sweeps=5; effective sweeps=5"
+one_leader_two_followers_multiproduct_leader,ces,C,follower_nash_action_equivalence,0,1.26720349451,1.26720349451e-05,1,"B,C solved by repeated actual best responses at every leader trial"
+one_leader_two_followers_multiproduct_leader,ces,C,physical_follower_nash_residual,3.65141250569e-12,1,1e-10,1,final independent physical-payoff best-response residual
+one_leader_two_followers_multiproduct_leader,ces,C,effective_follower_nash_residual,4.39936975738e-12,1,1e-10,1,final independent effective-cost best-response residual
+one_leader_two_followers_multiproduct_leader,ces,C,leader_reduced_foc_residual,4.93329110504e-07,1,1e-05,1,absolute finite-difference own-choice gradient at reduced optimum
+one_leader_two_followers_multiproduct_leader,ces,C,leader_reduced_foc_scaling,1.50206001286e-13,1,1e-05,1,d reduced physical payoff = r_A d reduced effective payoff
+one_leader_two_followers_multiproduct_leader,ces,C,follower_reaction_derivative_equivalence,2.22044604925e-12,1,1e-05,1,finite difference of fully re-solved follower Nash actions

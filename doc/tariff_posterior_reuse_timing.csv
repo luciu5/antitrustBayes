@@ -1,0 +1,6 @@
+"fixture","seed","run","draws","log","elapsed_seconds","user_seconds","system_seconds","peak_rss_kb","exit_status","log_status","timing_scope"
+"logit_bertrand",314159,"final-200",200,"doc/statistical_toolkit_runs/20260918/tariff-reuse-01/logs/posterior-benchmark-logit-bertrand-200.log",169.77,164.78,1.37,836848,0,"READ","final fixture; 200 draws"
+"logit_bertrand",314159,"pilot-5",5,"doc/statistical_toolkit_runs/20260918/tariff-reuse-01/logs/posterior-benchmark-pilot-5.log",19.05,15.47,0.95,804324,0,"READ","pilot; 5 draws"
+"logit_bertrand",314159,"pilot-5-cached",5,"doc/statistical_toolkit_runs/20260918/tariff-reuse-01/logs/posterior-benchmark-pilot-5-cached.log",14.23,11.21,0.92,824568,0,"READ","pilot; 5 draws"
+"rho_panel",271828,"final-200",200,"doc/statistical_toolkit_runs/20260918/tariff-reuse-01/logs/posterior-benchmark-rho-panel-200.log",161.84,158.94,0.74,873872,0,"READ","final fixture; 200 draws"
+"sampled_market",314159,"sampled-5",5,"doc/statistical_toolkit_runs/20260918/tariff-reuse-01/logs/posterior-benchmark-sampled-5.log",13.05,10.31,0.7,828432,0,"READ","sampled quality validation; 5 draws"

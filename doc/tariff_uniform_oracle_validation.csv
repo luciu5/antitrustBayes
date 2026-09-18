@@ -1,0 +1,89 @@
+test,demand,mode,case,max_error,secondary_error,tolerance,pass,detail
+post_policy_uniformity,-,-,merger_A_B,0,0,1e-08,1,"pre={'A': 0.78, 'B': 0.91, 'C': 0.86}; post={'A': 0.83, 'C': 0.88}; differing pre rates retained productwise"
+heterogeneous_policy_rejection,-,-,merged_A_B,0,0,1e-08,1,expected rejection: firm A has heterogeneous post-policy tariffs
+cost_recovery_formula,-,-,pre_post,0,0,2e-14,1,cpre=rpre*kappapre; cpost=cpre*(1+d); kappapost formula
+tariff_rate_conversion,-,-,producer_vs_consumer_price,0,0,2e-14,1,r=1-tau=1/(1+t); tau=t/(1+t)
+demand_inverse,logit,-,price_quantity_roundtrip,4.4408920985e-16,0,3e-09,1,independent direct demand and inverse demand
+demand_inverse,ces,-,price_quantity_roundtrip,4.4408920985e-16,0,3e-09,1,independent direct demand and inverse demand
+firm_payoff_identity,logit,B,A,4.4408920985e-16,0,2e-10,1,fixed cost included and divided by r_f in effective units
+firm_foc_scaling,logit,B,A,1.11022580018e-11,0,3e-07,1,d pi_original/d choice = r_f d pi_effective/d choice
+firm_payoff_identity,logit,B,C,1.11022302463e-16,0,2e-10,1,fixed cost included and divided by r_f in effective units
+firm_foc_scaling,logit,B,C,2.81619172426e-12,0,3e-07,1,d pi_original/d choice = r_f d pi_effective/d choice
+firm_payoff_identity,ces,B,A,4.4408920985e-16,0,2e-10,1,fixed cost included and divided by r_f in effective units
+firm_foc_scaling,ces,B,A,1.15463194561e-12,0,3e-07,1,d pi_original/d choice = r_f d pi_effective/d choice
+firm_payoff_identity,ces,B,C,5.55111512313e-17,0,2e-10,1,fixed cost included and divided by r_f in effective units
+firm_foc_scaling,ces,B,C,2.76201804483e-12,0,3e-07,1,d pi_original/d choice = r_f d pi_effective/d choice
+margin_basis_identities,-,-,net_revenue,1.11022302463e-16,0,3e-14,1,net=(rp-c)/(rp)=(p-kappa)/p; gross and profit/gross are pointwise only
+follower_response_equivalence,logit,B,follower:A,2.54030747548e-08,2.63393213836e-08,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,B,follower:A,1.30896843473e-08,2.63393213836e-08,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,B,follower:B,0,2.12240008561e-12,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,B,follower:B,1.35958452543e-09,2.12240008561e-12,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,B,follower:C,1.00315165064e-08,9.40761610798e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,B,follower:C,2.19543537313e-08,9.40761610798e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,C,follower:A,3.08544387817e-08,2.36998105196e-08,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,C,follower:A,3.91964345161e-08,2.36998105196e-08,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,C,follower:B,1.07434727781e-10,1.22887773963e-10,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,C,follower:B,3.70089791001e-09,1.22887773963e-10,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,C,follower:C,6.11671469031e-09,7.32026805354e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,C,follower:C,1.31311455609e-08,7.32026805354e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,BF,leader:A,2.54030747548e-08,2.63393213836e-08,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,BF,leader:A,1.30896843473e-08,2.63393213836e-08,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,BF,leader:B,0,2.12240008561e-12,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,BF,leader:B,1.35958452543e-09,2.12240008561e-12,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,BF,follower:C,1.00315165064e-08,9.40761610798e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,BF,follower:C,2.19543537313e-08,9.40761610798e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,CF,leader:A,3.08544387817e-08,2.36998105196e-08,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,CF,leader:A,3.91964345161e-08,2.36998105196e-08,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,CF,leader:B,1.07434727781e-10,1.22887773963e-10,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,CF,leader:B,3.70089791001e-09,1.22887773963e-10,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,CF,follower:C,6.11671469031e-09,7.32026805354e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,CF,follower:C,1.31311455609e-08,7.32026805354e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,BS,leader:A,2.54030747548e-08,2.63393213836e-08,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,BS,leader:A,1.30896843473e-08,2.63393213836e-08,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,BS,follower:B,0,2.12240008561e-12,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,BS,follower:B,1.35958452543e-09,2.12240008561e-12,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,BS,follower:C,1.00315165064e-08,9.40761610798e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,BS,follower:C,2.19543537313e-08,9.40761610798e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,CS,leader:A,3.08544387817e-08,2.36998105196e-08,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,CS,leader:A,3.91964345161e-08,2.36998105196e-08,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,CS,follower:B,1.07434727781e-10,1.22887773963e-10,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,CS,follower:B,3.70089791001e-09,1.22887773963e-10,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,logit,CS,follower:C,6.11671469031e-09,7.32026805354e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,logit,CS,follower:C,1.31311455609e-08,7.32026805354e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,B,follower:A,1.55525641254e-08,1.43611979467e-08,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,B,follower:A,1.01417037728e-08,1.43611979467e-08,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,B,follower:B,2.54245002829e-09,2.42185714042e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,B,follower:B,1.06921344037e-08,2.42185714042e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,B,follower:C,1.42819089888e-12,2.64537565467e-12,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,B,follower:C,9.63807525623e-09,2.64537565467e-12,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,C,follower:A,6.78367073625e-09,2.70396449532e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,C,follower:A,5.46490896617e-09,2.70396449532e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,C,follower:B,2.11614059609e-10,9.4271389424e-11,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,C,follower:B,8.0698283762e-10,9.4271389424e-11,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,C,follower:C,0,6.23464782317e-13,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,C,follower:C,3.26383813543e-09,6.23464782317e-13,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,BF,leader:A,1.55525641254e-08,1.43611979467e-08,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,BF,leader:A,1.01417037728e-08,1.43611979467e-08,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,BF,leader:B,2.54245002829e-09,2.42185714042e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,BF,leader:B,1.06921344037e-08,2.42185714042e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,BF,follower:C,1.42819089888e-12,2.64537565467e-12,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,BF,follower:C,9.63807525623e-09,2.64537565467e-12,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,CF,leader:A,6.78367073625e-09,2.70396449532e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,CF,leader:A,5.46490896617e-09,2.70396449532e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,CF,leader:B,2.11614059609e-10,9.4271389424e-11,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,CF,leader:B,8.0698283762e-10,9.4271389424e-11,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,CF,follower:C,0,6.23464782317e-13,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,CF,follower:C,3.26383813543e-09,6.23464782317e-13,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,BS,leader:A,1.55525641254e-08,1.43611979467e-08,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,BS,leader:A,1.01417037728e-08,1.43611979467e-08,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,BS,follower:B,2.54245002829e-09,2.42185714042e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,BS,follower:B,1.06921344037e-08,2.42185714042e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,BS,follower:C,1.42819089888e-12,2.64537565467e-12,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,BS,follower:C,9.63807525623e-09,2.64537565467e-12,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,CS,leader:A,6.78367073625e-09,2.70396449532e-09,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,CS,leader:A,5.46490896617e-09,2.70396449532e-09,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,CS,follower:B,2.11614059609e-10,9.4271389424e-11,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,CS,follower:B,8.0698283762e-10,9.4271389424e-11,5e-05,1,finite-difference own-choice FOC scaling
+follower_response_equivalence,ces,CS,follower:C,0,6.23464782317e-13,3e-05,1,direct physical-cost payoff versus effective-cost payoff; fixed costs retained
+response_foc,ces,CS,follower:C,3.26383813543e-09,6.23464782317e-13,5e-05,1,finite-difference own-choice FOC scaling
+heterogeneous_counterexample,logit,B,H_two_products,0.120058463435,0,0.0001,1,r_H differs by product; unweighted kappa objective changes multiproduct optimum

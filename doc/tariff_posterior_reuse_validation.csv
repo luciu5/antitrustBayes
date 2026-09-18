@@ -1,0 +1,10 @@
+validation,unit,passed,failed,errors,skips,warnings,elapsed_seconds,reported_max_error,tolerance,note
+antitrustBayes final suite,assertions,2212,0,0,13,17,39.21,,,Full installed suite; current source frozen
+trade baseline suite,assertions,1189,0,0,0,71,93.214,,,Before extension; CSV harness recovered from saved RDS
+trade final suite,assertions,1768,0,0,1,123,105.433,,,Full installed suite; explicit fractional rejection remains active
+independent primitive payoff/FOC/BR,checks,88,0,0,0,0,,1.11e-11,scale-adjusted; see full reference CSV,Root rerun; conditional BR not full nested equilibrium
+independent analytic follower FOC,checks,16,0,0,0,0,,8.19e-10,1e-07,Against physical payoff finite differences
+full nested Stackelberg original inverse,checks,32,0,0,0,0,,1.19e-11,1e-10,Max followerFOC; leadergrad<=4.18e-6 at1e-5; root original180bisection
+seed314159 final policies,policy cases,9600,0,0,0,0,169.77,8.89e-16,1e-07,200draws;6units;2anchors;4policies;plus9600referencechecks
+seed271828 final policies,policy cases,9600,0,0,0,0,161.84,8.89e-16,1e-07,200draws;6units;2anchors;4policies;plus9600referencechecks
+sampled quality functional check,policy cases,240,0,0,0,0,13.05,8.89e-16,1e-07,5draws; not a new HMC study;plus240referencechecks

@@ -63,6 +63,7 @@ Collate:
     'priors.R'
     'restriction_comparison.R'
     'simulate.R'
+    'posterior_policy_models.R'
     'stackelberg_bayes.R'
     'stackelberg_bridge.R'
     'stackelberg_comparison.R'
