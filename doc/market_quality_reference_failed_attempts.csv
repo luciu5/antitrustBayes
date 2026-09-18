@@ -1,0 +1,2 @@
+check,error,tolerance,status,notes
+expanded_collapsed_exact_integration,5.933012e+00,2e-07,failed,incomplete first nested adaptive quadrature attempt; replaced by 35-node Gauss-Hermite check and retained for audit

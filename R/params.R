@@ -345,9 +345,13 @@ bayes_specify <- function(params, market) {
     k_support = .stack_whole_or(params$k_support, NULL),
     k_prior = .stack_whole_or(params$k_prior, NULL),
     k_scope = params$k_scope %||% "market",
+    quality_scope = "global",
+    quality_scope_code = 1L,
     prior_normalization = list(
       mode = "supplied_draws",
-      model_spec_version = 9L,
+      model_spec_version = .antitrust_bayes_model_spec_version,
+      quality_scope = "global",
+      quality_scope_code = 1L,
       partition_support = if (is.null(resolved_partition)) NULL else
         resolved_partition$partition_supports,
       k_support = .stack_whole_or(params$k_support, NULL),

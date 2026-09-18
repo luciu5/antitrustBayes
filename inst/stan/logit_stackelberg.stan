@@ -1,4 +1,4 @@
-// Specification 9: centered orthonormal firm-quality coordinates.
+// Specification 10: scoped centered orthonormal firm-quality coordinates.
 // Bayesian Logit demand and supply model.
 // Conditional inside shares and inverse normalized margins are coupled
 // per observation through a free cross-equation correlation rho, using a
@@ -145,13 +145,48 @@ functions {
       int i = margin_idx[j];
       real z = margin_resid[j] - slope * share_resid[i];
       real weight = square(slope) / v_margin;
-      real residual = z + slope * c[g[i]] / a[g[i]];
-      within += (a[g[i]] / (a[g[i]] + weight)) * square(residual) / v_margin;
+      if (a[g[i]] > 0) {
+        real residual = z + slope * c[g[i]] / a[g[i]];
+        within += (a[g[i]] / (a[g[i]] + weight))
+          * square(residual) / v_margin;
+      } else if (slope == 0) within += square(z) / v_margin;
       a[g[i]] += weight;
       c[g[i]] += -slope * z / v_margin;
       logv += log(v_margin);
     }
     return centered_gaussian_from_stats(within, a, c, logv, N0 + Q, G, tau);
+  }
+
+  // Market-local version.  margin_order contains positions in margin_idx;
+  // share_n is explicit because share_resid is the full data vector.
+  real collapsed_joint_from_local_share_stats(
+      real share_within, vector share_a, vector share_c,
+      real share_log_v, vector share_resid, vector margin_resid,
+      array[] int margin_order, array[] int margin_idx, int margin_start,
+      array[] int quality_local, int share_n, int margin_n, int G,
+      real sigma_share, real sigma_margin, real rho, real tau) {
+    vector[G] a = share_a;
+    vector[G] c = share_c;
+    real within = share_within;
+    real logv = share_log_v;
+    real slope = rho * sigma_margin / sigma_share;
+    real v_margin = square(sigma_margin) * (1.0 - square(rho));
+    for (q in 1:margin_n) {
+      int margin_pos = margin_order[margin_start + q - 1];
+      int i = margin_idx[margin_pos];
+      int g = quality_local[i];
+      real z = margin_resid[q] - slope * share_resid[i];
+      real weight = square(slope) / v_margin;
+      if (a[g] > 0) {
+        real residual = z + slope * c[g] / a[g];
+        within += (a[g] / (a[g] + weight)) * square(residual) / v_margin;
+      } else if (slope == 0) within += square(z) / v_margin;
+      a[g] += weight;
+      c[g] += -slope * z / v_margin;
+      logv += log(v_margin);
+    }
+    return centered_gaussian_from_stats(within, a, c, logv,
+      share_n + margin_n, G, tau);
   }
 
   real collapsed_joint_gaussian_density(vector share_resid,
@@ -297,6 +332,17 @@ data {
   array[N] int<lower=1, upper=N> market_obs_order;
   array[N_market] int<lower=1> market_obs_start;
   array[N_market] int<lower=1> market_obs_n;
+  int<lower=1, upper=2> quality_scope;
+  int<lower=1> N_quality;
+  array[N] int<lower=1, upper=N_quality> obs_to_quality;
+  int<lower=1> N_quality_block;
+  array[N_quality_block] int<lower=1, upper=N_quality> quality_block_start;
+  array[N_quality_block] int<lower=1> quality_block_n;
+  int<lower=0> N_quality_coord;
+  array[N_quality_block] int<lower=1> quality_coord_start;
+  array[N_margin] int<lower=1, upper=N_margin> market_margin_order;
+  array[N_market] int<lower=1> market_margin_start;
+  array[N_market] int<lower=0> market_margin_n;
   array[N_market_year] int<lower=1, upper=N_market_year> market_mky_order;
   array[N_market] int<lower=1> market_mky_start;
   array[N_market] int<lower=1> market_mky_n;
@@ -310,6 +356,7 @@ transformed data {
   array[N_market_year] int mky_pos_in_market = rep_array(0, N_market_year);
   int any_paired = 0;
   int rho_active;
+  array[N] int quality_local;
   int market_s0_rotation_active =
     (market_s0_parameterization == 2 && is_single_market == 0) ? 1 : 0;
   for (mky in 1:N_market_year) {
@@ -329,10 +376,17 @@ transformed data {
       reject("Stackelberg ordered-k support must be strictly positive");
   for (i in 1:N) {
     if (margin_obs[i] == 1) any_paired = 1;
+    quality_local[i] = quality_scope == 2
+      ? obs_to_quality[i] - quality_block_start[market[i]] + 1
+      : obs_to_quality[i];
   }
+  if (quality_scope == 1 && N_quality_block != 1)
+    reject("global quality scope requires one quality block");
+  if (quality_scope == 2 && N_quality_block != N_market)
+    reject("market quality scope requires one quality block per market");
   if (quality_parameterization == 2 && share_likelihood == 2 &&
       margin_likelihood == 2 && use_rho == 1 && likelihood_mode == 1 &&
-      any_paired == 1 && N_market > 1)
+      any_paired == 1 && quality_scope == 1 && N_market > 1)
     reject("collapsed Gaussian rho exact-k likelihood currently requires one market");
   rho_active = (use_rho == 1 && likelihood_mode == 1 && any_paired == 1) ? 1 : 0;
 }
@@ -341,7 +395,7 @@ parameters {
   vector[is_single_market == 0 ? 1 : 0] mu_b_market_vec;
   vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;
   vector[is_single_market == 0 ? N_market : 0] b_market_raw;
-  vector[quality_parameterization == 1 ? N_group - 1 : 0] b_group_centered;
+  vector[quality_parameterization == 1 ? N_quality_coord : 0] b_group_centered;
   real<lower=0> sigma_b_strat;
   vector[(is_cournot == 1 && pool_alpha_by_market == 0) ? 0 : 1] mu_log_a_free;
   vector<lower=0>[pool_alpha_by_market == 1 ? 1 : 0] sigma_log_a_vec;
@@ -400,8 +454,8 @@ transformed parameters {
   vector[N_market_year] s0_raw_reconstructed = rep_vector(0.0, N_market_year);
   vector[N_market_year] c_unbounded_mky = rep_vector(0.0, N_market_year);
   vector[N_market_year] c_effective_mky = rep_vector(0.0, N_market_year);
-  vector[quality_parameterization == 1 ? N_group : 0] b_quality_all =
-    rep_vector(0.0, quality_parameterization == 1 ? N_group : 0);
+  vector[quality_parameterization == 1 ? N_quality : 0] b_quality_all =
+    rep_vector(0.0, quality_parameterization == 1 ? N_quality : 0);
   vector[N] share_mean = rep_vector(0.0, N);
   vector[N_market_year] s0;
   vector[N_market_year] s0_prob;
@@ -519,21 +573,25 @@ transformed parameters {
     mu_log_a = mu_log_a_free[1];
   }
   alpha_structural_market = a_market / price_sd;
-  if (quality_parameterization == 1 && N_group > 1) {
+  if (quality_parameterization == 1) for (block in 1:N_quality_block) {
+    int G = quality_block_n[block];
     real suffix = 0.0;
-    for (reverse_j in 1:(N_group - 1)) {
-      int j = N_group + 1 - reverse_j;
-      int k = j - 1;
-      real v_k = b_group_centered[k] / sqrt(1.0 * k * (k + 1.0));
-      b_quality_all[j] = suffix - k * v_k;
-      suffix += v_k;
+    if (G > 1) {
+      for (reverse_j in 1:(G - 1)) {
+        int j = G + 1 - reverse_j;
+        int k = j - 1;
+        real v_k = b_group_centered[quality_coord_start[block] + k - 1]
+          / sqrt(1.0 * k * (k + 1.0));
+        b_quality_all[quality_block_start[block] + j - 1] = suffix - k * v_k;
+        suffix += v_k;
+      }
+      b_quality_all[quality_block_start[block]] = suffix;
     }
-    b_quality_all[1] = suffix;
   }
   for (i in 1:N) {
     int m = market[i];
     int mky = market_year_idx[i];
-    real b_quality = (quality_parameterization == 1 ? b_quality_all[group[i]] : 0.0);
+    real b_quality = (quality_parameterization == 1 ? b_quality_all[obs_to_quality[i]] : 0.0);
     share_mean[i] = logit(s0_prob[mky]) + b_market[m] + b_quality
       + market_sign * a_market[m] * price_std[i];
   }
@@ -541,8 +599,12 @@ transformed parameters {
 
 model {
   real collapsed_share_ll = 0.0;
-  vector[N_group] share_a = rep_vector(0.0, N_group);
-  vector[N_group] share_c = rep_vector(0.0, N_group);
+  vector[N_market] collapsed_share_ll_market = rep_vector(0.0, N_market);
+  vector[N_quality] share_a = rep_vector(0.0, N_quality);
+  vector[N_quality] share_c = rep_vector(0.0, N_quality);
+  vector[N] share_resid = log_shareIn - share_mean;
+  vector[N_market] share_within_market = rep_vector(0.0, N_market);
+  vector[N_market] share_log_v_market = rep_vector(0.0, N_market);
   real share_within = 0.0;
   real share_log_v = 0.0;
   if (is_cournot == 1 && pool_alpha_by_market == 0) {
@@ -638,19 +700,40 @@ model {
   if (likelihood_mode != 3) {
     if (quality_parameterization == 2 && share_likelihood == 2) {
       for (i in 1:N) {
+        int q = obs_to_quality[i];
+        int m = market[i];
         real z = log_shareIn[i] - share_mean[i];
-        real v = square(sigma_share);
-        if (share_a[group[i]] > 0) {
-          real residual = z - share_c[group[i]] / share_a[group[i]];
-          share_within += (share_a[group[i]] / (share_a[group[i]] + 1.0 / v))
+        real v = square(quality_scope == 1 ? sigma_share : sigma_share_market[m]);
+        if (share_a[q] > 0) {
+          real residual = z - share_c[q] / share_a[q];
+          real contribution = (share_a[q] / (share_a[q] + 1.0 / v))
             * square(residual) / v;
+          share_within += contribution;
+          share_within_market[m] += contribution;
         }
-        share_a[group[i]] += 1.0 / v;
-        share_c[group[i]] += z / v;
+        share_a[q] += 1.0 / v;
+        share_c[q] += z / v;
         share_log_v += log(v);
+        share_log_v_market[m] += log(v);
       }
-      collapsed_share_ll = centered_gaussian_from_stats(
-        share_within, share_a, share_c, share_log_v, N, N_group, sigma_b_strat);
+      if (quality_scope == 1) {
+        collapsed_share_ll = centered_gaussian_from_stats(
+          share_within, share_a, share_c, share_log_v, N, N_quality,
+          sigma_b_strat);
+      } else for (m in 1:N_market) {
+        int start = quality_block_start[m];
+        int G = quality_block_n[m];
+        vector[G] a;
+        vector[G] c;
+        for (j in 1:G) {
+          a[j] = share_a[start + j - 1];
+          c[j] = share_c[start + j - 1];
+        }
+        collapsed_share_ll_market[m] = centered_gaussian_from_stats(
+          share_within_market[m], a, c, share_log_v_market[m],
+          market_obs_n[m], G, sigma_b_strat);
+        collapsed_share_ll += collapsed_share_ll_market[m];
+      }
       target += collapsed_share_ll;
     }
     else for (i in 1:N) {
@@ -699,21 +782,50 @@ model {
       }
       if (quality_parameterization == 2 && share_likelihood == 2 &&
           margin_likelihood == 2 && likelihood_mode != 3 && rho_active == 1 &&
-          N_market == 1) {
-        vector[N_margin] margin_resid;
-        for (q in 1:N_margin) {
-          int i = margin_idx[q];
-          int mky = market_year_idx[i];
-          real invm = stack_logit_inv_margin(i, mky, k, s0_prob[mky],
-            alpha_structural_market[m], supply_model, structure,
-            response[mky_pos_in_market[mky]], firm_mky_start, firm_mky_n,
-            firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
-          margin_resid[q] = log_marginNormInv[i] - log(invm + 1e-9);
+          (quality_scope == 2 || N_market == 1)) {
+        if (quality_scope == 1) {
+          vector[N_margin] margin_resid;
+          for (q in 1:N_margin) {
+            int i = margin_idx[q];
+            int mky = market_year_idx[i];
+            real invm = stack_logit_inv_margin(i, mky, k, s0_prob[mky],
+              alpha_structural_market[m], supply_model, structure,
+              response[mky_pos_in_market[mky]], firm_mky_start, firm_mky_n,
+              firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
+            margin_resid[q] = log_marginNormInv[i] - log(invm + 1e-9);
+          }
+          score[kk] += collapsed_joint_from_share_stats(
+            share_within, share_a, share_c, share_log_v, share_resid,
+            margin_resid, margin_idx, obs_to_quality, N_quality, sigma_share,
+            sigma_margin, rho, sigma_b_strat) - collapsed_share_ll;
+        } else {
+          int start = quality_block_start[m];
+          int G = quality_block_n[m];
+          int mn = market_margin_n[m];
+          vector[G] a;
+          vector[G] c;
+          vector[mn] local_margin_resid;
+          for (j in 1:G) {
+            a[j] = share_a[start + j - 1];
+            c[j] = share_c[start + j - 1];
+          }
+          for (q in 1:mn) {
+            int pos = market_margin_order[market_margin_start[m] + q - 1];
+            int i = margin_idx[pos];
+            int mky = market_year_idx[i];
+            real invm = stack_logit_inv_margin(i, mky, k, s0_prob[mky],
+              alpha_structural_market[m], supply_model, structure,
+              response[mky_pos_in_market[mky]], firm_mky_start, firm_mky_n,
+              firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
+            local_margin_resid[q] = log_marginNormInv[i] - log(invm + 1e-9);
+          }
+          score[kk] += collapsed_joint_from_local_share_stats(
+            share_within_market[m], a, c, share_log_v_market[m],
+            share_resid, local_margin_resid, market_margin_order,
+            margin_idx, market_margin_start[m], quality_local,
+            market_obs_n[m], mn, G, sigma_share_market[m], sigma_margin_market[m],
+            rho, sigma_b_strat) - collapsed_share_ll_market[m];
         }
-        score[kk] += collapsed_joint_from_share_stats(
-          share_within, share_a, share_c, share_log_v, log_shareIn - share_mean,
-          margin_resid, margin_idx, group, N_group, sigma_share, sigma_margin,
-          rho, sigma_b_strat) - collapsed_share_ll;
       } else for (pos in 1:market_obs_n[m]) {
         int i = market_obs_order[market_obs_start[m] + pos - 1];
         int mky = market_year_idx[i];
@@ -768,6 +880,11 @@ generated quantities {
   vector[N_market_year] posterior_core_share_unconditional_mky = rep_vector(0, N_market_year);
   vector[N_market] log_lik_share_market = rep_vector(0, N_market);
   vector[N_market] log_lik_margin_market = rep_vector(0, N_market);
+  vector[N_market] log_lik_share_collapsed_market = rep_vector(0, N_market);
+  vector[N_market] log_lik_joint_collapsed_market = rep_vector(0, N_market);
+  int collapsed_market_lik_valid = quality_parameterization == 2
+    && (quality_scope == 2 || N_market == 1)
+    && likelihood_mode != 3 && share_likelihood == 2;
   real log_lik_share_collapsed = 0.0;
   real log_lik_joint_collapsed = 0.0;
   real share_ll_gq = 0.0;
@@ -776,25 +893,36 @@ generated quantities {
 
   {
     vector[N] sharepred;
-    vector[N_group] share_a_gq = rep_vector(0.0, N_group);
-    vector[N_group] share_c_gq = rep_vector(0.0, N_group);
+    vector[N_quality] share_a_gq = rep_vector(0.0, N_quality);
+    vector[N_quality] share_c_gq = rep_vector(0.0, N_quality);
+    vector[N] share_resid_gq = rep_vector(0.0, N);
+    vector[N_market] share_within_gq_market = rep_vector(0.0, N_market);
+    vector[N_market] share_log_v_gq_market = rep_vector(0.0, N_market);
     real share_within_gq = 0.0;
     real share_log_v_gq = 0.0;
+    vector[N_market] share_ll_gq_market = rep_vector(0.0, N_market);
     for (i in 1:N) {
       int m = market[i];
       int mky = market_year_idx[i];
       sharepred[i] = share_mean[i];
+      share_resid_gq[i] = log_shareIn[i] - sharepred[i];
       if (quality_parameterization == 2 && likelihood_mode != 3) {
+        int quality = obs_to_quality[i];
         real z = log_shareIn[i] - sharepred[i];
-        real v = square(sigma_share);
-        if (share_a_gq[group[i]] > 0) {
-          real residual = z - share_c_gq[group[i]] / share_a_gq[group[i]];
-          share_within_gq += (share_a_gq[group[i]] / (share_a_gq[group[i]] + 1.0 / v))
+        real v = square((quality_scope == 1 || share_likelihood != 2)
+          ? sigma_share : sigma_share_market[m]);
+        if (share_a_gq[quality] > 0) {
+          real residual = z - share_c_gq[quality] / share_a_gq[quality];
+          real contribution = (share_a_gq[quality]
+            / (share_a_gq[quality] + 1.0 / v))
             * square(residual) / v;
+          share_within_gq += contribution;
+          share_within_gq_market[m] += contribution;
         }
-        share_a_gq[group[i]] += 1.0 / v;
-        share_c_gq[group[i]] += z / v;
+        share_a_gq[quality] += 1.0 / v;
+        share_c_gq[quality] += z / v;
         share_log_v_gq += log(v);
+        share_log_v_gq_market[m] += log(v);
       }
       pred_shareIn[i] = exp(sharepred[i]);
       pred_shareUncond[i] = (1 - s0_prob[mky]) * pred_shareIn[i];
@@ -807,10 +935,30 @@ generated quantities {
         log_lik_share_market[m] += log_lik_share_marginal[i];
       }
     }
-    if (quality_parameterization == 2 && likelihood_mode != 3)
-      share_ll_gq = centered_gaussian_from_stats(
-        share_within_gq, share_a_gq, share_c_gq, share_log_v_gq,
-        N, N_group, sigma_b_strat);
+    if (quality_parameterization == 2 && likelihood_mode != 3) {
+      if (quality_scope == 1) {
+        share_ll_gq = centered_gaussian_from_stats(
+          share_within_gq, share_a_gq, share_c_gq, share_log_v_gq,
+          N, N_quality, sigma_b_strat);
+      } else for (m in 1:N_market) {
+        int start = quality_block_start[m];
+        int G = quality_block_n[m];
+        vector[G] a;
+        vector[G] c;
+        for (j in 1:G) {
+          a[j] = share_a_gq[start + j - 1];
+          c[j] = share_c_gq[start + j - 1];
+        }
+        share_ll_gq_market[m] = centered_gaussian_from_stats(
+          share_within_gq_market[m], a, c, share_log_v_gq_market[m],
+          market_obs_n[m], G, sigma_b_strat);
+        share_ll_gq += share_ll_gq_market[m];
+      }
+      if (quality_scope == 2 && share_likelihood == 2) for (m in 1:N_market) {
+        log_lik_share_collapsed_market[m] = share_ll_gq_market[m];
+        log_lik_share_market[m] = share_ll_gq_market[m];
+      }
+    }
 
     for (m in 1:N_market) {
       int mky0 = market_mky_order[market_mky_start[m]];
@@ -863,22 +1011,53 @@ generated quantities {
           }
         }
         if (quality_parameterization == 2 && share_likelihood == 2 &&
-            margin_likelihood == 2 && likelihood_mode != 3 && rho_active == 1) {
-          vector[N_margin] margin_resid;
-          for (q in 1:N_margin) {
-            int i = margin_idx[q];
-            int mm = market[i];
-            int mky = market_year_idx[i];
-            real invm = stack_logit_inv_margin(i, mky, k, s0_prob[mky],
-              alpha_structural_market[mm], supply_model, structure,
-              response[mky_pos_in_market[mky]], firm_mky_start, firm_mky_n,
-              firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
-            margin_resid[q] = log_marginNormInv[i] - log(invm + 1e-9);
+            margin_likelihood == 2 && likelihood_mode != 3 && rho_active == 1 &&
+            (quality_scope == 2 || N_market == 1)) {
+          if (quality_scope == 1) {
+            vector[N_margin] margin_resid;
+            for (q in 1:N_margin) {
+              int i = margin_idx[q];
+              int mm = market[i];
+              int mky = market_year_idx[i];
+              real invm = stack_logit_inv_margin(i, mky, k, s0_prob[mky],
+                alpha_structural_market[mm], supply_model, structure,
+                response[mky_pos_in_market[mky]], firm_mky_start, firm_mky_n,
+                firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
+              margin_resid[q] = log_marginNormInv[i] - log(invm + 1e-9);
+            }
+            score[kk] += collapsed_joint_from_share_stats(
+              share_within_gq, share_a_gq, share_c_gq, share_log_v_gq,
+              share_resid_gq, margin_resid, margin_idx, obs_to_quality,
+              N_quality, sigma_share, sigma_margin, rho, sigma_b_strat)
+              - share_ll_gq;
+          } else {
+            int qstart = quality_block_start[m];
+            int G = quality_block_n[m];
+            int mn = market_margin_n[m];
+            vector[G] a;
+            vector[G] c;
+            vector[mn] local_margin_resid;
+            for (j in 1:G) {
+              a[j] = share_a_gq[qstart + j - 1];
+              c[j] = share_c_gq[qstart + j - 1];
+            }
+            for (q in 1:mn) {
+              int pos = market_margin_order[market_margin_start[m] + q - 1];
+              int i = margin_idx[pos];
+              int mky = market_year_idx[i];
+              real invm = stack_logit_inv_margin(i, mky, k, s0_prob[mky],
+                alpha_structural_market[m], supply_model, structure,
+                response[mky_pos_in_market[mky]], firm_mky_start, firm_mky_n,
+                firm_mky_shareIn, firm_mky_rank, obs_to_firm_mky, price);
+              local_margin_resid[q] = log_marginNormInv[i] - log(invm + 1e-9);
+            }
+            score[kk] += collapsed_joint_from_local_share_stats(
+              share_within_gq_market[m], a, c, share_log_v_gq_market[m],
+              share_resid_gq, local_margin_resid, market_margin_order,
+              margin_idx, market_margin_start[m], quality_local,
+              market_obs_n[m], mn, G, sigma_share_market[m], sigma_margin_market[m],
+              rho, sigma_b_strat) - share_ll_gq_market[m];
           }
-          score[kk] += collapsed_joint_from_share_stats(
-            share_within_gq, share_a_gq, share_c_gq, share_log_v_gq,
-            log_shareIn - sharepred, margin_resid, margin_idx, group, N_group,
-            sigma_share, sigma_margin, rho, sigma_b_strat) - share_ll_gq;
         }
         for (pos in 1:market_obs_n[m]) {
           int i = market_obs_order[market_obs_start[m] + pos - 1];
@@ -890,7 +1069,7 @@ generated quantities {
           if (likelihood_mode != 2 && margin_obs[i] == 1 &&
               !(quality_parameterization == 2 && share_likelihood == 2 &&
                 margin_likelihood == 2 && likelihood_mode != 3 && rho_active == 1 &&
-                N_market == 1)) {
+                (quality_scope == 2 || N_market == 1))) {
             if (margin_likelihood == 2) {
               ell[pos, kk] = rho_active == 1
                 ? normal_lpdf(log_marginNormInv[i] |
@@ -1034,8 +1213,23 @@ generated quantities {
   if (quality_parameterization == 2) {
     log_lik_share_collapsed = share_ll_gq;
     log_lik_joint_collapsed = share_ll_gq;
-    if (likelihood_mode != 2)
-      for (u in 1:N_partition_unit)
-        log_lik_joint_collapsed += unit_margin_loglik[u];
+    if (quality_scope == 2 && share_likelihood == 2) for (m in 1:N_market) {
+      int mky0 = market_mky_order[market_mky_start[m]];
+      int u = mky_to_partition_unit[mky0];
+      log_lik_joint_collapsed_market[m] = log_lik_share_collapsed_market[m]
+        + unit_margin_loglik[u];
+      log_lik_joint_collapsed += unit_margin_loglik[u];
+    } else {
+      if (N_market == 1 && likelihood_mode != 3 && share_likelihood == 2) {
+        int mky0 = market_mky_order[market_mky_start[1]];
+        int u = mky_to_partition_unit[mky0];
+        log_lik_share_collapsed_market[1] = share_ll_gq;
+        log_lik_joint_collapsed_market[1] = share_ll_gq
+          + (likelihood_mode != 2 ? unit_margin_loglik[u] : 0);
+      }
+      if (likelihood_mode != 2)
+        for (u in 1:N_partition_unit)
+          log_lik_joint_collapsed += unit_margin_loglik[u];
+    }
   }
 }

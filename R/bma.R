@@ -890,6 +890,7 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
       x@metadata$margin_likelihood %||% "student_t", character(1)),
     quality_parameterization = vapply(fits, function(x)
       x@metadata$quality_parameterization %||% "sampled", character(1)),
+    quality_scope = vapply(fits, .quality_scope_from_fit, character(1), strict = FALSE),
     prior_manifest = vapply(fits, function(x) x@metadata$prior_manifest,
                             character(1)),
     model_prior = prior_weights,

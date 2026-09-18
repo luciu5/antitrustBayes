@@ -18,9 +18,9 @@ test_that("collapsed Gaussian Stan paths are sparse, normalized, and scalar-acco
     expect_false(grepl("q0 -=", src, fixed = TRUE))
     expect_match(src, "log_lik_share_collapsed", fixed = TRUE)
     expect_match(src, "log_lik_joint_collapsed", fixed = TRUE)
-    expect_match(src, "quality_parameterization == 1 ? N_group - 1 : 0",
+    expect_match(src, "quality_parameterization == 1 ? N_quality_coord : 0",
                  fixed = TRUE)
-    expect_match(src, "vector[quality_parameterization == 1 ? N_group : 0] b_quality_all",
+    expect_match(src, "vector[quality_parameterization == 1 ? N_quality : 0] b_quality_all",
                  fixed = TRUE)
     expect_false(grepl("matrix\\s*\\[\\s*N\\s*,\\s*N\\s*\\]", src,
                        perl = TRUE))
@@ -36,7 +36,7 @@ test_that("collapsed Gaussian Stan paths are sparse, normalized, and scalar-acco
     expect_match(src, "N_market == 1", fixed = TRUE)
     expect_match(src, "target += log_sum_exp(score)", fixed = TRUE)
     expect_match(src, "- collapsed_share_ll", fixed = TRUE)
-    expect_match(src, "N_market == 1))", fixed = TRUE)
+    expect_match(src, "(quality_scope == 2 || N_market == 1)", fixed = TRUE)
     expect_match(src, "else for (pos in 1:market_obs_n[m])", fixed = TRUE)
     expect_match(src, "unit_margin_loglik", fixed = TRUE)
     expect_match(src, "posterior_component_prob", fixed = TRUE)

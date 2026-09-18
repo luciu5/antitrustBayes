@@ -17,9 +17,11 @@ safe_sd <- function(x, floor = 1e-8) {
                                       N_market = NULL,
                                       N_margin = NULL,
                                       likelihood_mode = 1L,
-                                      exact_k = FALSE) {
+                                      exact_k = FALSE,
+                                      quality_scope = c("global", "market")) {
   share_likelihood <- match.arg(share_likelihood)
   quality_parameterization <- match.arg(quality_parameterization)
+  quality_scope <- match.arg(quality_scope)
   if (is.null(margin_likelihood)) margin_likelihood <- share_likelihood
   margin_likelihood <- match.arg(margin_likelihood, c("student_t", "gaussian"))
   if (quality_parameterization == "collapsed" && share_likelihood != "gaussian") {
@@ -35,6 +37,11 @@ safe_sd <- function(x, floor = 1e-8) {
       !(quality_parameterization == "collapsed" && !isTRUE(use_rho))) {
     stop("The Gaussian-share/Student-t-margin hybrid requires collapsed quality and use_rho = FALSE.")
   }
+  ## Gaussian shares and margins contain no Student-t degrees-of-freedom
+  ## coordinate. The existing validation still rejects an explicit request to
+  ## estimate df with Gaussian shares; callers that leave estimation off get
+  ## an inactive coordinate in the returned contract.
+  df_active <- !(share_likelihood == "gaussian" && margin_likelihood == "gaussian")
   if (isTRUE(estimate_df) && share_likelihood == "gaussian") {
     stop("df = 'estimate' is only available for Student-t shares.")
   }
@@ -50,20 +57,259 @@ safe_sd <- function(x, floor = 1e-8) {
     stop("Gaussian-share/Student-t-margin hybrids require use_rho = FALSE.")
   }
   if (!is.null(N_market) && !is.null(N_margin) &&
-      quality_parameterization == "collapsed" && isTRUE(use_rho) &&
+      quality_scope == "global" && quality_parameterization == "collapsed" && isTRUE(use_rho) &&
       likelihood_mode == 1L && N_market > 1L && N_margin > 0L && exact_k) {
-    stop("Collapsed Gaussian rho is currently supported only for one market.")
+    stop("Global collapsed Gaussian quality with active rho and exact ordered-k ",
+         "is supported only for one market; use quality_scope = 'market' ",
+         "for multi-market exact-k.")
   }
   list(
     share_likelihood = share_likelihood,
     margin_likelihood = margin_likelihood,
     quality_parameterization = quality_parameterization,
+    quality_scope = quality_scope,
+    quality_scope_code = if (quality_scope == "global") 1L else 2L,
+    df_active = isTRUE(df_active),
     share_likelihood_code = if (share_likelihood == "student_t") 1L else 2L,
     margin_likelihood_code = if (margin_likelihood == "student_t") 1L else 2L,
     quality_parameterization_code = if (quality_parameterization == "sampled") 1L else 2L,
     mode = paste(share_likelihood, quality_parameterization, margin_likelihood,
                  sep = "/")
   )
+}
+
+## Build the separate quality incidence and contiguous centering-block map.
+## `group` remains the economic ownership/ranking identifier.  The returned
+## `obs_to_quality` map is the only index used by the quality prior.  Pair keys
+## are numeric codes, so user labels never get concatenated into an ambiguous
+## identifier.
+.build_quality_incidence <- function(market_int, group_int, market_levels,
+                                     group_levels,
+                                     quality_scope = c("global", "market"),
+                                     margin_idx = integer()) {
+  quality_scope <- match.arg(quality_scope)
+  n <- length(market_int)
+  if (length(group_int) != n || !length(market_int) ||
+      anyNA(market_int) || anyNA(group_int)) {
+    stop("Quality incidence requires matching non-missing market and group maps.",
+         call. = FALSE)
+  }
+  n_market <- length(market_levels)
+  if (!n_market || any(market_int < 1L | market_int > n_market)) {
+    stop("Quality incidence has an invalid market index.", call. = FALSE)
+  }
+  if (quality_scope == "global") {
+    if (any(group_int < 1L | group_int > length(group_levels))) {
+      stop("Quality incidence has an invalid group index.", call. = FALSE)
+    }
+    n_quality <- length(group_levels)
+    quality_index <- as.integer(group_int)
+    block_start <- 1L
+    block_n <- n_quality
+    block_market <- 1L
+    lookup <- data.frame(
+      quality_index = seq_len(n_quality),
+      market_index = rep(NA_integer_, n_quality),
+      group_index = seq_len(n_quality),
+      market = rep(NA_character_, n_quality),
+      group = as.character(group_levels),
+      market_label = rep(NA_character_, n_quality),
+      group_label = as.character(group_levels),
+      quality_unit = as.character(group_levels),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    if (any(group_int < 1L | group_int > length(group_levels))) {
+      stop("Quality incidence has an invalid group index.", call. = FALSE)
+    }
+    ## Sort by integer market then original integer group.  This is stable
+    ## across labels and makes each market's Helmert block contiguous.
+    pair_key <- (as.numeric(market_int) - 1) * length(group_levels) +
+      as.numeric(group_int)
+    pair_keys <- sort(unique(pair_key))
+    quality_index <- match(pair_key, pair_keys)
+    pair_market <- ((pair_keys - 1) %/% length(group_levels)) + 1
+    pair_group <- ((pair_keys - 1) %% length(group_levels)) + 1
+    block_n <- tabulate(pair_market, nbins = n_market)
+    if (any(block_n < 1L)) {
+      stop("Quality incidence requires every encoded market to have observations.",
+           call. = FALSE)
+    }
+    block_start <- cumsum(c(1L, head(block_n, -1L)))
+    block_market <- seq_len(n_market)
+    quality_unit <- if (n_market == 1L) {
+      as.character(group_levels[pair_group])
+    } else {
+      paste0("m", pair_market, "_g", pair_group)
+    }
+    lookup <- data.frame(
+      quality_index = seq_along(pair_keys),
+      market_index = as.integer(pair_market),
+      group_index = as.integer(pair_group),
+      market = as.character(market_levels[pair_market]),
+      group = as.character(group_levels[pair_group]),
+      market_label = as.character(market_levels[pair_market]),
+      group_label = as.character(group_levels[pair_group]),
+      quality_unit = quality_unit,
+      stringsAsFactors = FALSE
+    )
+  }
+  coord_n <- pmax(as.integer(block_n) - 1L, 0L)
+  coord_start <- cumsum(c(1L, head(coord_n, -1L)))
+  n_coord <- sum(coord_n)
+  market_obs_n <- tabulate(as.integer(market_int), nbins = n_market)
+  market_obs_order <- order(as.integer(market_int), seq_len(n))
+  market_obs_start <- cumsum(c(1L, head(market_obs_n, -1L)))
+
+  margin_idx <- as.integer(margin_idx)
+  if (length(margin_idx)) {
+    if (anyNA(margin_idx) || any(margin_idx < 1L | margin_idx > n)) {
+      stop("Quality incidence has an invalid margin index.", call. = FALSE)
+    }
+    margin_market <- as.integer(market_int[margin_idx])
+    margin_position <- seq_along(margin_idx)
+    market_margin_order <- order(margin_market, margin_position)
+  } else {
+    margin_market <- integer()
+    market_margin_order <- integer()
+  }
+  market_margin_n <- tabulate(margin_market, nbins = n_market)
+  market_margin_start <- cumsum(c(1L, head(market_margin_n, -1L)))
+
+  list(
+    quality_scope = quality_scope,
+    quality_scope_code = if (quality_scope == "global") 1L else 2L,
+    N_quality = as.integer(length(lookup$quality_index)),
+    obs_to_quality = as.integer(quality_index),
+    N_quality_block = as.integer(length(block_n)),
+    quality_block_start = as.integer(block_start),
+    quality_block_n = as.integer(block_n),
+    N_quality_coord = as.integer(n_coord),
+    quality_coord_start = as.integer(coord_start),
+    quality_block_market = as.integer(block_market),
+    market_obs_order = as.integer(market_obs_order),
+    market_obs_start = as.integer(market_obs_start),
+    market_obs_n = as.integer(market_obs_n),
+    market_margin_order = as.integer(market_margin_order),
+    market_margin_start = as.integer(market_margin_start),
+    market_margin_n = as.integer(market_margin_n),
+    quality_lookup = lookup
+  )
+}
+
+## Resolve the quality scope from a fitted object.  Specification 9 and older
+## objects had only the centered global group effect, so absence of the new
+## field is an explicit global interpretation.  A version-10 object without
+## the field is incomplete and must be refit rather than guessed to be market
+## scoped.
+.quality_scope_from_fit <- function(fit, strict = TRUE) {
+  if (methods::is(fit, "BayesSpecifiedFit")) return("global")
+  if (!methods::is(fit, "BayesLogit")) {
+    stop("Quality scope requires a BayesLogit fit.", call. = FALSE)
+  }
+  md <- fit@metadata
+  sd <- fit@stan_data
+  decode <- function(x, name) {
+    if (is.null(x) || !length(x)) return(NULL)
+    if (length(x) != 1L) stop("Malformed fitted quality scope field '", name, "'.", call. = FALSE)
+    if (is.numeric(x)) {
+      if (!is.finite(x) || x != floor(x) || !x %in% c(1, 2))
+        stop("Malformed fitted quality scope field '", name, "'.", call. = FALSE)
+      return(if (as.integer(x) == 1L) "global" else "market")
+    }
+    x <- as.character(x)
+    if (!x %in% c("global", "market"))
+      stop("Malformed fitted quality scope field '", name, "'.", call. = FALSE)
+    x
+  }
+  candidates <- list(
+    metadata = decode(md$quality_scope, "metadata$quality_scope"),
+    attribute = decode(attr(sd, "quality_scope", exact = TRUE), "attr(quality_scope)"),
+    stan = decode(sd$quality_scope, "stan_data$quality_scope"),
+    incidence = decode((md$quality_incidence %||%
+      attr(sd, "quality_incidence", exact = TRUE))$quality_scope,
+      "quality_incidence$quality_scope")
+  )
+  candidates <- candidates[!vapply(candidates, is.null, logical(1))]
+  if (length(candidates) > 1L && length(unique(unlist(candidates))) != 1L) {
+    stop("Fitted quality scope metadata disagree; clear the object and refit.",
+         call. = FALSE)
+  }
+  if (length(candidates)) return(unname(candidates[[1L]]))
+  normalization <- md$prior_normalization
+  normalization_version <- if (is.list(normalization))
+    normalization$model_spec_version else NULL
+  version <- md$model_spec_version %||% normalization_version %||%
+    attr(sd, "model_spec_version", exact = TRUE)
+  version <- if (length(version)) suppressWarnings(as.integer(version[[1L]])) else NA_integer_
+  ## `strict` is retained for callers serialized against the earlier helper
+  ## signature. It must not turn an incomplete specification-10 object into a
+  ## guessed global fit: only pre-10 objects have an implicit global scope.
+  if (is.na(version) || version < 10L) return("global")
+  stop("Specification-10 fit is missing quality_scope; clear and refit it explicitly with quality_scope = 'global' or 'market'.",
+       call. = FALSE)
+}
+
+## Return the canonical incidence contract attached to a fit, reconstructing
+## historical global incidence when serialized metadata pre-dates the pair
+## map.  The economic group/ownership vector remains the Stan `group` field.
+.quality_incidence_from_fit <- function(fit, strict = TRUE) {
+  if (methods::is(fit, "BayesSpecifiedFit")) return(NULL)
+  scope <- .quality_scope_from_fit(fit, strict = strict)
+  sd <- fit@stan_data
+  incidence <- attr(sd, "quality_incidence", exact = TRUE) %||%
+    fit@metadata$quality_incidence
+  if (is.list(incidence) && !is.null(incidence$obs_to_quality)) {
+    if (!identical(as.character(incidence$quality_scope), scope))
+      stop("Quality incidence scope disagrees with fitted scope.", call. = FALSE)
+    return(incidence)
+  }
+  market <- sd$market
+  group <- sd$group
+  if (is.null(group)) {
+    stop("Fitted object is missing market/group fields needed to rebuild quality incidence.",
+         call. = FALSE)
+  }
+  if (is.null(market)) {
+    if (identical(scope, "market"))
+      stop("Market-scoped quality incidence cannot be reconstructed without market indices; clear and refit.", call. = FALSE)
+    market <- rep.int(1L, length(group))
+  }
+  market <- as.integer(market); group <- as.integer(group)
+  market_levels <- attr(sd, "market_levels", exact = TRUE) %||%
+    fit@metadata$market_levels %||% if ("market" %in% names(fit@data))
+      sort(unique(as.character(fit@data$market))) else "unit_1"
+  group_levels <- attr(sd, "group_levels", exact = TRUE) %||%
+    fit@metadata$group_levels %||% sort(unique(as.character(fit@data$group)))
+  .build_quality_incidence(
+    market_int = market, group_int = group,
+    market_levels = as.character(market_levels),
+    group_levels = as.character(group_levels), quality_scope = scope,
+    margin_idx = as.integer(sd$margin_idx %||% integer())
+  )
+}
+
+## Stack data historically carries the same market observation CSR used by
+## the quality likelihood. Keep one canonical copy when the two builders are
+## combined, while allowing its exact-structure cutoff_scale placeholder to
+## be filled by the Stack append (the base builder intentionally leaves it
+## NULL for ordered-k).
+.merge_stan_stack_data <- function(stan_data, stack_data) {
+  overlap <- intersect(names(stan_data), names(stack_data))
+  for (nm in overlap) {
+    left <- stan_data[[nm]]
+    right <- stack_data[[nm]]
+    if (is.null(left) && !is.null(right)) {
+      stan_data[[nm]] <- right
+    } else if (!is.null(left) && !is.null(right) &&
+               !isTRUE(all.equal(unname(left), unname(right),
+                                 check.attributes = FALSE))) {
+      stop("Stack and quality data disagree for shared field '", nm, "'.",
+           call. = FALSE)
+    }
+  }
+  stack_data <- stack_data[setdiff(names(stack_data), overlap)]
+  c(stan_data, stack_data)
 }
 
 ## Resolve the outside-share pooling ladder.  `s0_pooling` is the public
@@ -391,8 +637,10 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               k_scope = "market",
                               share_likelihood = c("student_t", "gaussian"),
                               quality_parameterization = c("sampled", "collapsed"),
-                              margin_likelihood = NULL) {
+                              margin_likelihood = NULL,
+                              quality_scope = c("global", "market")) {
   N <- length(prices)
+  quality_scope <- match.arg(quality_scope)
   likelihood_modes <- .resolve_likelihood_modes(
     share_likelihood = share_likelihood,
     quality_parameterization = quality_parameterization,
@@ -400,11 +648,17 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     use_rho = use_rho,
     use_market_resid_scale = use_market_resid_scale,
     estimate_df = estimate_df,
-    likelihood_mode = likelihood_mode
+    likelihood_mode = likelihood_mode,
+    quality_scope = quality_scope
   )
   share_likelihood <- likelihood_modes$share_likelihood
   margin_likelihood <- likelihood_modes$margin_likelihood
   quality_parameterization <- likelihood_modes$quality_parameterization
+  estimate_df <- isTRUE(estimate_df) && isTRUE(likelihood_modes$df_active)
+  if (!estimate_df && identical(likelihood_modes$share_likelihood, "gaussian") &&
+      identical(likelihood_modes$margin_likelihood, "gaussian")) {
+    resid_df_fixed <- NULL
+  }
   market_side <- match.arg(market_side, c("input", "output"))
   market_sign <- if (market_side == "input") 1L else -1L
   resolved_structure <- .stack_resolve_structure(
@@ -508,6 +762,11 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   N_cluster <- nlevels(cluster_f)
   margin_idx <- which(margin_observed)
   N_margin <- length(margin_idx)
+  quality_incidence <- .build_quality_incidence(
+    market_int = market_int, group_int = group_int,
+    market_levels = levels(market_f), group_levels = levels(group_f),
+    quality_scope = quality_scope, margin_idx = margin_idx
+  )
   if (quality_parameterization == "collapsed" && isTRUE(use_rho) &&
       likelihood_mode == 1L && N_market > 1L && N_margin > 0L) {
     .resolve_likelihood_modes(
@@ -519,7 +778,8 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       estimate_df = estimate_df,
       N_market = N_market, N_margin = N_margin,
       likelihood_mode = likelihood_mode,
-      exact_k = exact_structure && identical(partition_prior, "ordered_k")
+      exact_k = exact_structure && identical(partition_prior, "ordered_k"),
+      quality_scope = quality_scope
     )
   }
   if (any(vapply(split(cluster_int, mky_int), function(x) length(unique(x)) > 1L,
@@ -656,6 +916,21 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       share_likelihood = likelihood_modes$share_likelihood_code,
       margin_likelihood = likelihood_modes$margin_likelihood_code,
       quality_parameterization = likelihood_modes$quality_parameterization_code,
+      quality_scope = quality_incidence$quality_scope_code,
+      N_quality = quality_incidence$N_quality,
+      obs_to_quality = array(quality_incidence$obs_to_quality, dim = N),
+      N_quality_block = quality_incidence$N_quality_block,
+      quality_block_start = array(quality_incidence$quality_block_start),
+      quality_block_n = array(quality_incidence$quality_block_n),
+      N_quality_coord = quality_incidence$N_quality_coord,
+      quality_coord_start = array(quality_incidence$quality_coord_start),
+      market_obs_order = array(quality_incidence$market_obs_order, dim = N),
+      market_obs_start = array(quality_incidence$market_obs_start),
+      market_obs_n = array(quality_incidence$market_obs_n),
+      market_margin_order = array(quality_incidence$market_margin_order,
+                                  dim = N_margin),
+      market_margin_start = array(quality_incidence$market_margin_start),
+      market_margin_n = array(quality_incidence$market_margin_n),
       K_s0 = K_s0,
       X_s0 = X_s0_mat,
       mky_to_market = array(mky_to_market),
@@ -697,6 +972,10 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
   attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
   attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+  attr(stan_data, "quality_scope") <- quality_incidence$quality_scope
+  attr(stan_data, "quality_scope_code") <- quality_incidence$quality_scope_code
+  attr(stan_data, "quality_lookup") <- quality_incidence$quality_lookup
+  attr(stan_data, "quality_incidence") <- quality_incidence
   attr(stan_data, "likelihood_mode_metadata") <- likelihood_modes
   attr(stan_data, "s0_pooling") <- s0_resolution$resolved
   attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
@@ -724,7 +1003,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     )
     ranking_metadata <- attr(stack_data, "firm_market_ranking", exact = TRUE)
     partition_metadata <- attr(stack_data, "partition_metadata", exact = TRUE)
-    stan_data <- c(stan_data, stack_data)
+    stan_data <- .merge_stan_stack_data(stan_data, stack_data)
     if (!is.null(cutoff_scale)) stan_data$cutoff_scale <- cutoff_scale
     attr(stan_data, "market_levels") <- levels(market_f)
     attr(stan_data, "year_levels") <- levels(year_f)
@@ -744,6 +1023,10 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
     attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
     attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+    attr(stan_data, "quality_scope") <- quality_incidence$quality_scope
+    attr(stan_data, "quality_scope_code") <- quality_incidence$quality_scope_code
+    attr(stan_data, "quality_lookup") <- quality_incidence$quality_lookup
+    attr(stan_data, "quality_incidence") <- quality_incidence
     attr(stan_data, "likelihood_mode_metadata") <- likelihood_modes
     attr(stan_data, "s0_pooling") <- s0_resolution$resolved
     attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
@@ -801,8 +1084,10 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   k_scope = "market",
                                   share_likelihood = c("student_t", "gaussian"),
                                   quality_parameterization = c("sampled", "collapsed"),
-                                  margin_likelihood = NULL) {
+                                  margin_likelihood = NULL,
+                                  quality_scope = c("global", "market")) {
   N <- length(prices)
+  quality_scope <- match.arg(quality_scope)
   likelihood_modes <- .resolve_likelihood_modes(
     share_likelihood = share_likelihood,
     quality_parameterization = quality_parameterization,
@@ -810,11 +1095,17 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     use_rho = use_rho,
     use_market_resid_scale = use_market_resid_scale,
     estimate_df = estimate_df,
-    likelihood_mode = likelihood_mode
+    likelihood_mode = likelihood_mode,
+    quality_scope = quality_scope
   )
   share_likelihood <- likelihood_modes$share_likelihood
   margin_likelihood <- likelihood_modes$margin_likelihood
   quality_parameterization <- likelihood_modes$quality_parameterization
+  estimate_df <- isTRUE(estimate_df) && isTRUE(likelihood_modes$df_active)
+  if (!estimate_df && identical(likelihood_modes$share_likelihood, "gaussian") &&
+      identical(likelihood_modes$margin_likelihood, "gaussian")) {
+    resid_df_fixed <- NULL
+  }
   market_side <- match.arg(market_side, c("input", "output"))
   if (market_side != "output") {
     stop("CES estimation currently supports output markets only; use ",
@@ -934,6 +1225,11 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   N_cluster <- nlevels(cluster_f)
   margin_idx <- which(margin_observed)
   N_margin <- length(margin_idx)
+  quality_incidence <- .build_quality_incidence(
+    market_int = market_int, group_int = group_int,
+    market_levels = levels(market_f), group_levels = levels(group_f),
+    quality_scope = quality_scope, margin_idx = margin_idx
+  )
   if (quality_parameterization == "collapsed" && isTRUE(use_rho) &&
       likelihood_mode == 1L && N_market > 1L && N_margin > 0L) {
     .resolve_likelihood_modes(
@@ -945,7 +1241,8 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       estimate_df = estimate_df,
       N_market = N_market, N_margin = N_margin,
       likelihood_mode = likelihood_mode,
-      exact_k = exact_structure && identical(partition_prior, "ordered_k")
+      exact_k = exact_structure && identical(partition_prior, "ordered_k"),
+      quality_scope = quality_scope
     )
   }
   if (any(vapply(split(cluster_int, mky_int), function(x) length(unique(x)) > 1L,
@@ -1088,6 +1385,21 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       share_likelihood = likelihood_modes$share_likelihood_code,
       margin_likelihood = likelihood_modes$margin_likelihood_code,
       quality_parameterization = likelihood_modes$quality_parameterization_code,
+      quality_scope = quality_incidence$quality_scope_code,
+      N_quality = quality_incidence$N_quality,
+      obs_to_quality = array(quality_incidence$obs_to_quality, dim = N),
+      N_quality_block = quality_incidence$N_quality_block,
+      quality_block_start = array(quality_incidence$quality_block_start),
+      quality_block_n = array(quality_incidence$quality_block_n),
+      N_quality_coord = quality_incidence$N_quality_coord,
+      quality_coord_start = array(quality_incidence$quality_coord_start),
+      market_obs_order = array(quality_incidence$market_obs_order, dim = N),
+      market_obs_start = array(quality_incidence$market_obs_start),
+      market_obs_n = array(quality_incidence$market_obs_n),
+      market_margin_order = array(quality_incidence$market_margin_order,
+                                  dim = N_margin),
+      market_margin_start = array(quality_incidence$market_margin_start),
+      market_margin_n = array(quality_incidence$market_margin_n),
       K_s0 = K_s0,
       X_s0 = X_s0_mat,
       mky_to_market = array(mky_to_market),
@@ -1130,6 +1442,10 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
   attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
   attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+  attr(stan_data, "quality_scope") <- quality_incidence$quality_scope
+  attr(stan_data, "quality_scope_code") <- quality_incidence$quality_scope_code
+  attr(stan_data, "quality_lookup") <- quality_incidence$quality_lookup
+  attr(stan_data, "quality_incidence") <- quality_incidence
   attr(stan_data, "likelihood_mode_metadata") <- likelihood_modes
   attr(stan_data, "s0_pooling") <- s0_resolution$resolved
   attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
@@ -1157,7 +1473,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     )
     ranking_metadata <- attr(stack_data, "firm_market_ranking", exact = TRUE)
     partition_metadata <- attr(stack_data, "partition_metadata", exact = TRUE)
-    stan_data <- c(stan_data, stack_data)
+    stan_data <- .merge_stan_stack_data(stan_data, stack_data)
     if (!is.null(cutoff_scale)) stan_data$cutoff_scale <- cutoff_scale
     attr(stan_data, "market_levels") <- levels(market_f)
     attr(stan_data, "year_levels") <- levels(year_f)
@@ -1178,6 +1494,10 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
     attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
     attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+    attr(stan_data, "quality_scope") <- quality_incidence$quality_scope
+    attr(stan_data, "quality_scope_code") <- quality_incidence$quality_scope_code
+    attr(stan_data, "quality_lookup") <- quality_incidence$quality_lookup
+    attr(stan_data, "quality_incidence") <- quality_incidence
     attr(stan_data, "likelihood_mode_metadata") <- likelihood_modes
     attr(stan_data, "s0_pooling") <- s0_resolution$resolved
     attr(stan_data, "s0_pooling_requested") <- s0_resolution$requested
@@ -1364,7 +1684,7 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
 # Current fitted-object/model contract. Increment whenever the Stan likelihood
 # changes in a way that makes serialized fits unsuitable for comparison or
 # simulation under the current package.
-.antitrust_bayes_model_spec_version <- 9L
+.antitrust_bayes_model_spec_version <- 10L
 
 # Arithmetic mean of a logistic-normal random variable. The outside-share
 # prior is parameterized on the logit scale in Stan, while FOC prior

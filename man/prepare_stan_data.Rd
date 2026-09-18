@@ -40,7 +40,8 @@ prepare_stan_data(
   k_scope = "market",
   share_likelihood = c("student_t", "gaussian"),
   quality_parameterization = c("sampled", "collapsed"),
-  margin_likelihood = NULL
+  margin_likelihood = NULL,
+  quality_scope = c("global", "market")
 )
 }
 \arguments{
@@ -113,6 +114,11 @@ include zero; Stackelberg supports must be positive.}
 
 \item{k_prior}{Positional probabilities corresponding to \code{k_support};
 \code{NULL} gives a uniform prior.}
+
+\item{quality_scope}{Quality incidence is \code{"global"} (historical
+default) or experimental \code{"market"}; market scope centers persistent
+quality within each market while retaining the original ownership/ranking
+\code{group} field.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.

@@ -45,7 +45,7 @@
 #'   override. An empty vector gives a wholly MonCom post state.
 #' @param demand_anchoring Demand baseline for policy simulation. The default
 #'   \code{"observed"} retains the historical observed-share reconstruction.
-#'   \code{"latent_quality"} draws the fitted global quality state, normalizes
+#'   \code{"latent_quality"} draws the fitted scoped quality state, normalizes
 #'   latent relative shares while retaining the posterior outside share, and
 #'   solves a new pre-policy equilibrium using the observed-share FOC cost
 #'   primitive. It supports output Logit/CES and input Logit. For input Logit,

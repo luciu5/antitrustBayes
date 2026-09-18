@@ -56,12 +56,13 @@ test_that("all Stan graphs use the centered quality coordinate contract", {
   for (f in files) {
     code <- paste(readLines(f, warn = FALSE), collapse = "\n")
     expect_false(grepl("b_group_raw", code, fixed = TRUE), info = f)
-    expect_true(grepl("vector[quality_parameterization == 1 ? N_group - 1 : 0] b_group_centered", code,
+    expect_true(grepl("vector[quality_parameterization == 1 ? N_quality_coord : 0] b_group_centered", code,
                       fixed = TRUE), info = f)
-    expect_true(grepl("matrix[N_group, quality_parameterization == 1 ? N_group - 1 : 0] Q", code,
-                      fixed = TRUE), info = f)
-    expect_true(grepl("b_quality_all = Q * b_group_centered;",
-                      code, fixed = TRUE), info = f)
+    expect_false(grepl("matrix[N_group, quality_parameterization == 1 ? N_group - 1 : 0] Q", code,
+                       fixed = TRUE), info = f)
+    expect_true(grepl("for (block in 1:N_quality_block)", code, fixed = TRUE), info = f)
+    expect_true(grepl("real suffix = 0.0;", code, fixed = TRUE), info = f)
+    expect_true(grepl("b_quality_all[quality_block_start[block] + j - 1] = suffix - k * v_k;", code, fixed = TRUE), info = f)
     expect_true(grepl("normal_lpdf(b_group_centered | 0, sigma_b_strat)",
                       code, fixed = TRUE), info = f)
   }

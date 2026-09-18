@@ -1,9 +1,9 @@
 .stack_comparison_fixture <- function() {
   methods::new("BayesLogit",stanfit=NULL,supply_model=1L,demand_model="logit",
     market_side="output",price_sd=1,call=call("bayes_est"),
-    metadata=list(structure="stackelberg", partition_prior="ordered_k",
+    metadata=list(structure="stackelberg", partition_prior="ordered_k", quality_scope="global",
       prior_normalization=list(
-      mode="native_stan_normalized", model_spec_version=9L)),
+      mode="native_stan_normalized", model_spec_version=10L)),
     stan_data=list(structure=2L,partition_prior_code=1L,
       likelihood_mode=1L,use_hmt=0L,
       use_s0_market_pool=0L,use_s0_market_year_pool=0L,

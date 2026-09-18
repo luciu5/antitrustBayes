@@ -98,18 +98,30 @@
         required <- c(required, "share_mean")
         ## One global group is deterministically centered at zero and the
         ## historical recovery path intentionally accepts no b_quality_all.
-        n_group <- fit@stan_data$N_group %||%
+        n_quality <- fit@stan_data$N_quality %||% fit@stan_data$N_group %||%
           if (!is.null(fit@stan_data$group)) max(fit@stan_data$group) else NA_integer_
-        if (length(n_group) == 1L && is.finite(n_group) && n_group > 1L)
+        if (length(n_quality) == 1L && is.finite(n_quality) && n_quality > 1L)
           required <- c(required, "b_quality_all")
       }
       if (quality == "collapsed") {
         required <- c(required, "share_mean", "sigma_b_strat", "sigma_share")
+        scope <- if (methods::is(fit, "BayesLogit"))
+          .quality_scope_from_fit(fit, strict = FALSE) else "global"
         if (.posterior_contract_rho_active(fit) &&
             identical(conditioning, "auto") &&
             !(native || identical(partition, "ordered_k"))) {
           required <- c(required, "rho", "sigma_margin", "pred_marginNormInv")
         }
+        exact_quality <- .posterior_contract_rho_active(fit) &&
+          identical(conditioning, "auto") &&
+          (native || identical(partition, "ordered_k")) &&
+          (identical(scope, "market") ||
+           (identical(scope, "global") &&
+            as.integer(fit@stan_data$N_market %||%
+              if (!is.null(fit@stan_data$market)) max(fit@stan_data$market) else 1L) == 1L))
+        if (exact_quality)
+          required <- c(required, "rho", "sigma_margin", "posterior_component_prob",
+                        "a_market", "s0_prob")
       }
     }
   }
@@ -118,10 +130,21 @@
       stop("posterior_quality extraction requires a collapsed-quality fit.", call. = FALSE)
     }
     required <- c("share_mean", "sigma_b_strat", "sigma_share")
+    scope <- .quality_scope_from_fit(fit, strict = FALSE)
     if (.posterior_contract_rho_active(fit) && identical(conditioning, "auto") &&
         !(native || identical(partition, "ordered_k"))) {
       required <- c(required, "rho", "sigma_margin", "pred_marginNormInv")
     }
+    exact_quality <- .posterior_contract_rho_active(fit) &&
+      identical(conditioning, "auto") &&
+      (native || identical(partition, "ordered_k")) &&
+      (identical(scope, "market") ||
+       (identical(scope, "global") &&
+        as.integer(fit@stan_data$N_market %||%
+          if (!is.null(fit@stan_data$market)) max(fit@stan_data$market) else 1L) == 1L))
+    if (exact_quality)
+      required <- c(required, "rho", "sigma_margin", "posterior_component_prob",
+                    "a_market", "s0_prob")
   }
   if (purpose == "posterior_k") {
     if (!native || !identical(partition, "ordered_k")) {

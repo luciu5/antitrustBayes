@@ -43,6 +43,15 @@ make_model_universe_exact_fit <- function(markets = c("m1", "m2"),
   observed_groups <- unlist(lapply(seq_len(n_unit), function(u) {
     paste0("m", u, "_firm", seq_len(n_firms[[u]]))
   }), use.names = FALSE)
+  stan_data$N <- length(observed_groups)
+  stan_data$market <- rep(seq_len(n_unit), n_firms)
+  stan_data$group <- match(observed_groups, sort(unique(observed_groups)))
+  stan_data$N_group <- length(unique(observed_groups))
+  attr(stan_data, "group_levels") <- sort(unique(observed_groups))
+  attr(stan_data, "quality_scope") <- "global"
+  attr(stan_data, "quality_incidence") <- antitrustBayes:::.build_quality_incidence(
+    stan_data$market, stan_data$group, markets,
+    attr(stan_data, "group_levels"), quality_scope = "global")
   data <- data.frame(
     prices = rep(1, length(observed_groups)),
     quantities = rep(1, length(observed_groups)),
@@ -59,9 +68,9 @@ make_model_universe_exact_fit <- function(markets = c("m1", "m2"),
       supply_model = as.integer(supply_model), demand_model = "logit", prior_manifest = "baseline",
       resolved_priors = list(prior_alpha_sd = 1), firm_market_ranking = ranking,
       share_likelihood = share_likelihood, margin_likelihood = margin_likelihood,
-      quality_parameterization = quality_parameterization,
+      quality_parameterization = quality_parameterization, quality_scope = "global",
       likelihood = "joint", posterior_draws = 2L,
-      prior_normalization = list(mode = "native_stan_normalized", model_spec_version = 9L)
+      prior_normalization = list(mode = "native_stan_normalized", model_spec_version = 10L)
     )
   )
 }

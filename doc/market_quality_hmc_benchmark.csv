@@ -1,0 +1,64 @@
+"case","fixture","mode","seed","status","wall_seconds","native_seconds","peak_RSS_kb","divergences","treedepth_hits","minimum_BFMI","maximum_Rhat","minimum_bulk_ESS","minimum_tail_ESS","minimum_bulk_ESS_second","minimum_tail_ESS_second","mean_step_size","quality_share_scale_correlation","estimated_coordinate_failures","usable_gate","error","warnings"
+"B_collapsed_market_271828","B","collapsed_market",271828,"diagnostic gate failed",125.25,123.762,531528,17,0,0.76144922401999,1.01178650592766,599.540501999546,687.391063604345,4.78675051496644,5.48815220442591,0.020124451927846,-0.164392740670138,0,FALSE,"","There were 17 divergent transitions after warmup. See
+https://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+to find out why this is a problem and how to eliminate them. | Examine the pairs() plot to diagnose sampling problems
+"
+"B_expanded_market_271828","B","expanded_market",271828,"diagnostic gate failed",67.149,65.244,531408,20,0,0.501200966646658,1.01499931417855,393.476910170054,677.726224563764,5.85975830124133,10.0928714435623,0.0187830829443269,-0.101940098253297,0,FALSE,"","There were 20 divergent transitions after warmup. See
+https://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+to find out why this is a problem and how to eliminate them. | Examine the pairs() plot to diagnose sampling problems
+ | Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess"
+"B_legacy_271828","B","legacy",271828,"diagnostic gate failed",66.185,64.328,522912,1,0,0.641229705563356,1.03338958059568,237.05878551546,161.878511154671,3.58175999872268,2.44584892580903,0.0266771648030275,-0.144597831351882,0,FALSE,"","There were 1 divergent transitions after warmup. See
+https://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+to find out why this is a problem and how to eliminate them. | Examine the pairs() plot to diagnose sampling problems
+ | Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess"
+"B_collapsed_market_314159","B","collapsed_market",314159,"diagnostic gate failed",137.248,135.577,531636,10,0,0.694692481702941,1.00469297426703,724.359261883123,931.416709586662,5.2777400172179,6.78637728481771,0.0203124662226282,-0.0432095917228942,0,FALSE,"","There were 10 divergent transitions after warmup. See
+https://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+to find out why this is a problem and how to eliminate them. | Examine the pairs() plot to diagnose sampling problems
+"
+"B_expanded_market_314159","B","expanded_market",314159,"diagnostic gate failed",81.672,79.734,531644,13,0,0.423257665425056,1.00628403754759,482.052163247197,593.667021440469,5.90229409402484,7.26891739446162,0.0182876837004166,-0.0605470780551277,0,FALSE,"","There were 13 divergent transitions after warmup. See
+https://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+to find out why this is a problem and how to eliminate them. | Examine the pairs() plot to diagnose sampling problems
+ | Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess"
+"B_legacy_314159","B","legacy",314159,"diagnostic gate failed",47.13,44.676,522420,0,0,0.665036447553832,1.01126415536381,350.923669866256,135.841472582682,7.44586611216328,2.8822718561995,0.0567525080407406,-0.100244568487679,0,FALSE,"","Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess"
+"BF_collapsed_market_271828","BF","collapsed_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BF_expanded_market_271828","BF","expanded_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BF_legacy_271828","BF","legacy",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BF_collapsed_market_314159","BF","collapsed_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BF_expanded_market_314159","BF","expanded_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BF_legacy_314159","BF","legacy",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BS_collapsed_market_271828","BS","collapsed_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BS_expanded_market_271828","BS","expanded_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BS_legacy_271828","BS","legacy",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BS_collapsed_market_314159","BS","collapsed_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BS_expanded_market_314159","BS","expanded_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"BS_legacy_314159","BS","legacy",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"C_collapsed_market_271828","C","collapsed_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"C_expanded_market_271828","C","expanded_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"C_legacy_271828","C","legacy",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"C_collapsed_market_314159","C","collapsed_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"C_expanded_market_314159","C","expanded_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"C_legacy_314159","C","legacy",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"CES_B_collapsed_market_271828","CES_B","collapsed_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"CES_B_expanded_market_271828","CES_B","expanded_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"CES_B_legacy_271828","CES_B","legacy",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"CES_B_collapsed_market_314159","CES_B","collapsed_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"CES_B_expanded_market_314159","CES_B","expanded_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"CES_B_legacy_314159","CES_B","legacy",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"routine_auto_B_collapsed_market_271828","routine_auto_B","collapsed_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"routine_auto_B_expanded_market_271828","routine_auto_B","expanded_market",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"routine_auto_B_legacy_271828","routine_auto_B","legacy",271828,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"routine_auto_B_collapsed_market_314159","routine_auto_B","collapsed_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"routine_auto_B_expanded_market_314159","routine_auto_B","expanded_market",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""
+"routine_auto_B_legacy_314159","routine_auto_B","legacy",314159,"not run",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,"",""

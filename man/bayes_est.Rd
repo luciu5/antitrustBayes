@@ -19,6 +19,7 @@ bayes_est(
   df = 5,
   share_likelihood = c("student_t", "gaussian"),
   quality_parameterization = c("sampled", "collapsed"),
+  quality_scope = c("global", "market"),
   margin_likelihood = NULL,
   use_market_resid_scale = FALSE,
   use_alpha_market_pool = TRUE,
@@ -114,6 +115,12 @@ model.}
 \item{quality_parameterization}{Quality effects are \code{"sampled"}
 (default) or \code{"collapsed"}; collapsed quality integrates Gaussian
 group effects and disallows market residual scales.}
+
+\item{quality_scope}{Quality incidence is \code{"global"} (the historical
+default) or experimental \code{"market"}. Market scope gives each observed
+market/group pair a persistent quality effect and centers the effects within
+each market; the economic \code{group} ownership/ranking identifier is
+unchanged.}
 
 \item{margin_likelihood}{Margin residual family, \code{"student_t"} or
 \code{"gaussian"}; \code{NULL} (default) follows

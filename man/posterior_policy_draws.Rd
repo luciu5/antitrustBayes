@@ -15,7 +15,7 @@ posterior_policy_draws(fit, n_draws = NULL, seed = NULL)
 }
 \value{
 A reusable object of class \code{bayes_policy_draw_plan} containing selected
-posterior indices, one global quality draw per selected draw, and exact-k role
+posterior indices, one scoped quality draw per selected draw, and exact-k role
 realizations when the fit uses a native ordered-k structure.
 }
 \description{
@@ -24,6 +24,8 @@ counterfactuals can be evaluated from one fit-level draw plan.
 }
 \details{
 The plan binds quality and role states to their selected posterior rows.
+Quality is centered globally or within each market according to the fit's
+stored quality scope; market-specific effects persist across periods.
 Reuse it intact across interventions. Changing its indices or latent states
 requires constructing a new plan with this function; fitting again is unnecessary.
 

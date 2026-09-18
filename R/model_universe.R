@@ -300,12 +300,51 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
     "outside_price", "X_s0", "s0_pooling",
     "s0_pooling_resolved", "use_rho", "use_alpha_market_pool",
     "use_s0_market_pool", "use_s0_market_year_pool", "use_market_resid_scale",
-    "use_hmt", "estimate_df", "resid_df_fixed"
+    "use_hmt", "estimate_df", "resid_df_fixed", "quality_scope",
+    "N_quality", "obs_to_quality", "N_quality_block",
+    "quality_block_start", "quality_block_n", "N_quality_coord",
+    "quality_coord_start", "market_obs_order", "market_obs_start",
+    "market_obs_n", "market_margin_order", "market_margin_start",
+    "market_margin_n"
   ), names(stan))
   stan_state <- lapply(stan[stan_fields], function(x) {
     if (is.matrix(x) || is.data.frame(x)) unname(as.matrix(x)) else unname(x)
   })
   names(stan_state) <- stan_fields
+  quality_scope <- .quality_scope_from_fit(fit, strict = FALSE)
+  quality_incidence <- .quality_incidence_from_fit(fit, strict = FALSE)
+  quality_lookup <- if (is.null(quality_incidence)) NULL else
+    quality_incidence$quality_lookup
+  n_market <- stan$N_market
+  if (length(n_market) != 1L || is.na(n_market) ||
+      !is.finite(n_market) || n_market < 1L) {
+    n_market <- if ("market" %in% names(dat)) {
+      length(unique(as.character(dat$market)))
+    } else if (is.list(quality_incidence)) {
+      length(quality_incidence$market_obs_n)
+    } else {
+      NA_integer_
+    }
+  }
+  n_market <- suppressWarnings(as.integer(n_market[[1L]]))
+  ## A market-scoped one-market block is the historical global block.  Keep
+  ## scope-specific metadata and caches intact, while making the statistical
+  ## model-universe identity use the global code and lookup convention so the
+  ## same hypothesis is not counted twice.
+  canonical_single_market <- isTRUE(n_market == 1L)
+  if (canonical_single_market && "quality_scope" %in% names(stan_state))
+    stan_state$quality_scope <- 1L
+  if (canonical_single_market && is.data.frame(quality_lookup) &&
+      nrow(quality_lookup)) {
+    quality_lookup$market_index <- NA_integer_
+    if ("market" %in% names(quality_lookup))
+      quality_lookup$market <- NA_character_
+    if ("market_label" %in% names(quality_lookup))
+      quality_lookup$market_label <- NA_character_
+    if ("quality_unit" %in% names(quality_lookup) &&
+        "group_label" %in% names(quality_lookup))
+      quality_lookup$quality_unit <- as.character(quality_lookup$group_label)
+  }
   share_mode <- .mu_or(md$share_likelihood,
                        attr(stan, "share_likelihood", exact = TRUE))
   margin_mode <- .mu_or(md$margin_likelihood,
@@ -329,10 +368,19 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   attr_state <- list(
     likelihood_mode_metadata = likelihood_mode_metadata,
     s0_pooling = attr(stan, "s0_pooling", exact = TRUE),
-    market_levels = attr(stan, "market_levels", exact = TRUE)
+    market_levels = attr(stan, "market_levels", exact = TRUE),
+    quality_scope = if (canonical_single_market) "global" else quality_scope,
+    quality_lookup = quality_lookup
   )
   resolved <- .mu_active_priors(fit, gaussian_only)
+  normalization <- md$prior_normalization
+  model_spec_version <- .mu_or(
+    md$model_spec_version,
+    .mu_or(attr(stan, "model_spec_version", exact = TRUE),
+           if (is.list(normalization)) normalization$model_spec_version else NULL)
+  )
   state <- list(
+    model_spec_version = model_spec_version,
     demand_model = .mu_or(md$demand_model, fit@demand_model),
     market_side = fit@market_side,
     likelihood = .mu_or(md$likelihood, NULL),
@@ -344,6 +392,7 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
     quality_parameterization = {
       quality_mode
     },
+    quality_scope = attr_state$quality_scope,
     likelihood_mode = .mu_or(md$likelihood_mode, stan$likelihood_mode),
     use_rho = .mu_or(md$use_rho, stan$use_rho),
     prior_manifest = if (length(resolved)) NULL else md$prior_manifest,
@@ -355,7 +404,12 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
     stan = stan_state,
     attributes = attr_state
   )
-  digest::digest(serialize(state, NULL, version = 3), algo = "sha256")
+  ## Version 2 materializes ALTREP vectors while preserving the complete state,
+  ## names, classes, dimensions, and attributes.  Version 3 can retain the
+  ## original ALTREP/reference graph, making equal M=1 global/market states
+  ## hash differently solely because their incidence objects were constructed
+  ## through different paths.
+  digest::digest(serialize(state, NULL, version = 2), algo = "sha256")
 }
 
 .mu_source_fits <- function(args, descriptor) {

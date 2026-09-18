@@ -90,6 +90,10 @@
 #' @param quality_parameterization Quality effects are \code{"sampled"}
 #'   (default) or \code{"collapsed"}; collapsed quality integrates Gaussian
 #'   group effects and disallows market residual scales.
+#' @param quality_scope Quality incidence for the hierarchical quality effect:
+#'   \code{"global"} (historical default) or experimental \code{"market"},
+#'   which centers persistent quality separately within each market while
+#'   retaining the original \code{group} ownership identifiers.
 #' @param margin_likelihood Margin residual family, \code{"student_t"} or
 #'   \code{"gaussian"}; \code{NULL} (default) follows
 #'   \code{share_likelihood}. Gaussian-share Student-t margins require
@@ -308,6 +312,7 @@ bayes_est <- function(prices, quantities, margins,
                       df = 5,
                       share_likelihood = c("student_t", "gaussian"),
                       quality_parameterization = c("sampled", "collapsed"),
+                      quality_scope = c("global", "market"),
                       margin_likelihood = NULL,
                       use_market_resid_scale = FALSE,
                       use_alpha_market_pool = TRUE,
@@ -354,6 +359,7 @@ bayes_est <- function(prices, quantities, margins,
   likelihood <- match.arg(likelihood)
   share_likelihood <- match.arg(share_likelihood)
   quality_parameterization <- match.arg(quality_parameterization)
+  quality_scope <- match.arg(quality_scope)
   if (!is.null(margin_likelihood)) {
     margin_likelihood <- match.arg(margin_likelihood, c("student_t", "gaussian"))
   }
@@ -493,8 +499,14 @@ bayes_est <- function(prices, quantities, margins,
     use_rho = use_rho,
     use_market_resid_scale = use_market_resid_scale,
     estimate_df = estimate_df,
-    likelihood_mode = match(likelihood, c("joint", "share", "margin"))
+    likelihood_mode = match(likelihood, c("joint", "share", "margin")),
+    quality_scope = quality_scope
   )
+  estimate_df <- isTRUE(estimate_df) && isTRUE(likelihood_modes$df_active)
+  if (!estimate_df && identical(likelihood_modes$share_likelihood, "gaussian") &&
+      identical(likelihood_modes$margin_likelihood, "gaussian")) {
+    resid_df_fixed <- NULL
+  }
   flags <- list(
     use_cutoff = use_cutoff,
     use_rho = use_rho,
@@ -619,7 +631,8 @@ bayes_est <- function(prices, quantities, margins,
       k_scope = k_scope,
       share_likelihood = likelihood_modes$share_likelihood,
       quality_parameterization = likelihood_modes$quality_parameterization,
-      margin_likelihood = likelihood_modes$margin_likelihood
+      margin_likelihood = likelihood_modes$margin_likelihood,
+      quality_scope = quality_scope
     )
     stan_mod <- stanmodels[[if (structure == "stackelberg" ||
                                 (exact_structure && structure == "fringe" &&
@@ -666,7 +679,8 @@ bayes_est <- function(prices, quantities, margins,
       k_scope = k_scope,
       share_likelihood = likelihood_modes$share_likelihood,
       quality_parameterization = likelihood_modes$quality_parameterization,
-      margin_likelihood = likelihood_modes$margin_likelihood
+      margin_likelihood = likelihood_modes$margin_likelihood,
+      quality_scope = quality_scope
     )
     stan_mod <- stanmodels[[if (structure == "stackelberg" ||
                                 (exact_structure && structure == "fringe" &&
@@ -709,6 +723,10 @@ bayes_est <- function(prices, quantities, margins,
   metadata$share_likelihood <- likelihood_modes$share_likelihood
   metadata$margin_likelihood <- likelihood_modes$margin_likelihood
   metadata$quality_parameterization <- likelihood_modes$quality_parameterization
+  metadata$quality_scope <- likelihood_modes$quality_scope
+  metadata$quality_scope_code <- likelihood_modes$quality_scope_code
+  metadata$quality_lookup <- attr(stan_data, "quality_lookup", exact = TRUE)
+  metadata$quality_incidence <- attr(stan_data, "quality_incidence", exact = TRUE)
   metadata$likelihood_mode <- likelihood_modes$mode
   metadata$bayes_is_collapsed_quality <-
     identical(likelihood_modes$quality_parameterization, "collapsed")
@@ -738,18 +756,23 @@ bayes_est <- function(prices, quantities, margins,
     partition_metadata$k_prior_by_unit
   metadata$firm_market_ranking <- attr(stan_data, "firm_market_ranking", exact = TRUE)
   metadata$resolved_priors <- priors
-  metadata$df_mode <- if (estimate_df) "estimated" else "fixed"
-  metadata$resid_df_fixed <- if (estimate_df) NA_real_ else resid_df_fixed
+  metadata$df_mode <- if (!isTRUE(likelihood_modes$df_active)) "inactive" else
+    if (estimate_df) "estimated" else "fixed"
+  metadata$resid_df_fixed <- if (!isTRUE(likelihood_modes$df_active) || estimate_df) NA_real_ else resid_df_fixed
   metadata$nu_prior <- list(
     shape = priors$prior_nu_shape,
     rate = priors$prior_nu_rate
   )
   metadata$prior_normalization <- list(
     mode = "native_stan_normalized",
-    model_spec_version = 9L,
+    model_spec_version = .antitrust_bayes_model_spec_version,
     share_likelihood = likelihood_modes$share_likelihood,
     margin_likelihood = likelihood_modes$margin_likelihood,
     quality_parameterization = likelihood_modes$quality_parameterization,
+    quality_scope = likelihood_modes$quality_scope,
+    quality_scope_code = likelihood_modes$quality_scope_code,
+    quality_lookup = metadata$quality_lookup,
+    quality_incidence = metadata$quality_incidence,
     market_s0_parameterization = market_s0_resolution$requested,
     market_s0_parameterization_requested = market_s0_resolution$requested,
     market_s0_parameterization_effective = market_s0_resolution$effective,

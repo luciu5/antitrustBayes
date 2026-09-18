@@ -9,7 +9,8 @@ posterior_quality(
   n_draws = NULL,
   seed = NULL,
   draws = NULL,
-  conditioning = c("auto", "share")
+  conditioning = c("auto", "share"),
+  k_cache = NULL
 )
 }
 \arguments{
@@ -27,35 +28,49 @@ after the function returns.}
 \item{draws}{Optional list containing numeric \code{share_mean} (draws by
 observations), \code{sigma_b_strat}, and \code{sigma_share}. When omitted,
 these are extracted from the fit's Stan object. Joint recovery also needs
-\code{rho}, \code{sigma_margin}, and \code{pred_marginNormInv}.}
+\code{rho}, \code{sigma_margin}, and \code{pred_marginNormInv}; exact
+market ordered-k fits instead require \code{posterior_component_prob},
+\code{a_market}, and \code{s0_prob} for existing FOC component means.}
 
 \item{conditioning}{\code{"auto"} (default) conditions on shares and
 matched margins when Gaussian rho is active, and on shares otherwise.
 \code{"share"} explicitly returns the share-only conditional distribution.}
+
+\item{k_cache}{Optional internal exact ordered-k realization cache. When
+supplied, the same market-level state is used for component margin means and
+is returned as \code{$realized_k}; policy draw plans pass this cache through
+to prevent independent state resampling.}
 }
 \value{
-A \code{posterior_quality} list. \code{$draws} is a draws by groups
-numeric matrix of conditional quality draws; \code{$conditional_means} and
+A \code{posterior_quality} list. \code{$draws} is a draws by scoped
+quality-unit numeric matrix; \code{$conditional_means} and
 \code{$conditional_sds} have the corresponding per-draw conditional moments.
-Column names and \code{$group_labels} give stable group labels, while
+Column names and \code{$quality_units} give stable scoped units, while
 \code{$draw_indices} records the original posterior draw number for each
-row. \code{$draws_long} is a tidy version with columns \code{draw_index},
-\code{group}, \code{quality}, \code{conditional_mean}, and
-\code{conditional_sd}. \code{$summary} gives mixture posterior means and
-SDs by group (including both common-parameter and conditional quality
-uncertainty). \code{$metadata} records the selected draw count and modes.
+row. \code{$draws_long} is a tidy version with columns
+\code{draw_index}, \code{market}, \code{group}, \code{quality_unit},
+\code{quality}, \code{conditional_mean}, and \code{conditional_sd}.
+\code{$summary} gives mixture posterior means and SDs by scoped unit
+(including both common-parameter and conditional quality uncertainty).
+\code{$realized_k} records exact market states when applicable and
+\code{$metadata} labels whether moments condition on a realized state.
 }
 \description{
-Reconstruct conditional group quality after a collapsed Gaussian fit
+Reconstruct conditional quality after a collapsed Gaussian fit. Global fits
+retain the historical centered group vector. Market-scoped fits return one
+persistent centered vector per market/group pair, with block metadata and
+market/group/unit columns in the long output. Active-rho exact ordered-k
+fits realize one k state per market before using the corresponding existing
+FOC component mean; conditional moments are labeled as conditioned on that
+realized state.
 }
 \details{
 The quality vector is the group-level quality in the centered global prior
 used by the collapsed Stan model. For each common-parameter draw this
 function conditions that prior on the observed \code{log_shareIn} and,
-with active Gaussian rho, the matched margins. Full joint recovery for
-exact ordered-k rho fits is currently unsupported because the stored margin
-prediction averages distinct component means; explicit share-only recovery
-is available. The returned quality draw is generated
+with active Gaussian rho, the matched margins. Exact market ordered-k rho
+fits first realize one partition state per market and use its existing FOC
+component mean. The returned quality draw is generated
 after the conditioning step, so HMC does not need to sample quality
 coordinates. Computation is linear in the number of observations and groups
 and never constructs a dense group covariance matrix.

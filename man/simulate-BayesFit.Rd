@@ -105,7 +105,8 @@ override. An empty vector gives a wholly MonCom post state.}
 
 \item{demand_anchoring}{Demand baseline for policy simulation. The default
 \code{"observed"} retains observed-share reconstruction. \code{"latent_quality"}
-draws fitted global quality, normalizes relative latent shares while retaining
+draws fitted quality under the stored global or market scope, normalizes
+relative latent shares while retaining
 the posterior outside share, and solves a new pre-policy equilibrium using the
 observed-share FOC cost primitive. It supports output Logit/CES and input Logit; input value primitives
 are held fixed unless changed by the counterfactual.}

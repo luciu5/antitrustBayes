@@ -64,6 +64,16 @@
   labels
 }
 
+.lq_quality_scope <- function(fit) {
+  if (methods::is(fit, "BayesSpecifiedFit")) return("global")
+  .quality_scope_from_fit(fit, strict = FALSE)
+}
+
+.lq_quality_incidence <- function(fit) {
+  if (methods::is(fit, "BayesSpecifiedFit")) return(NULL)
+  .quality_incidence_from_fit(fit, strict = FALSE)
+}
+
 .lq_quality_mode <- function(fit) {
   if (methods::is(fit, "BayesSpecifiedFit")) return("none")
   stan_data <- fit@stan_data
@@ -102,40 +112,101 @@
   })
 }
 
-.lq_quality_draws <- function(fit, draws, draw_indices, seed = NULL) {
+## The policy simulator stores one role state for every selected simulation
+## unit (market-year in a panel), while exact ordered-k quality conditioning
+## needs one state for every partition market.  Convert the former to the
+## latter without changing the simulator-facing cache.  Shared market-scope
+## role draws must agree across all years in a market; a period-scoped state
+## therefore fails explicitly instead of silently selecting one year.
+.lq_market_quality_k_cache <- function(fit, incidence, k_cache) {
+  if (is.null(k_cache) || !identical(as.character(incidence$quality_scope), "market"))
+    return(k_cache)
+  setup <- .lq_all_units(fit)
+  info_market <- vapply(setup$info, function(z) as.integer(z$market_index), integer(1))
+  n_market <- max(as.integer(incidence$quality_lookup$market_index))
+  if (length(info_market) != length(setup$info) || anyNA(info_market) ||
+      any(info_market < 1L | info_market > n_market)) {
+    stop("The exact-k quality cache cannot map simulation units to markets.", call. = FALSE)
+  }
+  unit_ids <- vapply(setup$info, function(z) as.character(z$unit_id), character(1))
+  out <- lapply(k_cache, function(z) {
+    if (is.null(z) || is.null(names(z)))
+      stop("The exact-k quality cache must be named by simulation unit.", call. = FALSE)
+    z <- stats::setNames(as.numeric(z), names(z))
+    if (any(!is.finite(z)) || any(z != floor(z)))
+      stop("The exact-k quality cache contains malformed states.", call. = FALSE)
+    vals <- numeric(n_market)
+    for (m in seq_len(n_market)) {
+      ids <- unit_ids[info_market == m]
+      hit <- ids[ids %in% names(z)]
+      if (!length(hit))
+        stop("The exact-k quality cache is missing market ", m, ".", call. = FALSE)
+      vv <- as.numeric(z[hit])
+      if (any(vv != vv[[1L]]))
+        stop("Market-scoped quality requires one exact-k state across all years in market ", m, ".", call. = FALSE)
+      vals[[m]] <- vv[[1L]]
+    }
+    vals
+  })
+  names(out) <- names(k_cache)
+  out
+}
+
+.lq_quality_draws <- function(fit, draws, draw_indices, seed = NULL, k_cache = NULL) {
   groups <- .lq_group_levels(fit)
   n_draw <- .lq_draw_count(fit, draws)
   n_group <- length(groups)
   mode <- .lq_quality_mode(fit)
+  incidence <- .lq_quality_incidence(fit)
+  scope <- .lq_quality_scope(fit)
+  units <- if (is.null(incidence)) groups else as.character(incidence$quality_lookup$quality_unit)
+  n_quality <- length(units)
   if (mode == "none") {
-    out <- matrix(0, nrow = length(draw_indices), ncol = n_group,
-                  dimnames = list(as.character(draw_indices), groups))
+    out <- matrix(0, nrow = length(draw_indices), ncol = n_quality,
+                  dimnames = list(as.character(draw_indices), units))
     return(list(draws = out, source = "none", conditioning = "none",
-                mode = mode, group_labels = groups))
+                mode = mode, group_labels = groups, quality_units = units,
+                quality_scope = scope, quality_lookup = incidence$quality_lookup,
+                incidence = incidence))
   }
   if (mode == "sampled") {
-    q <- .lq_draw_matrix(draws$b_quality_all, n_draw, n_group,
+    q <- .lq_draw_matrix(draws$b_quality_all, n_draw, n_quality,
                          "b_quality_all")
     if (is.null(q)) {
-      if (n_group == 1L) q <- matrix(0, nrow = n_draw, ncol = 1L)
+      if (n_quality == 1L) q <- matrix(0, nrow = n_draw, ncol = 1L)
       else stop("Sampled-quality fit is missing generated quantity 'b_quality_all'.",
                 call. = FALSE)
     }
     q <- q[draw_indices, , drop = FALSE]
-    if (any(!is.finite(q)) || any(abs(rowSums(q)) > 1e-8)) {
-      stop("Sampled global quality draws are non-finite or violate centering.",
+    block_ok <- if (is.null(incidence)) abs(rowSums(q)) else {
+      vapply(seq_len(incidence$N_quality_block), function(b) {
+        abs(rowSums(q[, incidence$quality_block_start[[b]]:
+          (incidence$quality_block_start[[b]] + incidence$quality_block_n[[b]] - 1L), drop = FALSE]))
+      }, numeric(nrow(q)))
+    }
+    if (any(!is.finite(q)) || any(block_ok > 1e-8)) {
+      stop("Sampled quality draws are non-finite or violate per-block centering.",
            call. = FALSE)
     }
-    colnames(q) <- groups
+    colnames(q) <- units
     rownames(q) <- as.character(draw_indices)
     return(list(draws = q, source = "sampled_stan", conditioning = "joint_draw",
-                mode = mode, group_labels = groups))
+                mode = mode, group_labels = groups, quality_units = units,
+                quality_scope = scope, quality_lookup = incidence$quality_lookup,
+                incidence = incidence))
   }
   ## posterior_quality() supplies the exact Gaussian conditional draw. Restrict
   ## every draw-indexed field first, then request all rows of that subset. This
   ## retains the selected original theta rows without allocating an all-draw
   ## quality matrix or performing a second independent draw selection.
   selected_draws <- .lq_subset_draws(draws, draw_indices, n_draw)
+  selected_k_cache <- if (is.null(k_cache)) NULL else {
+    z <- k_cache[as.character(draw_indices)]
+    if (length(z) != length(draw_indices) || any(vapply(z, is.null, logical(1))))
+      stop("The quality draw cache is missing an exact-k state for a selected draw.", call. = FALSE)
+    names(z) <- as.character(seq_along(draw_indices)); z
+  }
+  selected_k_cache <- .lq_market_quality_k_cache(fit, incidence, selected_k_cache)
   quality_fit <- fit
   ## posterior_quality() deliberately checks the fit's recorded draw count.
   ## The shallow clone changes only that validation field; provenance in the
@@ -145,20 +216,25 @@
     quality_fit@metadata$posterior_draws <- length(draw_indices)
   }
   pq <- posterior_quality(quality_fit, n_draws = length(draw_indices), seed = seed,
-                          draws = selected_draws, conditioning = "auto")
-  if (!identical(as.character(pq$group_labels), groups)) {
+                          draws = selected_draws, conditioning = "auto",
+                          k_cache = selected_k_cache)
+  if (!identical(as.character(pq$group_labels), groups) ||
+      !identical(as.character(pq$quality_scope), scope)) {
     stop("Conditional quality labels do not match the fitted group map.", call. = FALSE)
   }
   q <- pq$draws
   if (nrow(q) != length(draw_indices)) {
     stop("Conditional quality recovery returned an unexpected draw count.", call. = FALSE)
   }
-  if (any(!is.finite(q)) || any(abs(rowSums(q)) > 1e-8)) {
-    stop("Conditional quality draws are non-finite or violate centering.", call. = FALSE)
+  if (any(!is.finite(q))) {
+    stop("Conditional quality draws are non-finite.", call. = FALSE)
   }
-  dimnames(q) <- list(as.character(draw_indices), groups)
+  dimnames(q) <- list(as.character(draw_indices), units)
   list(draws = q, source = "posterior_quality", conditioning =
-         pq$metadata$conditioning, mode = mode, group_labels = groups)
+         pq$metadata$conditioning, mode = mode, group_labels = groups,
+       quality_units = units, quality_scope = scope,
+       quality_lookup = incidence$quality_lookup, incidence = incidence,
+       realized_k = pq$realized_k)
 }
 
 .lq_all_units <- function(fit) {
@@ -212,12 +288,18 @@
 }
 
 .lq_plan_signature <- function(fit, groups, n_total, mode, draws = NULL) {
+  incidence <- .lq_quality_incidence(fit)
+  scope <- .lq_quality_scope(fit)
   list(
     fit_signature_version = 2L,
     demand_model = as.character(fit@demand_model),
     market_side = as.character(fit@market_side),
     posterior_draws = as.integer(n_total),
     group_labels = as.character(groups),
+    quality_scope = scope,
+    quality_units = if (is.null(incidence)) as.character(groups) else
+      as.character(incidence$quality_lookup$quality_unit),
+    quality_lookup = if (is.null(incidence)) NULL else incidence$quality_lookup,
     quality_mode = mode,
     structure = as.character(.lq_or(fit@metadata$structure, "simultaneous")),
     fit_fingerprint = .lq_fit_fingerprint(fit, draws, version = 2L)
@@ -226,6 +308,7 @@
 
 .lq_plan_state_fingerprint <- function(plan) {
   digest::digest(plan[c("draw_indices", "quality_draws", "group_labels",
+                       "quality_scope", "quality_units", "quality_lookup",
                        "quality_source", "quality_conditioning", "quality_mode",
                        "k_cache", "role_mapping", "fixed_k", "role_offset")],
                  algo = "xxhash64", serialize = TRUE)
@@ -244,14 +327,17 @@
   draw_indices <- .lq_with_seed(seed, function() {
     if (n_total == 1L) 1L else sample.int(n_total, n_draws)
   })
-  quality_seed <- if (is.null(seed)) NULL else as.integer((as.double(seed) + 1) %% .Machine$integer.max)
-  quality <- .lq_quality_draws(fit, draws, draw_indices, seed = quality_seed)
   role_seed <- if (is.null(seed)) NULL else as.integer((as.double(seed) + 2) %% .Machine$integer.max)
   k_cache <- .lq_with_seed(role_seed, function() .lq_role_cache(fit, draws, draw_indices))
+  quality_seed <- if (is.null(seed)) NULL else as.integer((as.double(seed) + 1) %% .Machine$integer.max)
+  quality <- .lq_quality_draws(fit, draws, draw_indices, seed = quality_seed,
+                               k_cache = k_cache)
   plan <- structure(list(
     draw_indices = as.integer(draw_indices), quality_draws = quality$draws,
     quality_source = quality$source, quality_conditioning = quality$conditioning,
     quality_mode = quality$mode, group_labels = quality$group_labels,
+    quality_scope = quality$quality_scope, quality_units = quality$quality_units,
+    quality_lookup = quality$quality_lookup,
     k_cache = k_cache, role_mapping = "mixture", fixed_k = NULL,
     role_offset = 0L,
     fit_signature = .lq_plan_signature(fit, quality$group_labels, n_total,
@@ -262,6 +348,8 @@
       draw_indices = as.integer(draw_indices), quality_source = quality$source,
       quality_conditioning = quality$conditioning,
       quality_parameterization = quality$mode, group_labels = quality$group_labels,
+      quality_scope = quality$quality_scope, quality_units = quality$quality_units,
+      quality_lookup = quality$quality_lookup,
       role_mapping = "mixture", role_offset = 0L, exact_k = !is.null(k_cache)
     )
   ), class = c("bayes_policy_draw_plan", "list"))
@@ -272,7 +360,8 @@
 #' Build a reusable posterior draw plan for policy simulation
 #'
 #' The plan samples posterior indices once and, for collapsed fits, draws one
-#' conditional global quality vector per selected parameter draw. Exact native
+#' conditional quality vector per selected parameter draw, centered globally
+#' or within each market according to the fit's quality scope. Exact native
 #' ordered-k fits also receive one role realization per market and draw. Reuse
 #' the returned object in observed-anchor and latent-quality simulations.
 #'
@@ -299,6 +388,9 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
     stop("'draw_plan' must be created by posterior_policy_draws().", call. = FALSE)
   }
   groups <- .lq_group_levels(fit)
+  incidence <- .lq_quality_incidence(fit)
+  scope <- .lq_quality_scope(fit)
+  units <- if (is.null(incidence)) groups else as.character(incidence$quality_lookup$quality_unit)
   signature_version <- if (is.list(plan$fit_signature) &&
                            !is.null(plan$fit_signature$fit_signature_version))
     as.integer(plan$fit_signature$fit_signature_version) else 1L
@@ -311,8 +403,14 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
   }
   n_total <- .lq_draw_count(fit, draws)
   sig <- plan$fit_signature
+  legacy_scope_missing <- is.list(sig) && is.null(sig$quality_scope) && signature_version == 1L
+  legacy_units_missing <- is.list(sig) && is.null(sig$quality_units) && signature_version == 1L
   if (!is.list(sig) || !identical(as.integer(sig$posterior_draws), as.integer(n_total)) ||
       !identical(as.character(sig$group_labels), groups) ||
+      (!legacy_scope_missing && !identical(as.character(sig$quality_scope), scope)) ||
+      (!legacy_units_missing && !identical(as.character(sig$quality_units), units)) ||
+      (!is.null(sig$quality_lookup) && !identical(sig$quality_lookup,
+        if (is.null(incidence)) NULL else incidence$quality_lookup)) ||
       !identical(as.character(sig$demand_model), as.character(fit@demand_model)) ||
       !identical(as.character(sig$market_side), as.character(fit@market_side)) ||
       !identical(as.character(sig$quality_mode), as.character(.lq_quality_mode(fit))) ||
@@ -346,12 +444,17 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
     stop("'fixed_k' or 'role_offset' conflicts with the draw_plan role realization.", call. = FALSE)
   }
   if (!is.matrix(plan$quality_draws) || nrow(plan$quality_draws) != length(di) ||
-      ncol(plan$quality_draws) != length(groups) ||
-      !identical(colnames(plan$quality_draws), groups)) {
-    stop("'draw_plan' has malformed global quality draws.", call. = FALSE)
+      ncol(plan$quality_draws) != length(units) ||
+      !identical(colnames(plan$quality_draws), units)) {
+    stop("'draw_plan' has malformed scoped quality draws.", call. = FALSE)
   }
-  if (any(!is.finite(plan$quality_draws)) ||
-      any(abs(rowSums(plan$quality_draws)) > 1e-8)) {
+  centered <- if (is.null(incidence)) abs(rowSums(plan$quality_draws)) else
+    unlist(lapply(seq_len(incidence$N_quality_block), function(b) {
+      first <- incidence$quality_block_start[[b]]
+      last <- first + incidence$quality_block_n[[b]] - 1L
+      abs(rowSums(plan$quality_draws[, first:last, drop = FALSE]))
+    }), use.names = FALSE)
+  if (any(!is.finite(plan$quality_draws)) || any(centered > 1e-8)) {
     stop("'draw_plan' quality draws are non-finite or violate centering.",
          call. = FALSE)
   }
@@ -385,11 +488,14 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
                         nrow(object@data), "share_mean")
   score <- as.numeric(sm[draw, unit$idx])
   if (identical(plan$quality_mode, "collapsed")) {
-    group <- as.character(object@data$group[unit$idx])
+    incidence <- .lq_quality_incidence(object)
+    quality_index <- if (is.null(incidence)) match(
+      as.character(object@data$group[unit$idx]), plan$group_labels
+    ) else incidence$obs_to_quality[unit$idx]
     q <- .lq_quality_for_draw(plan, draw)
-    map <- match(group, plan$group_labels)
-    if (anyNA(map)) stop("Latent-quality group labels are not in the fit map.", call. = FALSE)
-    score <- score + q[map]
+    if (anyNA(quality_index) || any(quality_index < 1L | quality_index > length(q)))
+      stop("Latent-quality incidence labels are not in the fit map.", call. = FALSE)
+    score <- score + q[quality_index]
   }
   list(score = score, s0 = s0, quality = .lq_quality_for_draw(plan, draw),
        draw_index = as.integer(draw))

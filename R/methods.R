@@ -168,6 +168,9 @@ setMethod("show", "BayesLogit", function(object) {
   cat("  Observations:", nrow(object@data), "\n")
   cat("  Markets:", length(unique(object@data$market)), "\n")
   cat("  Groups:", length(unique(object@data$group)), "\n")
+  cat("  Quality scope:", .quality_scope_from_fit(object, strict = FALSE), "\n")
+  if (!is.null(object@stan_data$N_quality))
+    cat("  Persistent quality units:", object@stan_data$N_quality, "\n")
   price_label <- if (demand_label == "CES") "Log-price SD" else "Price SD"
   cat(" ", price_label, "(scaling):", round(object@price_sd, 4), "\n")
 
