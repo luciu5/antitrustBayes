@@ -8,6 +8,13 @@ has two divergences and therefore misses that gate. Historical
 collapsed-Gaussian sampler evidence is recorded separately and is not a pass
 for these new multi-market, rho-active targets.
 
+The user subsequently approved the routine Gaussian/collapsed/market/rho
+default promotion. This is a package decision based on the accumulated evidence
+and the diagnosed counterfactual domain obstruction, not a claim that all
+original gates passed. Failed runs and provisional evidence retain their labels;
+complete-universe BMA remains withheld. See
+[the default history](default_model_history.md).
+
 ## Frozen comparison
 
 The comparison distinguishes three specifications:
@@ -49,9 +56,14 @@ separately rather than combined under inconsistent anchoring.
 
 ## Current recommendation
 
-Do not change routine defaults yet. Independent integration/factorization,
-native target/gradient and package gates have passed. Multi-seed usable HMC
-and PNB evidence remain mandatory promotion gates.
+Promote the user-approved routine statistical architecture: Gaussian shares
+and margins, collapsed market quality and active rho. Independent
+integration/factorization, native target/gradient and package checks passed;
+the separately labeled rotated collapsed two-seed benchmark is usable, and
+seven of eight PNB fits pass the strict frozen gate. The two Bertrand
+divergences, remaining conduct/scaling HMC work and counterfactual boundary
+handling are limitations, not erased failures. Keep the explicit Student-t,
+sampled/global and hybrid options and diagnose every fitted application.
 
 ## First active-rho paired result (one seed; provisional)
 
@@ -256,8 +268,9 @@ The normalized target and gradient checks establish the same statistical model.
 The first rotated run's maximum R-hat of 1.0104476, on the share residual scale,
 is a marginal Monte Carlo precision miss of the 1.01 threshold. It is not
 evidence that the economic model or coordinate transformation failed. The
-strict gate label is retained separately from that interpretation. Fully usable
-paired posterior equivalence and default promotion remain unestablished.
+strict gate label is retained separately from that interpretation. At this stage,
+fully usable paired posterior equivalence and default promotion were not
+established; the later evidence and approved package decision are recorded above.
 
 The original conditional sampled-quality short pair is not run because the
 two collapsed gates did not both pass. One separately labeled budget-length
@@ -304,4 +317,76 @@ usable paired posterior equivalence.
 The initial marginal R-hat miss disappears at the longer budget. This provides
 two-seed usable collapsed evidence for this Bertrand fixture, while the
 unrun conduct fixtures, PNB Bertrand divergences and application evidence
-remain separate promotion gates. It does not replace the original failures.
+remain limitations of the evidence. The subsequent user-approved promotion does
+not replace the original failures or establish these missing comparisons.
+
+## Completed PNB bridge and policy postprocessing
+
+The canonical four-model and rich eight-model bridge calculations each
+completed three repetitions with `maxiter=5000`. The
+[curated bridge table](market_quality_pnb_bridge.csv) retains the final universe
+priors separately from the source evidence priors. Canonical weights are 1/4;
+rich weights are MC=A=1/4 and B=C=BF=CF=BS=CS=1/12. The richer families have
+strictly interior k=1:5 in this 39-bank market. No model prior was changed after
+seeing the results.
+
+The largest bridge log-evidence standard deviation is .006303. This measures
+repetition stability, not the absence of sampler bias. Both universes remain
+`complete_provisional_sampler_failure`, because B retains two divergences.
+The provisional rich probabilities are MC .3126, A .3275, B .1135, BF .1115,
+BS .1134, C .0038, CF .0056 and CS .0122. These are executed numerical evidence
+calculations. They remain provisional model probabilities and cannot, by
+themselves, establish sampler usability or justify a default recommendation.
+
+All eight model-specific merger cases completed 200 requested posterior policy
+draws. Supported observed and latent-quality anchors use the same structural
+draw indices and role realization within each fit. Auction latent-quality
+anchoring remains explicitly unsupported. Costs are recovered from the
+observed-share conduct FOCs for each structural draw, then held fixed when
+realized quality changes the baseline and through the pre/post merger solves.
+Quality is not redrawn after the merger. This is the documented posterior
+pushforward, not a new joint latent-cost measurement model.
+
+The [failure ledger](market_quality_pnb_policy_failures.csv) preserves all case
+and anchor statuses. CF has 36/200 observed-anchor and 26/200 latent-anchor
+failed draws; CS has 5/200 and 1/200. The other supported cases have zero
+failures. Every failed draw retains all 39 product cells and its error label.
+The saved messages mean that neither the initial Broyden solver nor its BB
+fallback returned an accepted finite root. The separate final residual-check
+error was not observed. The failed objects omit solver return codes, primitives
+and stage markers, so these messages alone do not identify an economic cause
+or prove equilibrium nonexistence.
+
+Failure is associated with the exact role state. In CF, all 29 observed-anchor
+k=2 draws fail, compared with 7/171 draws at other k values; latent CF fails
+26/29 at k=2 and zero elsewhere. All CS failures occur at k=2. The target bank
+is third in the predetermined share ranking and joins the acquirer's strategic
+firm under post-merger ownership at k=2. A
+[direct interior-equilibrium oracle](market_quality_cournot_boundary_math.md)
+now reproduces every successful observed-anchor draw to price-change error
+below 6e-13. Every failed observed-anchor CF/CS draw has a negative rate in its
+unique interior solution: 36/36 CF at the target, 5/5 CS at the acquirer.
+Production solvers restrict rates to p=exp(z)>0, so those solutions cannot be
+returned. This diagnoses a positivity-domain obstruction, not the absence of
+a boundary or real-rate equilibrium. Latent-anchor failures remain unclassified
+by that check. No solver tolerance, prior, role rule or economic equation is
+changed. A fresh Luna review approves the new oracle's mathematics, parameter
+conversion and saved-state implementation; its summary reuses the root's
+executed 400-state fixture, rather than claiming a separate recalculation.
+
+The [585 per-product summaries](market_quality_pnb_policy_products.csv) retain
+the requested, valid and failed counts. Their intervals and standard deviations
+describe each product's policy posterior conditional on successful solves.
+They do not pool products into one posterior distribution. Anchoring differences
+can be substantive: in usable C, the target bank's mean price change is -51.9%
+with observed-share anchoring and -29.6% with latent-quality anchoring, with no
+failed draws in either case. This comparison concerns anchoring under the same
+fit, not Gaussian versus Student-t residuals.
+
+Complete-universe BMA remains `withheld_unusable_sampler`. No BMA weights,
+moments, variance decomposition or successful-subset renormalization are
+reported. The first canonical supervisor check had an operational filename
+typo; its complete artifacts were validated and recovered without rerunning
+the bridge. All original failure records are retained locally. Historical
+rich-main Student-t estimates remain qualified by their BFMI failures and the
+archived-input reconstruction.

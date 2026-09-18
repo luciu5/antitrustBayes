@@ -1,8 +1,9 @@
 # Market-quality implementation map
 
 Status: native specification and R integration independently reviewed; the
-package suite passes. Sampler and application gates remain incomplete, with
-initial sampler failures retained. Defaults are not yet changed.
+package suite passes. The user approved Gaussian shares/margins, collapsed
+market quality and active rho as the routine defaults. Some sampler and
+application gates remain incomplete; initial failures retain their labels.
 
 ## Identity and persistence
 
@@ -95,11 +96,14 @@ refit rather than silent migration. New runtime data contracts reject missing
 scope/index maps; tiny historical test fixtures may resolve global scope
 explicitly through dedicated compatibility helpers.
 
-Before all default-change gates pass, callers select market scope explicitly
-and the existing function defaults remain intact. After gates pass, signatures,
-help pages, tests, and history change together to Gaussian shares/margins,
-collapsed market quality, and active rho. No unrelated pooling, prior, sampler,
-or structural default changes are part of this task.
+The user-approved routine defaults are Gaussian shares/margins, collapsed
+market quality, and active rho. Signatures, help pages, tests and history change
+together. `margin_likelihood=NULL` follows the selected share family and
+therefore resolves to Gaussian in a default call. Explicit global quality and
+sampled Student-t models remain available. No unrelated pooling, prior,
+coordinate, sampler or structural default changes are part of this promotion.
+Specification version 10 and the explicit model flags continue to distinguish
+statistical models; old serialized fits retain their recorded model.
 
 ## Supported statistical combinations
 

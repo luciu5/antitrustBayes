@@ -1,8 +1,11 @@
 # Market-quality validation contract
 
-Status: prespecified gates; execution results will be appended without removing
-failed or interrupted runs. Existing defaults remain unchanged until all gates
-below pass.
+Status: the original prespecified diagnostic gates and all failed/interrupted
+runs are retained below. On 2026-09-17 the user approved the routine default
+promotion after reviewing the evidence. That approval supersedes the original
+all-gates promotion hold; it neither relaxes these fit-usability criteria nor
+changes a failed/provisional result into a pass. See
+[the decision history](default_model_history.md).
 
 ## Mathematical and native gates
 
@@ -39,7 +42,7 @@ tau near zero, tiny share scale, rho zero/nonzero, Logit input/output, CES,
 sampled/collapsed quality, and all exact conduct families. Production large-N
 tests must never use a dense global covariance.
 
-## Frozen HMC and default gates
+## Original frozen HMC and default gates
 
 Compare legacy Student-t/sampled/global, Gaussian/sampled/market, and
 Gaussian/collapsed/market on identical data and original prior settings where
@@ -75,6 +78,12 @@ PNB fits or bridge estimates remain visible and prevent default promotion.
 Only after density, gradient, package, usable HMC, and PNB gates pass may all
 public defaults and help pages change together. Outstanding evidence must be
 reported explicitly rather than characterized as validation success.
+
+The statements in this section record the original prespecified release gates.
+The user-approved routine-default decision on 2026-09-17 supersedes their
+all-gates requirement for promotion. Fit-usability thresholds, failure labels,
+and the decision to withhold PNB BMA remain unchanged. Unrun comparisons remain
+unrun; promotion is not a claim that every original gate passed.
 
 ## Pre-change package baseline (2026-09-17)
 
@@ -165,3 +174,50 @@ difference. The first extended harness compared each complete diagnostic quality
 vector against a local subset, producing 256 retained test failures; a corrected
 replay checks the same saved simulations without rerunning or changing any solve.
 The combined reproducible replay passed 368/368 checks.
+
+## Empty-sampling-result guard
+
+An operational sensitivity attempt returned an rstan mode-2 object with no
+samples after an invalid driver seed. That failed attempt is retained. The R
+wrapper now rejects empty or incomplete sampling results before constructing a
+Bayesian fit. It checks the real rstan named-list draw storage, requested chain
+count, and saved/post-warmup counts. It does not reject fits based on divergences,
+R-hat, parameter values, or elapsed time, and does not change the Stan target.
+
+A fresh independent reviewer checked the contract against rstan 2.32.7 source.
+The installed guard accepts both a retained primary fit and the PNB Bertrand
+fit, including their existing divergences, and rejects the original empty
+mode-2 object. Sixteen unit expectations cover empty/partial storage, thinning,
+unsaved warmup, ordinary chains, and one-draw fixed-parameter output. The
+namespace-aware installed full suite passes 1,871 expectations with zero
+failures/errors, 13 skips and 13 warning expectations. The R-only overlay leaves
+the native DLL hash unchanged. An initial Python-version-incompatible hash
+helper failed before copying/installing anything; its operational retry and
+the original failure are recorded locally.
+
+## Routine-default promotion verification (2026-09-17)
+
+The user-approved defaults now resolve to Gaussian shares and margins,
+collapsed market-specific quality, and active rho. The margin family follows
+the share family when omitted; Gaussian fits have no active df coordinate.
+The explicit Student-t/sampled/global and hybrid specifications remain available.
+
+The installed package suite passed 1,909 assertions with zero failures or
+errors, 13 opt-in skips and 13 existing warning expectations. Before promotion,
+32 explicit Gaussian/collapsed/market/rho Stan-data fixtures were saved. After
+promotion, the omitted-settings call produced exactly identical complete data
+and attributes in every fixture: Logit/CES, one/two markets, repeated periods,
+missing margins, B/C/MC/A, and exact BF/CF/BS/CS with multiple k states. Current
+explicit and implicit selections are also exactly identical.
+
+The R-only install reused the compiled kernels; the native DLL checksum was
+unchanged. This selection change therefore does not alter the already verified
+normalized target of an explicitly specified model. No new HMC run was made
+for the promotion, and no original failed or provisional fit was relabeled.
+
+The audit also found and repaired a pre-existing historical policy-plan checksum
+regression. Unversioned/explicit-v1 plans retain their historical state fields;
+v2 plans retain exactly their existing field order and checksum payload.
+Regression tests check both versions and mutation detection using a supplied-
+parameter policy-plan fixture. This does not claim replay of every historical
+native-fit plan.

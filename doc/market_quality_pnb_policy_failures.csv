@@ -1,0 +1,17 @@
+case,anchor,status,n_requested_draws,n_products,n_requested_cells,n_failed_draws,n_failed_cells,n_valid_cells,failure_rate_cells,failure_labels,anchor_conditioning,draw_plan_shared_with_observed,reason,source_file
+B,observed,complete,200,39,7800,0,0,7800,0,,observed-share structural baseline; posterior conditioned on recorded shares/margins,true,,policy/B-observed-draws.csv
+B,latent_quality,complete,200,39,7800,0,0,7800,0,,posterior-quality structural baseline; same posterior draw/quality/roles plan as observed; costs and equilibria solved per draw,true,,policy/B-latent_quality-draws.csv
+MC,observed,complete,200,39,7800,0,0,7800,0,,observed-share structural baseline; posterior conditioned on recorded shares/margins,true,,policy/MC-observed-draws.csv
+MC,latent_quality,complete,200,39,7800,0,0,7800,0,,posterior-quality structural baseline; same posterior draw/quality/roles plan as observed; costs and equilibria solved per draw,true,,policy/MC-latent_quality-draws.csv
+C,observed,complete,200,39,7800,0,0,7800,0,,observed-share structural baseline; posterior conditioned on recorded shares/margins,true,,policy/C-observed-draws.csv
+C,latent_quality,complete,200,39,7800,0,0,7800,0,,posterior-quality structural baseline; same posterior draw/quality/roles plan as observed; costs and equilibria solved per draw,true,,policy/C-latent_quality-draws.csv
+A,observed,complete,200,39,7800,0,0,7800,0,,observed-share structural baseline; posterior conditioned on recorded shares/margins,true,,policy/A-observed-draws.csv
+A,latent_quality,unsupported,200,39,7800,,,,,,not run,true,Auction latent-quality anchoring is explicitly unsupported by the public API.,policy/A-latent_quality-unsupported.rds
+BF,observed,complete,200,39,7800,0,0,7800,0,,observed-share structural baseline; posterior conditioned on recorded shares/margins,true,,policy/BF-observed-draws.csv
+BF,latent_quality,complete,200,39,7800,0,0,7800,0,,posterior-quality structural baseline; same posterior draw/quality/roles plan as observed; costs and equilibria solved per draw,true,,policy/BF-latent_quality-draws.csv
+BS,observed,complete,200,39,7800,0,0,7800,0,,observed-share structural baseline; posterior conditioned on recorded shares/margins,true,,policy/BS-observed-draws.csv
+BS,latent_quality,complete,200,39,7800,0,0,7800,0,,posterior-quality structural baseline; same posterior draw/quality/roles plan as observed; costs and equilibria solved per draw,true,,policy/BS-latent_quality-draws.csv
+CF,observed,complete_with_failures,200,39,7800,36,1404,6396,0.18,CoreFringe Logit price equilibrium solver failed (1404 cells),observed-share structural baseline; posterior conditioned on recorded shares/margins,true,,policy/CF-observed-draws.csv
+CF,latent_quality,complete_with_failures,200,39,7800,26,1014,6786,0.13,CoreFringe Logit price equilibrium solver failed (1014 cells),posterior-quality structural baseline; same posterior draw/quality/roles plan as observed; costs and equilibria solved per draw,true,,policy/CF-latent_quality-draws.csv
+CS,observed,complete_with_failures,200,39,7800,5,195,7605,0.025,Stackelberg price equilibrium solver failed (195 cells),observed-share structural baseline; posterior conditioned on recorded shares/margins,true,,policy/CS-observed-draws.csv
+CS,latent_quality,complete_with_failures,200,39,7800,1,39,7761,0.005,Stackelberg price equilibrium solver failed (39 cells),posterior-quality structural baseline; same posterior draw/quality/roles plan as observed; costs and equilibria solved per draw,true,,policy/CS-latent_quality-draws.csv

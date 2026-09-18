@@ -49,9 +49,9 @@ identifier (`group`).
 ## Step 1: Estimate Under Multiple Supply Models
 
 We estimate the Bayesian logit demand model under four supply assumptions
-using the default joint share/margin Student-t likelihood, including its
-estimated cross-equation correlation: Nash-Bertrand, Monopolistic Competition,
-Cournot, and Second-Score Auction.
+using the default joint Gaussian share/margin likelihood with collapsed,
+market-specific persistent quality and estimated cross-equation correlation:
+Nash-Bertrand, Monopolistic Competition, Cournot, and Second-Score Auction.
 Nash bargaining is available in the general API, but is not included in this
 retail-deposit candidate set because its institutional interpretation is less
 direct.

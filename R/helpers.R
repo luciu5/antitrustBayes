@@ -7,9 +7,10 @@ safe_sd <- function(x, floor = 1e-8) {
 ## Resolve the statistical likelihood contract shared by bayes_est() and the
 ## two direct Stan-data preparation entry points.  Codes are deliberately
 ## stable and are passed as data to Stan: 1 = Student-t, 2 = Gaussian;
-## 1 = sampled quality, 2 = collapsed quality.
-.resolve_likelihood_modes <- function(share_likelihood = c("student_t", "gaussian"),
-                                      quality_parameterization = c("sampled", "collapsed"),
+## 1 = sampled quality, 2 = collapsed quality.  New fits default to the
+## Gaussian/collapsed/market contract; explicit legacy values remain valid.
+.resolve_likelihood_modes <- function(share_likelihood = c("gaussian", "student_t"),
+                                      quality_parameterization = c("collapsed", "sampled"),
                                       margin_likelihood = NULL,
                                       use_rho = TRUE,
                                       use_market_resid_scale = FALSE,
@@ -18,7 +19,7 @@ safe_sd <- function(x, floor = 1e-8) {
                                       N_margin = NULL,
                                       likelihood_mode = 1L,
                                       exact_k = FALSE,
-                                      quality_scope = c("global", "market")) {
+                                      quality_scope = c("market", "global")) {
   share_likelihood <- match.arg(share_likelihood)
   quality_parameterization <- match.arg(quality_parameterization)
   quality_scope <- match.arg(quality_scope)
@@ -578,7 +579,26 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #' @param supply_model Integer 1--5.
 #' @param market_side Character: \code{"input"} or \code{"output"}.
 #' @param use_cutoff Logical.
-#' @param use_rho Logical.
+#' @param use_rho Logical. If \code{TRUE} (default), jointly model share and
+#'   margin residuals with a cross-equation residual correlation when
+#'   \code{likelihood_mode = 1} and a margin is observed. The default Gaussian
+#'   mode uses Gaussian residual correlation; explicit Student-t modes retain
+#'   their Student-t conditional factorization. Collapsed quality may induce
+#'   additional dependence through integrated group effects. The correlation
+#'   coordinate is inactive for share-only or margin-only data and when no
+#'   margin is observed.
+#' @param share_likelihood Share residual family: \code{"gaussian"}
+#'   (default) or \code{"student_t"}.
+#' @param quality_parameterization Quality effects are \code{"collapsed"}
+#'   (default) or \code{"sampled"}; collapsed quality integrates Gaussian
+#'   group effects and disallows market residual scales.
+#' @param margin_likelihood Margin residual family: \code{"student_t"} or
+#'   \code{"gaussian"}; \code{NULL} (default) follows
+#'   \code{share_likelihood}, so the resolved default is Gaussian.
+#' @param quality_scope Quality incidence is \code{"market"} (default), which
+#'   centers persistent quality separately within each market while retaining
+#'   the original ownership/ranking \code{group} field. \code{"global"}
+#'   retains the historical pooled scope.
 #' @param use_market_resid_scale Logical.
 #' @param use_alpha_market_pool Logical.
 #' @param use_s0_market_year_pool Logical.
@@ -635,10 +655,10 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               k_support = NULL,
                               k_prior = NULL,
                               k_scope = "market",
-                              share_likelihood = c("student_t", "gaussian"),
-                              quality_parameterization = c("sampled", "collapsed"),
+                              share_likelihood = c("gaussian", "student_t"),
+                              quality_parameterization = c("collapsed", "sampled"),
                               margin_likelihood = NULL,
-                              quality_scope = c("global", "market")) {
+                              quality_scope = c("market", "global")) {
   N <- length(prices)
   quality_scope <- match.arg(quality_scope)
   likelihood_modes <- .resolve_likelihood_modes(
@@ -1082,10 +1102,10 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   k_support = NULL,
                                   k_prior = NULL,
                                   k_scope = "market",
-                                  share_likelihood = c("student_t", "gaussian"),
-                                  quality_parameterization = c("sampled", "collapsed"),
+                                  share_likelihood = c("gaussian", "student_t"),
+                                  quality_parameterization = c("collapsed", "sampled"),
                                   margin_likelihood = NULL,
-                                  quality_scope = c("global", "market")) {
+                                  quality_scope = c("market", "global")) {
   N <- length(prices)
   quality_scope <- match.arg(quality_scope)
   likelihood_modes <- .resolve_likelihood_modes(

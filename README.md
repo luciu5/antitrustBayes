@@ -14,7 +14,7 @@ Bayesian estimation of differentiated-products demand and supply models using St
 
 Additional utilities:
 
-- **`bayes_compare()`** — Compare models using WAIC/LOO-IC with stacking weights and optional bridge sampling. Logit/CES comparison is allowed when both fits use the same quantity-space outcomes and market side.
+- **`bayes_compare()`** — Compare models using bridge sampling, with WAIC/LOO-IC and stacking where the likelihood supports them. Collapsed-quality fits use bridge evidence; ordinary pointwise LOO/WAIC is unavailable. Logit/CES comparison is allowed when both fits use the same quantity-space outcomes and market side.
 - **`bayes_avg()`** — Bayesian model averaging across supply model specifications.
 - **`bayes_prior_manifest()`** and **`bank_model_priors()`** — Reproducible proper parameter priors and candidate-set probabilities. The banking baseline assigns 0.30 each to Bertrand, Cournot, and monopolistic competition and 0.10 to the auction model; equal-weight and core-three sensitivities are available.
 - **`conduct_distance()`**, **`conduct_information_matrix()`**, and **`conduct_validation()`** — Theory-guided conduct distinguishability and targeted Monte Carlo validation.
@@ -82,11 +82,15 @@ comp <- bayes_compare(
 ```
 
 The primary share outcome is the log conditional inside quantity share,
-`log_shareIn`. By default, `use_rho = TRUE` couples it to the log inverse-margin
-outcome with a bivariate Student-t likelihood factored as
-`p(share) * p(margin | share)`. The correlation is estimated only for a joint
-fit with at least one observed margin; otherwise it is structurally fixed at
-zero and is not sampled. Shared proper priors are required for bridge-sampling
+`log_shareIn`. New fits default to Gaussian share and margin residuals,
+analytically collapsed persistent quality centered within each market, and
+`use_rho = TRUE`. Quality persists across periods for each firm-market group.
+The share-margin residual correlation is estimated only for a joint fit with
+at least one observed margin; otherwise it is structurally fixed at zero and
+is not sampled. The historical specification remains available with
+`share_likelihood = "student_t"`, `margin_likelihood = "student_t"`,
+`quality_parameterization = "sampled"`, and `quality_scope = "global"`.
+Shared proper priors are required for bridge-sampling
 model probabilities. Use `likelihood = "share"` and `likelihood = "margin"`
 fits with `bayes_evidence_decomposition()` when you want to report how much
 evidence comes from each block.

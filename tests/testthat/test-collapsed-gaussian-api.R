@@ -1,4 +1,4 @@
-test_that("collapsed Gaussian API preserves defaults and records resolved modes", {
+test_that("collapsed Gaussian API records routine and explicit legacy modes", {
   f <- list(
     prices = c(1.0, 1.2, 0.9, 1.1),
     quantities = c(1.1, 0.9, 1.2, 0.8),
@@ -8,9 +8,19 @@ test_that("collapsed Gaussian API preserves defaults and records resolved modes"
   )
 
   d_default <- do.call(prepare_stan_data, f)
-  expect_equal(d_default$share_likelihood, 1L)
-  expect_equal(d_default$margin_likelihood, 1L)
-  expect_equal(d_default$quality_parameterization, 1L)
+  expect_equal(d_default$share_likelihood, 2L)
+  expect_equal(d_default$margin_likelihood, 2L)
+  expect_equal(d_default$quality_parameterization, 2L)
+  expect_equal(d_default$quality_scope, 2L)
+  expect_false(attr(d_default, "likelihood_mode_metadata")$df_active)
+
+  d_legacy <- do.call(prepare_stan_data, c(f, list(
+    share_likelihood = "student_t", margin_likelihood = "student_t",
+    quality_parameterization = "sampled", quality_scope = "global"
+  )))
+  expect_equal(unname(unlist(d_legacy[c("share_likelihood", "margin_likelihood",
+                                       "quality_parameterization", "quality_scope")])),
+               rep(1L, 4L))
 
   d_a <- do.call(prepare_stan_data, c(f, list(
     share_likelihood = "gaussian", quality_parameterization = "sampled",
@@ -47,7 +57,8 @@ test_that("collapsed Gaussian API preserves defaults and records resolved modes"
   expect_equal(d_d$margin_likelihood, 1L)
 
   expect_error(do.call(prepare_stan_data, c(f, list(
-    share_likelihood = "student_t", margin_likelihood = "gaussian"
+    share_likelihood = "student_t", margin_likelihood = "gaussian",
+    quality_parameterization = "sampled"
   ))), "Student-t shares")
   expect_error(do.call(prepare_stan_data, c(f, list(
     share_likelihood = "student_t", quality_parameterization = "collapsed"
@@ -97,7 +108,8 @@ test_that("exact ordered-k rho restriction distinguishes rho zero from active rh
     year = rep(1, 4), group = c(1, 2, 1, 2), supply_model = 1L,
     market_side = "input", structure = "fringe", partition_prior = "ordered_k",
     k_support = 0:1, share_likelihood = "gaussian",
-    quality_parameterization = "collapsed", margin_likelihood = "gaussian"
+    quality_parameterization = "collapsed", margin_likelihood = "gaussian",
+    quality_scope = "global"
   )
   expect_no_error(do.call(prepare_stan_data, c(f, list(use_rho = FALSE))))
   expect_error(do.call(prepare_stan_data, c(f, list(use_rho = TRUE))),

@@ -361,3 +361,42 @@ test_that("the observed-share route remains the default and numerically unchange
   expect_equal(implicit@price_post, explicit@price_post)
   expect_identical(implicit@metadata$demand_anchoring, "observed")
 })
+
+
+test_that("historical policy-plan state hashes retain their version-1 key set", {
+  fx <- .latent_policy_fixture(n_draws = 4L)
+  plan <- posterior_policy_draws(fx$fit, n_draws = 3L, seed = 12L)
+  v2_keys <- c("draw_indices", "quality_draws", "group_labels",
+               "quality_scope", "quality_units", "quality_lookup",
+               "quality_source", "quality_conditioning", "quality_mode",
+               "k_cache", "role_mapping", "fixed_k", "role_offset")
+  expect_identical(.lq_plan_state_fingerprint(plan),
+                   digest::digest(plan[v2_keys], algo = "xxhash64", serialize = TRUE))
+
+  historical_keys <- c("draw_indices", "quality_draws", "group_labels",
+                       "quality_source", "quality_conditioning", "quality_mode",
+                       "k_cache", "role_mapping", "fixed_k", "role_offset")
+  historical <- plan
+  historical$fit_signature$fit_signature_version <- NULL
+  historical$fit_signature$quality_scope <- NULL
+  historical$fit_signature$quality_units <- NULL
+  historical$fit_signature$quality_lookup <- NULL
+  historical$quality_scope <- NULL
+  historical$quality_units <- NULL
+  historical$quality_lookup <- NULL
+  historical$fit_signature$fit_fingerprint <-
+    .lq_fit_fingerprint(fx$fit, version = 1L)
+  historical$fit_signature$latent_state_fingerprint <-
+    digest::digest(historical[historical_keys], algo = "xxhash64", serialize = TRUE)
+  expect_identical(.lq_plan_state_fingerprint(historical),
+                   historical$fit_signature$latent_state_fingerprint)
+  expect_no_error(.lq_validate_plan(fx$fit, historical))
+  historical$fit_signature$fit_signature_version <- 1L
+  expect_no_error(.lq_validate_plan(fx$fit, historical))
+  changed <- historical
+  changed$quality_draws[1L, 1L] <- changed$quality_draws[1L, 1L] + .01
+  expect_error(.lq_validate_plan(fx$fit, changed), "latent states")
+  changed <- plan
+  changed$quality_units <- rev(changed$quality_units)
+  expect_error(.lq_validate_plan(fx$fit, changed), "latent states")
+})

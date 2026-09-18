@@ -24,7 +24,7 @@ test_that("fully Gaussian likelihood has no active df coordinate", {
     quality_parameterization = "collapsed", estimate_df = FALSE
   )
   expect_false(modes$df_active)
-  expect_identical(modes$quality_scope, "global")
+  expect_identical(modes$quality_scope, "market")
   expect_error(
     antitrustBayes:::.resolve_likelihood_modes(
       share_likelihood = "gaussian", margin_likelihood = "gaussian",

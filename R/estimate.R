@@ -30,6 +30,87 @@
   min(resolved_chains, option_cores)
 }
 
+## Check the existence contract for a fit returned by rstan::sampling.  This
+## intentionally says nothing about sampler quality (divergences, R-hat, or
+## elapsed time); those are diagnostics for callers after a real fit exists.
+.assert_stan_sampling_contract <- function(stanfit, requested_chains) {
+  sampler_hint <- "Check sampler messages and initialization settings."
+  fail <- function(detail) {
+    stop(
+      paste("rstan::sampling returned an unusable stanfit:", detail,
+            sampler_hint),
+      call. = FALSE
+    )
+  }
+
+  if (!methods::is(stanfit, "stanfit")) {
+    fail("expected a normal stanfit object with sampling mode 0.")
+  }
+  if (length(stanfit@mode) != 1L || !is.numeric(stanfit@mode) ||
+      !is.finite(stanfit@mode) || stanfit@mode != 0L) {
+    fail("the fit is not a normal sampling result (mode must be 0).")
+  }
+
+  valid_count <- function(x, n = NULL) {
+    is.numeric(x) && (is.null(n) || length(x) == n) &&
+      all(is.finite(x)) && all(x >= 0) && all(x == floor(x))
+  }
+  if (!valid_count(requested_chains) || length(requested_chains) != 1L ||
+      requested_chains < 1 || requested_chains > .Machine$integer.max) {
+    fail("the requested chain count is invalid.")
+  }
+  n_chains <- as.integer(requested_chains)
+
+  sim <- tryCatch(stanfit@sim, error = function(e) NULL)
+  if (!is.list(sim)) fail("the fit has no usable sampling metadata.")
+  if (!valid_count(sim$chains) || length(sim$chains) != 1L ||
+      sim$chains != n_chains) {
+    fail(paste0("the returned chain count does not match requested chains (",
+                n_chains, ")."))
+  }
+  n_save <- sim$n_save
+  warmup2 <- sim$warmup2
+  if (!valid_count(n_save, n_chains) ||
+      !valid_count(warmup2, n_chains)) {
+    fail("per-chain n_save and warmup2 counts are missing or invalid.")
+  }
+  n_post <- n_save - warmup2
+  if (any(n_post <= 0)) {
+    fail("each chain must contain at least one post-warmup draw.")
+  }
+
+  samples <- sim$samples
+  if (!is.list(samples) || length(samples) != n_chains) {
+    fail("saved samples are missing for one or more chains.")
+  }
+  ## rstan stores each chain as a named list of flattened parameter vectors,
+  ## not as the matrices returned by get_sampler_params()/as.matrix().
+  sample_rows <- vapply(samples, function(chain) {
+    if (!is.list(chain) || length(chain) == 0L ||
+        is.null(names(chain)) || anyNA(names(chain)) ||
+        any(!nzchar(names(chain))) || anyDuplicated(names(chain))) {
+      return(NA_real_)
+    }
+    lengths <- vapply(chain, function(draws) {
+      if (!is.numeric(draws) || !is.null(dim(draws))) return(NA_real_)
+      as.numeric(length(draws))
+    }, numeric(1))
+    if (any(!is.finite(lengths)) || length(unique(lengths)) != 1L) {
+      return(NA_real_)
+    }
+    lengths[[1L]]
+  }, numeric(1))
+  if (any(!is.finite(sample_rows)) || any(sample_rows != n_save) ||
+      any(sample_rows <= 0)) {
+    fail("saved samples are empty or do not match per-chain n_save counts.")
+  }
+  if (!all(vapply(samples, function(chain)
+    identical(names(chain), names(samples[[1L]])), logical(1)))) {
+    fail("saved parameter names differ between chains.")
+  }
+  invisible(stanfit)
+}
+
 #' Bayesian Estimation of Demand and Supply
 #'
 #' Estimates a hierarchical Bayesian model of differentiated products demand
@@ -66,37 +147,44 @@
 #'   \code{"auction"}, or \code{"bargaining"}.
 #' @param use_cutoff Logical. If \code{TRUE}, estimate a fringe-firm share
 #'   cutoff. Default \code{FALSE}.
-#' @param use_rho Logical. If \code{TRUE} (default), couple the share and
-#'   margin likelihoods per observation through a free cross-equation
-#'   correlation \code{rho}, using a bivariate Student-t factored as
-#'   \code{p(share) * p(margin | share)}. \code{rho} is only ever
-#'   instantiated when \code{likelihood = "joint"} and at least one
-#'   observation has an observed margin; otherwise it is structurally fixed
-#'   at zero (never sampled). Note that \code{likelihood = "share"} omits the
-#'   margin equation and therefore the equilibrium-margin information that
-#'   principally identifies the outside share's level -- under share-only
-#'   fits, the outside share may be weakly identified or prior-dominated,
-#'   depending on the market/time/intercept structure of the data. This is an
-#'   expected property of the model, not a defect to be tuned away.
-#' @param df Degrees of freedom for the joint bivariate (or, when \code{rho}
-#'   is inactive, marginal) Student-t likelihood. Either a single finite
-#'   numeric greater than 2 (fixed, default \code{5}, preferred for sparse
-#'   information sets) or the character sentinel \code{"estimate"}, which
-#'   places a \code{gamma(prior_nu_shape, prior_nu_rate)} prior on
-#'   \code{nu - 2} and estimates \code{nu} jointly with the rest of the
-#'   model.
-#' @param share_likelihood Share residual family: \code{"student_t"}
-#'   (default) or \code{"gaussian"}.
-#' @param quality_parameterization Quality effects are \code{"sampled"}
-#'   (default) or \code{"collapsed"}; collapsed quality integrates Gaussian
+#' @param use_rho Logical. If \code{TRUE} (default), jointly model share and
+#'   margin residuals with a free cross-equation residual correlation
+#'   \code{rho} when \code{likelihood = "joint"} and at least one observation
+#'   has an observed margin. Under the default Gaussian likelihood this is a
+#'   Gaussian residual correlation; explicit Student-t modes retain the
+#'   conditional bivariate Student-t factorization. With collapsed quality,
+#'   integrated group effects can induce additional dependence across
+#'   observations, while \code{rho} remains the share-margin residual
+#'   correlation. It is structurally fixed at zero (never sampled) for
+#'   share-only or margin-only fits and when no margin is observed. Note that
+#'   \code{likelihood = "share"} omits the margin equation and therefore the
+#'   equilibrium-margin information that principally identifies the outside
+#'   share's level -- under share-only fits, the outside share may be weakly
+#'   identified or prior-dominated, depending on the market/time/intercept
+#'   structure of the data. This is an expected property of the model, not a
+#'   defect to be tuned away.
+#' @param df Degrees of freedom for Student-t share or margin residuals. It
+#'   is either a single finite numeric greater than 2 (fixed, default
+#'   \code{5}, preferred for sparse information sets) or the character
+#'   sentinel \code{"estimate"}, which places a
+#'   \code{gamma(prior_nu_shape, prior_nu_rate)} prior on \code{nu - 2} and
+#'   estimates \code{nu} jointly with the rest of the model. The resolved
+#'   fully Gaussian default has no active degrees-of-freedom coordinate and
+#'   ignores this fixed value; requesting \code{df = "estimate"} remains
+#'   invalid for Gaussian residuals.
+#' @param share_likelihood Share residual family: \code{"gaussian"}
+#'   (default) or \code{"student_t"}.
+#' @param quality_parameterization Quality effects are \code{"collapsed"}
+#'   (default) or \code{"sampled"}; collapsed quality integrates Gaussian
 #'   group effects and disallows market residual scales.
 #' @param quality_scope Quality incidence for the hierarchical quality effect:
-#'   \code{"global"} (historical default) or experimental \code{"market"},
-#'   which centers persistent quality separately within each market while
-#'   retaining the original \code{group} ownership identifiers.
+#'   \code{"market"} (default), which centers persistent quality separately
+#'   within each market while retaining the original \code{group} ownership
+#'   identifiers, or \code{"global"} for the historical pooled scope.
 #' @param margin_likelihood Margin residual family, \code{"student_t"} or
 #'   \code{"gaussian"}; \code{NULL} (default) follows
-#'   \code{share_likelihood}. Gaussian-share Student-t margins require
+#'   \code{share_likelihood}, so the resolved default is Gaussian. Gaussian-share
+#'   Student-t margins require
 #'   collapsed quality, fixed \code{df}, and \code{use_rho = FALSE}.
 #' @param use_market_resid_scale Logical. If \code{TRUE}, allow market-level
 #'   share and inverse-margin residual scales with hierarchical shrinkage.
@@ -194,12 +282,12 @@
 #' @param ... Additional arguments (currently unused).
 #'
 #' @details
-#' The default is the historical Student-t share and margin likelihood with
-#' sampled quality. Gaussian sampled and Gaussian collapsed quality are
-#' selected with \code{share_likelihood} and
-#' \code{quality_parameterization}. Collapsed fits retain normalized bridge
-#' evidence; their observation-level predictive arrays are unavailable for
-#' LOO/WAIC.
+#' New fits default to Gaussian share and margin residuals with collapsed,
+#' market-scoped quality and active residual correlation when both equations
+#' are present. Student-t residuals, sampled quality, and global quality remain
+#' available by setting the corresponding arguments explicitly. Collapsed fits
+#' retain normalized bridge evidence; their observation-level predictive arrays
+#' are unavailable for LOO/WAIC.
 #'
 #' Two demand models are supported:
 #' \describe{
@@ -310,9 +398,9 @@ bayes_est <- function(prices, quantities, margins,
                       use_cutoff = FALSE,
                       use_rho = TRUE,
                       df = 5,
-                      share_likelihood = c("student_t", "gaussian"),
-                      quality_parameterization = c("sampled", "collapsed"),
-                      quality_scope = c("global", "market"),
+                      share_likelihood = c("gaussian", "student_t"),
+                      quality_parameterization = c("collapsed", "sampled"),
+                      quality_scope = c("market", "global"),
                       margin_likelihood = NULL,
                       use_market_resid_scale = FALSE,
                       use_alpha_market_pool = TRUE,
@@ -715,6 +803,10 @@ bayes_est <- function(prices, quantities, margins,
     list(object = stan_mod, data = stan_data),
     default_stan
   ))
+  .assert_stan_sampling_contract(
+    stanfit,
+    requested_chains = default_stan$chains
+  )
 
   metadata <- package_provenance(df, prior_manifest, model_prior)
   metadata$stan_chains <- as.integer(default_stan$chains)

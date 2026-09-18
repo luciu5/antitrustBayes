@@ -38,10 +38,10 @@ prepare_stan_data(
   k_support = NULL,
   k_prior = NULL,
   k_scope = "market",
-  share_likelihood = c("student_t", "gaussian"),
-  quality_parameterization = c("sampled", "collapsed"),
+  share_likelihood = c("gaussian", "student_t"),
+  quality_parameterization = c("collapsed", "sampled"),
   margin_likelihood = NULL,
-  quality_scope = c("global", "market")
+  quality_scope = c("market", "global")
 )
 }
 \arguments{
@@ -64,7 +64,25 @@ greater than 1 are valid for input-market markdowns.}
 
 \item{market_side}{Character: \code{"input"} or \code{"output"}.}
 
-\item{use_rho}{Logical.}
+\item{use_rho}{Logical. If \code{TRUE} (default), jointly model share and
+margin residuals with a cross-equation residual correlation when
+\code{likelihood_mode = 1} and a margin is observed. The default Gaussian
+mode uses Gaussian residual correlation; explicit Student-t modes retain
+their Student-t conditional factorization. Collapsed quality may induce
+additional dependence through integrated group effects. The correlation
+coordinate is inactive for share-only or margin-only data and when no
+margin is observed.}
+
+\item{share_likelihood}{Share residual family: \code{"gaussian"}
+(default) or \code{"student_t"}.}
+
+\item{quality_parameterization}{Quality effects are \code{"collapsed"}
+(default) or \code{"sampled"}; collapsed quality integrates Gaussian group
+effects and disallows market residual scales.}
+
+\item{margin_likelihood}{Margin residual family: \code{"student_t"} or
+\code{"gaussian"}; \code{NULL} (default) follows
+\code{share_likelihood}, so the resolved default is Gaussian.}
 
 \item{use_market_resid_scale}{Logical.}
 
@@ -115,10 +133,10 @@ include zero; Stackelberg supports must be positive.}
 \item{k_prior}{Positional probabilities corresponding to \code{k_support};
 \code{NULL} gives a uniform prior.}
 
-\item{quality_scope}{Quality incidence is \code{"global"} (historical
-default) or experimental \code{"market"}; market scope centers persistent
-quality within each market while retaining the original ownership/ranking
-\code{group} field.}
+\item{quality_scope}{Quality incidence is \code{"market"} (default), which
+centers persistent quality within each market while retaining the original
+ownership/ranking \code{group} field. \code{"global"} retains the historical
+pooled scope.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.

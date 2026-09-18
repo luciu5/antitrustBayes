@@ -307,11 +307,19 @@
 }
 
 .lq_plan_state_fingerprint <- function(plan) {
-  digest::digest(plan[c("draw_indices", "quality_draws", "group_labels",
-                       "quality_scope", "quality_units", "quality_lookup",
-                       "quality_source", "quality_conditioning", "quality_mode",
-                       "k_cache", "role_mapping", "fixed_k", "role_offset")],
-                 algo = "xxhash64", serialize = TRUE)
+  ## Unversioned/v1 plans predate quality scope. Preserve their historical
+  ## state hash rather than adding absent scoped fields to the payload.
+  version <- if (is.list(plan$fit_signature) &&
+                 !is.null(plan$fit_signature$fit_signature_version))
+    as.integer(plan$fit_signature$fit_signature_version) else 1L
+  keys <- c("draw_indices", "quality_draws", "group_labels",
+            "quality_source", "quality_conditioning", "quality_mode",
+            "k_cache", "role_mapping", "fixed_k", "role_offset")
+  if (identical(version, 2L)) {
+    keys <- append(keys, c("quality_scope", "quality_units", "quality_lookup"),
+                   after = 3L)
+  }
+  digest::digest(plan[keys], algo = "xxhash64", serialize = TRUE)
 }
 
 #' Internal draw-plan constructor.  `draws` is the policy-plan contract union;

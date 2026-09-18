@@ -17,9 +17,9 @@ bayes_est(
   use_cutoff = FALSE,
   use_rho = TRUE,
   df = 5,
-  share_likelihood = c("student_t", "gaussian"),
-  quality_parameterization = c("sampled", "collapsed"),
-  quality_scope = c("global", "market"),
+  share_likelihood = c("gaussian", "student_t"),
+  quality_parameterization = c("collapsed", "sampled"),
+  quality_scope = c("market", "global"),
   margin_likelihood = NULL,
   use_market_resid_scale = FALSE,
   use_alpha_market_pool = TRUE,
@@ -88,43 +88,48 @@ currently supports output markets only; if omitted, its default is
 \item{use_cutoff}{Logical. If \code{TRUE}, estimate a fringe-firm share
 cutoff. Default \code{FALSE}.}
 
-\item{use_rho}{Logical. If \code{TRUE} (default), couple the share and
-margin likelihoods per observation through a free cross-equation
-correlation \code{rho}, using a bivariate Student-t factored as
-\code{p(share) * p(margin | share)}. \code{rho} is only ever
-instantiated when \code{likelihood = "joint"} and at least one
-observation has an observed margin; otherwise it is structurally fixed
-at zero (never sampled). Note that \code{likelihood = "share"} omits the
-margin equation and therefore the equilibrium-margin information that
-principally identifies the outside share's level -- under share-only
-fits, the outside share may be weakly identified or prior-dominated,
-depending on the market/time/intercept structure of the data. This is an
-expected property of the model, not a defect to be tuned away.}
+\item{use_rho}{Logical. If \code{TRUE} (default), jointly model share and
+margin residuals with a free cross-equation residual correlation
+\code{rho} when \code{likelihood = "joint"} and at least one observation
+has an observed margin. Under the default Gaussian likelihood this is a
+Gaussian residual correlation; explicit Student-t modes retain the
+conditional bivariate Student-t factorization. With collapsed quality,
+integrated group effects can induce additional dependence across
+observations, while \code{rho} remains the share-margin residual
+correlation. It is structurally fixed at zero (never sampled) for
+share-only or margin-only fits and when no margin is observed. Note that
+\code{likelihood = "share"} omits the margin equation and therefore the
+equilibrium-margin information that principally identifies the outside
+share's level -- under share-only fits, the outside share may be weakly
+identified or prior-dominated, depending on the market/time/intercept
+structure of the data. This is an expected property of the model, not a
+defect to be tuned away.}
 
-\item{df}{Degrees of freedom for the joint bivariate (or, when \code{rho}
-is inactive, marginal) Student-t likelihood. Either a single finite
-numeric greater than 2 (fixed, default \code{5}, preferred for sparse
-information sets) or the character sentinel \code{"estimate"}, which
-places a \code{gamma(prior_nu_shape, prior_nu_rate)} prior on
-\code{nu - 2} and estimates \code{nu} jointly with the rest of the
-model.}
+\item{df}{Degrees of freedom for Student-t share or margin residuals. It
+is either a single finite numeric greater than 2 (fixed, default
+\code{5}, preferred for sparse information sets) or the character
+sentinel \code{"estimate"}, which places a
+\code{gamma(prior_nu_shape, prior_nu_rate)} prior on \code{nu - 2} and
+estimates \code{nu} jointly with the rest of the model. The resolved
+fully Gaussian default has no active degrees-of-freedom coordinate and
+ignores this fixed value; requesting \code{df = "estimate"} remains
+invalid for Gaussian residuals.}
 
-\item{share_likelihood}{Share residual family: \code{"student_t"}
-(default) or \code{"gaussian"}.}
+\item{share_likelihood}{Share residual family: \code{"gaussian"}
+(default) or \code{"student_t"}.}
 
-\item{quality_parameterization}{Quality effects are \code{"sampled"}
-(default) or \code{"collapsed"}; collapsed quality integrates Gaussian
+\item{quality_parameterization}{Quality effects are \code{"collapsed"}
+(default) or \code{"sampled"}; collapsed quality integrates Gaussian
 group effects and disallows market residual scales.}
 
-\item{quality_scope}{Quality incidence is \code{"global"} (the historical
-default) or experimental \code{"market"}. Market scope gives each observed
-market/group pair a persistent quality effect and centers the effects within
-each market; the economic \code{group} ownership/ranking identifier is
-unchanged.}
+\item{quality_scope}{Quality incidence is \code{"market"} (default), which
+gives each observed market/group pair a persistent quality effect and centers
+the effects within each market; the economic \code{group} ownership/ranking
+identifier is unchanged. \code{"global"} retains the historical pooled scope.}
 
 \item{margin_likelihood}{Margin residual family, \code{"student_t"} or
 \code{"gaussian"}; \code{NULL} (default) follows
-\code{share_likelihood}. Gaussian-share Student-t margins require
+\code{share_likelihood}, so the resolved default is Gaussian. Gaussian-share Student-t margins require
 collapsed quality, fixed \code{df}, and \code{use_rho = FALSE}.}
 
 \item{use_market_resid_scale}{Logical. If \code{TRUE}, allow market-level
@@ -259,12 +264,12 @@ demand parameters (price sensitivity, mean valuations, outside share) and
 supply parameters under one of five supply models.
 }
 \details{
-The default is the historical Student-t share and margin likelihood with
-sampled quality. Gaussian sampled and Gaussian collapsed quality are
-selected with \code{share_likelihood} and
-\code{quality_parameterization}. Collapsed fits retain normalized bridge
-evidence; their observation-level predictive arrays are unavailable for
-LOO/WAIC.
+New fits default to Gaussian share and margin residuals with collapsed,
+market-scoped quality and active residual correlation when both equations
+are present. Student-t residuals, sampled quality, and global quality remain
+available by setting the corresponding arguments explicitly. Collapsed fits
+retain normalized bridge evidence; their observation-level predictive arrays
+are unavailable for LOO/WAIC.
 
 Two demand models are supported:
 \describe{
