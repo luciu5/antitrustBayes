@@ -29,6 +29,9 @@
 #'   or tariff equation is evaluated here. Attributes retain the draw index,
 #'   local quality units, realized k and plan fingerprint. Quality and roles
 #'   are never resampled during realization.
+#'   Second-score output Logit auctions use the cost-based value index of
+#'   \pkg{antitrust}. Their winning probabilities respond to effective costs
+#'   rather than bid prices; realized quality is held fixed across policies.
 #' @seealso \code{posterior_policy_draws()}, \code{posterior_quality()}
 #' @export
 posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
@@ -40,10 +43,12 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
     stop("'fit' must be a BayesFit object.", call. = FALSE)
   demand_anchoring <- match.arg(demand_anchoring)
   specified <- methods::is(fit, "BayesSpecifiedFit")
+  auction_logit <- identical(as.character(fit@demand_model), "logit") &&
+    identical(as.integer(fit@supply_model), 4L)
   if (!identical(fit@market_side, "output") ||
       !fit@demand_model %in% c("logit", "ces") ||
-      !as.integer(fit@supply_model) %in% c(1L, 2L, 3L))
-    stop("posterior_policy_models() initially supports output Logit/CES Bertrand, Cournot and MonCom games.",
+      (!as.integer(fit@supply_model) %in% c(1L, 2L, 3L) && !auction_logit))
+    stop("posterior_policy_models() supports output Logit/CES Bertrand, Cournot and MonCom games, and second-score output Logit auctions.",
          call. = FALSE)
   native_structure <- .native_ordered_structure(fit)
   structure_name <- fit@metadata[["structure", exact = TRUE]] %||% if (specified)

@@ -39,5 +39,10 @@ anchoring preserves the original structural cost primitive and may require
 solving the genuine latent baseline. No tariff or policy equation is evaluated.
 Attributes retain posterior index, local quality units, realized k and plan
 fingerprint. Failures identify unit, posterior index and construction stage.
+Second-score output Logit auctions are also supported. Their cost-based value
+index follows \pkg{antitrust}: winning probabilities respond to effective
+costs rather than bid prices. Latent reconstruction preserves costs, sets the
+auction-normalized log share odds, and holds the implied value index fixed
+through later policies. CES auctions remain unsupported by this helper.
 }
 \seealso{\code{\link{posterior_policy_draws}}, \code{\link{posterior_quality}}}

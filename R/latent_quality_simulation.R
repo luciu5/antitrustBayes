@@ -537,6 +537,7 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
     stop("Latent-quality preservation requires an initialized numeric mcPre.", call. = FALSE)
   }
   is_ces <- methods::is(model, "CES")
+  is_auction <- methods::is(model, "Auction2ndLogit") && !is_ces
   if (!is_ces && !methods::is(model, "Logit")) {
     stop("Latent-quality demand replacement currently supports Logit input/output and output CES only.",
          call. = FALSE)
@@ -559,7 +560,19 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
   } else {
     alpha <- as.numeric(model@slopes$alpha)
     if (length(alpha) != 1L || !is.finite(alpha) || alpha == 0) stop("Latent Logit demand has an invalid signed price coefficient.", call. = FALSE)
-    model@slopes$meanval <- delta - alpha * (prices_reference - price_outside)
+    if (is_auction) {
+      if (!isTRUE(model@output) || alpha >= 0 || !is.na(model@normIndex) ||
+          !isTRUE(all.equal(as.numeric(price_outside), 0)))
+        stop("Latent auction quality requires output Logit with a positive outside share and zero outside cost shock.", call. = FALSE)
+      # Auction2ndLogit stores eta = v + alpha * mcPre, not the ordinary
+      # price-based intercept. Its public share method adds alpha times the
+      # additive cost change after policy. Keep mcPre and v = eta - alpha*mcPre
+      # fixed while realizing probabilities from this conditional quality draw.
+      model@slopes$meanval <- delta
+      model@mcDelta <- rep(0, n)
+    } else {
+      model@slopes$meanval <- delta - alpha * (prices_reference - price_outside)
+    }
   }
   model@priceStart <- prices_reference
   model@pricePre <- prices_reference
@@ -631,6 +644,10 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
     solved_revenue_shares = latent_revenue,
     mc_pre = old_mc,
     mkt_size = old_mkt_size,
+    demand_representation = if (is_auction) "auction_cost_based_value_index" else
+      if (is_ces) "ces_mean_value" else "logit_price_based_mean_value",
+    auction_value = if (is_auction) as.numeric(model@slopes$meanval) -
+      as.numeric(model@slopes$alpha) * old_mc else NULL,
     foc_reference = foc_reference,
     foc_solved = foc_solved,
     price_discrepancy = as.numeric(model@pricePre) - prices_reference
@@ -640,6 +657,8 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
 .lq_metadata <- function(info, quality_source, quality_conditioning) {
   list(
     demand_anchoring = "latent_quality",
+    demand_representation = info$demand_representation,
+    auction_value = info$auction_value,
     normalization = info$normalization,
     quality_source = quality_source,
     quality_conditioning = quality_conditioning,
