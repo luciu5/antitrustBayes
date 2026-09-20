@@ -1,0 +1,17 @@
+"fixture","ss","rho","max_relative_gradient_error","tolerance","passed"
+"singleton",0.005,-0.8,1.22683421418883e-07,2e-04,TRUE
+"singleton",0.005,0.8,2.29084830242821e-08,2e-04,TRUE
+"singleton",0.25,-0.8,2.59055701163686e-10,2e-04,TRUE
+"singleton",0.25,0.8,2.21226741032919e-10,2e-04,TRUE
+"cross_section",0.005,-0.8,2.97330736467248e-10,2e-04,TRUE
+"cross_section",0.005,0.8,4.41674669645326e-10,2e-04,TRUE
+"cross_section",0.25,-0.8,4.45424597790396e-10,2e-04,TRUE
+"cross_section",0.25,0.8,4.74040468828105e-10,2e-04,TRUE
+"multiproduct",0.005,-0.8,1.94364368488005e-06,2e-04,TRUE
+"multiproduct",0.005,0.8,2.14813578814712e-06,2e-04,TRUE
+"multiproduct",0.25,-0.8,7.73583561257725e-10,2e-04,TRUE
+"multiproduct",0.25,0.8,8.02324630934573e-10,2e-04,TRUE
+"unbalanced_panel",0.005,-0.8,1.13827966455257e-06,2e-04,TRUE
+"unbalanced_panel",0.005,0.8,1.04914167970319e-06,2e-04,TRUE
+"unbalanced_panel",0.25,-0.8,5.96534533593109e-10,2e-04,TRUE
+"unbalanced_panel",0.25,0.8,7.13571911520162e-10,2e-04,TRUE

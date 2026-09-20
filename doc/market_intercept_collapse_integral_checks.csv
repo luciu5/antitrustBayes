@@ -1,0 +1,17 @@
+"fixture","ss","rho","normalized_integral","error","passed"
+"singleton",0.02,0,1,1.11022302462516e-15,TRUE
+"singleton",0.02,0.8,1,3.99680288865056e-15,TRUE
+"singleton",0.4,0,1,4.44089209850063e-16,TRUE
+"singleton",0.4,0.8,1,1.33226762955019e-15,TRUE
+"cross_section",0.02,0,1,6.66133814775094e-16,TRUE
+"cross_section",0.02,0.8,1,3.10862446895044e-15,TRUE
+"cross_section",0.4,0,1,2.22044604925031e-16,TRUE
+"cross_section",0.4,0.8,1,2.22044604925031e-16,TRUE
+"multiproduct",0.02,0,0.999999999999987,1.33226762955019e-14,TRUE
+"multiproduct",0.02,0.8,1.00000000000008,8.10462807976364e-14,TRUE
+"multiproduct",0.4,0,1,6.66133814775094e-16,TRUE
+"multiproduct",0.4,0.8,1,6.66133814775094e-16,TRUE
+"unbalanced_panel",0.02,0,1.00000000000001,7.7715611723761e-15,TRUE
+"unbalanced_panel",0.02,0.8,1.00000000000015,1.49880108324396e-13,TRUE
+"unbalanced_panel",0.4,0,1,8.88178419700125e-16,TRUE
+"unbalanced_panel",0.4,0.8,0.999999999999997,2.99760216648792e-15,TRUE
