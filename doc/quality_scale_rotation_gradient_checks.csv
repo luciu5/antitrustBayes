@@ -1,0 +1,11 @@
+"scenario","coordinate","finite_gradient","chain_rule_gradient","relative_error","tolerance","passed"
+"ordinary","log_contrast_total_scale",-2.88390577773967,-2.88390577729558,1.1434088139988e-10,2e-06,TRUE
+"ordinary","logit_share_variance_fraction",-0.374111026530171,-0.374111026605962,5.51565780986284e-11,2e-06,TRUE
+"share_small","log_contrast_total_scale",11.1592433569285,11.1592439326141,4.73455072776043e-08,2e-06,TRUE
+"share_small","logit_share_variance_fraction",7.32360365032182,7.32360353732646,1.35752935618899e-08,2e-06,TRUE
+"quality_small","log_contrast_total_scale",-3.75195282042995,-3.75195282051113,1.70832124072814e-11,2e-06,TRUE
+"quality_small","logit_share_variance_fraction",-0.508898817887521,-0.508898817839562,3.17841598017273e-11,2e-06,TRUE
+"both_small","log_contrast_total_scale",1672.47137587148,1672.47137586151,5.96113729836628e-12,2e-06,TRUE
+"both_small","logit_share_variance_fraction",1.79031718516853,1.79031721507982,1.07196741144701e-08,2e-06,TRUE
+"share_large","log_contrast_total_scale",-9.48298341363341,-9.48298341058708,2.90597052629351e-10,2e-06,TRUE
+"share_large","logit_share_variance_fraction",-0.737354053730152,-0.737354054324589,3.4215084983822e-10,2e-06,TRUE

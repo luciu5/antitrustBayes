@@ -202,3 +202,46 @@ test_that("scalar rstan arrays are accepted without changing draw alignment", {
   expect_identical(posterior_quality(fit, draws = arrays, seed = 31)$draws,
     posterior_quality(fit, draws = plain, seed = 31)$draws)
 })
+
+test_that("posterior_quality uses economic quality scale under total/fraction coordinates", {
+  group <- c(1L, 2L, 1L, 3L)
+  y <- c(.2, .3, .1, .4)
+  mu <- matrix(c(.1, .2, .15, .3), nrow = 1L)
+  tau <- .6
+  sigma <- .4
+  total <- sqrt(tau^2 + sigma^2)
+  fraction_logit <- 2 * (log(sigma) - log(tau))
+  fit <- posterior_quality_fixture(group, y)
+  fit@metadata$quality_scale_parameterization <- "total_fraction"
+  fit@metadata$quality_scale_parameterization_effective <- "total_fraction"
+  fit@stan_data$quality_scale_parameterization <- 2L
+
+  contract <- antitrustBayes:::.posterior_contract(
+    fit, purpose = "posterior_quality", conditioning = "share"
+  )
+  expect_identical(
+    contract$actual[contract$canonical == "sigma_b_strat"],
+    "sigma_b_strat_economic"
+  )
+  expect_error(antitrustBayes:::.posterior_normalize_draw_names(list(
+    share_mean = mu, sigma_b_strat = total, sigma_share = sigma
+  ), contract), "sigma_b_strat")
+
+  legacy <- posterior_quality(fit, seed = 47, draws = list(
+    share_mean = mu, sigma_b_strat_economic = tau,
+    ## Deliberately wrong raw value confirms that the economic alias wins.
+    sigma_b_strat = total * 3, log_sigma_share = fraction_logit,
+    sigma_share = sigma
+  ))
+  reconstructed <- posterior_quality(fit, seed = 47, draws = list(
+    share_mean = mu, sigma_b_strat = total,
+    log_sigma_share = fraction_logit, sigma_share = sigma
+  ))
+  expect_identical(reconstructed$draws, legacy$draws)
+  expect_identical(reconstructed$conditional_means, legacy$conditional_means)
+  expect_identical(reconstructed$conditional_sds, legacy$conditional_sds)
+
+  expect_error(posterior_quality(fit, draws = list(
+    share_mean = mu, sigma_b_strat = total, sigma_share = sigma
+  )), "raw pair")
+})

@@ -25,7 +25,7 @@ prepare_ces_stan_data(
   use_s0_market_pool = FALSE,
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
-  market_s0_parameterization = c("legacy", "rotated"),
+  market_s0_parameterization = c("legacy", "rotated", "joint"),
   margin_observed = NULL,
   outside_price = 1,
   likelihood_mode = 1L,
@@ -40,6 +40,7 @@ prepare_ces_stan_data(
   k_scope = "market",
   share_likelihood = c("gaussian", "student_t"),
   quality_parameterization = c("collapsed", "sampled"),
+  quality_scale_parameterization = c("legacy", "total_fraction"),
   margin_likelihood = NULL,
   quality_scope = c("market", "global")
 )
@@ -77,6 +78,12 @@ margin is observed.}
 \item{quality_parameterization}{Quality effects are \code{"collapsed"}
 (default) or \code{"sampled"}; collapsed quality integrates Gaussian group
 effects and disallows market residual scales.}
+
+\item{quality_scale_parameterization}{Sampler coordinates for the Gaussian
+share-noise and quality scales. \code{"legacy"} (default) preserves the
+historical coordinates. \code{"total_fraction"} is an exact experimental
+contrast-total-scale/variance-fraction rotation requiring Gaussian shares,
+collapsed quality, and a common residual scale.}
 
 \item{margin_likelihood}{Margin residual family: \code{"student_t"} or
 \code{"gaussian"}; \code{NULL} (default) follows

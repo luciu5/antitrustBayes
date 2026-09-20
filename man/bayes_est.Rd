@@ -19,6 +19,7 @@ bayes_est(
   df = 5,
   share_likelihood = c("gaussian", "student_t"),
   quality_parameterization = c("collapsed", "sampled"),
+  quality_scale_parameterization = c("legacy", "total_fraction"),
   quality_scope = c("market", "global"),
   margin_likelihood = NULL,
   use_market_resid_scale = FALSE,
@@ -26,7 +27,7 @@ bayes_est(
   use_s0_market_year_pool = FALSE,
   use_s0_market_pool = FALSE,
   s0_pooling = c("auto", "none", "market", "market_year"),
-  market_s0_parameterization = c("legacy", "rotated"),
+  market_s0_parameterization = c("legacy", "rotated", "joint"),
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
   use_hmt = FALSE,
@@ -122,6 +123,15 @@ invalid for Gaussian residuals.}
 (default) or \code{"sampled"}; collapsed quality integrates Gaussian
 group effects and disallows market residual scales.}
 
+\item{quality_scale_parameterization}{Sampler coordinates for the Gaussian
+share-noise and quality scales. \code{"legacy"} (default) preserves the
+historical coordinates. \code{"total_fraction"} is an exact experimental
+contrast-total-scale/variance-fraction rotation available with Gaussian
+shares, collapsed quality, and a common residual scale. In that mode the raw
+Stan fields \code{sigma_b_strat} and \code{log_sigma_share} are sampler
+coordinates; use \code{sigma_b_strat_economic} and \code{sigma_share} for the
+reconstructed economic scales.}
+
 \item{quality_scope}{Quality incidence is \code{"market"} (default), which
 gives each observed market/group pair a persistent quality effect and centers
 the effects within each market; the economic \code{group} ownership/ranking
@@ -170,13 +180,13 @@ The explicit legacy flags \code{use_s0_market_pool} and
 \code{use_s0_market_year_pool} remain supported when \code{s0_pooling} is
 omitted; supplying both interfaces together is ambiguous and errors.}
 
-\item{market_s0_parameterization}{Character string selecting the legacy or
-market/outside-share rotated Stan coordinates. The default
-\code{"legacy"} preserves the historical parameterization. With
-\code{"rotated"}, multi-market pooled outside-share fits use coordinates
-that reconstruct the original outside level as \eqn{q = v + b}; the mode is
-a documented no-op for single-market fits. The requested and effective modes
-and whether the rotation was active are recorded in fit metadata.}
+\item{market_s0_parameterization}{Character string selecting legacy,
+shifted rotated, or joint orthogonal market/outside-share coordinates. The
+default \code{"legacy"} preserves the historical parameterization.
+\code{"rotated"} is active only for multi-market fits and is a documented
+no-op for single-market fits. \code{"joint"} is the experimental orthogonal
+coordinate for a noncentered market-level \code{s0} hierarchy with multiple
+markets. The requested and effective modes are recorded in fit metadata.}
 
 \item{use_centered_alpha}{Logical. If \code{TRUE}, use the centered
 parameterization for the selected market-level price-effect pool (Logit

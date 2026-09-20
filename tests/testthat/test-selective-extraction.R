@@ -118,7 +118,7 @@ test_that("active rho quality conditioning extracts its union once", {
   fit@stan_data$log_marginNormInv <- log(c(.4, .5, .6))
   draws <- list(
     share_mean = matrix(rep(c(-.8, -.9, -1), 2L), nrow = 2L, byrow = TRUE),
-    sigma_b_strat = c(.5, .5), sigma_share = c(.2, .2),
+    sigma_b_strat_economic = c(.5, .5), sigma_share = c(.2, .2),
     rho = c(.2, .2), sigma_margin = c(.3, .3),
     pred_marginNormInv = matrix(rep(c(.4, .5, .6), 2L), nrow = 2L, byrow = TRUE)
   )
@@ -134,7 +134,7 @@ test_that("active rho quality conditioning extracts its union once", {
     }
   )
   expect_equal(n_extract, 1L)
-  expect_equal(requested, c("share_mean", "sigma_b_strat", "sigma_share",
+  expect_equal(requested, c("share_mean", "sigma_b_strat_economic", "sigma_share",
                             "rho", "sigma_margin", "pred_marginNormInv"))
   expect_equal(nrow(got$draws), 2L)
   bad <- draws

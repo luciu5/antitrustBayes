@@ -105,6 +105,36 @@ validate_comparison_contract <- function(fits) {
       "4e91beeba1f0155781d72a824bda92f9e1ad51b901d583f9700056b2bb3bcc76",
     logit_supply =
       "59cdf553449bfe192aa8e13398fd54bcaf9b3e991289e2e9fd2afc0e93994ff3"
+  ),
+  joint = c(
+    ces_stackelberg =
+      "aa271037512b2498142aba358aabeed0efdf1138e064fefbab7d46b7aa4c2630",
+    ces_supply =
+      "22bb34c068e7f8170521dfae3a82aa8f0bf1b3525b24cae8225202bd48b7b4ba",
+    logit_stackelberg =
+      "5419e6ac433fdf4c0c4f09cbcefd8fcb3a3c5dfebcddb88bf432f591fdad996e",
+    logit_supply =
+      "af9e00bbbe87c5e37fa0724f7dce7ff5886ba837c1ccffd06b2477ead9a0fcbe"
+  ),
+  scale = c(
+    ces_stackelberg =
+      "181493cd7cb2e279f6083df15c39bfbe1f4980d3bd5b0e578cd4d084ab5f3fee",
+    ces_supply =
+      "04f2ed9f0c4240741ee5db52514015dbb875305f6c4ee8f2eab9a4ee7a0a7cc7",
+    logit_stackelberg =
+      "7b11b839425f3ced97dcdcba557a6dd6fbcbc5309c2da0b6845502e942491cbc",
+    logit_supply =
+      "ec359f2992625e384fb2071268c537c0dcfc7c9242257501dfd180718cf05a82"
+  ),
+  margin_first = c(
+    ces_stackelberg =
+      "5fa76ab5b181ddfc2c8a5c184c146ada989023667426d8e7ac8d47893e3c76e8",
+    ces_supply =
+      "0fb87698b9674b019cca333e7e82ea1da265a73d4cad4b81caf0c0281faa8dad",
+    logit_stackelberg =
+      "9abe4d66a2f4d154b322338bba691303a3c483df44a8593d4948ce758b617355",
+    logit_supply =
+      "f6bffa9ce0282dc08b12871a549c3ad3d14cc8e458f3c5c3308bd404a358374e"
   )
 )
 
@@ -136,15 +166,20 @@ validate_comparison_contract <- function(fits) {
 
 .bayes_bridge_is_approved_migration <- function(saved_hash, current_hash,
                                                 kernel, original, rotation,
-                                                helmert = NULL) {
+                                                helmert = NULL, joint = NULL,
+                                                scale = NULL,
+                                                margin_first = NULL) {
   !is.null(.bayes_bridge_migration_geometry(
-    saved_hash, current_hash, kernel, original, rotation, helmert
+    saved_hash, current_hash, kernel, original, rotation, helmert, joint,
+    scale, margin_first
   ))
 }
 
 .bayes_bridge_migration_geometry <- function(saved_hash, current_hash,
                                               kernel, original, rotation,
-                                              helmert = NULL) {
+                                              helmert = NULL, joint = NULL,
+                                              scale = NULL,
+                                              margin_first = NULL) {
   valid <- is.character(saved_hash) && length(saved_hash) == 1L &&
     is.character(current_hash) && length(current_hash) == 1L &&
     is.character(kernel) && length(kernel) == 1L &&
@@ -161,7 +196,58 @@ validate_comparison_contract <- function(fits) {
   if (new_helmert && identical(unname(rotation[[kernel]]), saved_hash)) {
     return("preserve")
   }
+  new_joint <- is.character(joint) && kernel %in% names(joint) &&
+    identical(unname(joint[[kernel]]), current_hash)
+  if (new_joint && identical(unname(original[[kernel]]), saved_hash)) {
+    return("legacy")
+  }
+  if (new_joint &&
+      (identical(unname(rotation[[kernel]]), saved_hash) ||
+       (is.character(helmert) && kernel %in% names(helmert) &&
+        identical(unname(helmert[[kernel]]), saved_hash)))) {
+    return("preserve")
+  }
+  new_scale <- is.character(scale) && kernel %in% names(scale) &&
+    identical(unname(scale[[kernel]]), current_hash)
+  if (new_scale && identical(unname(original[[kernel]]), saved_hash)) {
+    return("legacy")
+  }
+  if (new_scale &&
+      (identical(unname(rotation[[kernel]]), saved_hash) ||
+       (is.character(helmert) && kernel %in% names(helmert) &&
+        identical(unname(helmert[[kernel]]), saved_hash)) ||
+       (is.character(joint) && kernel %in% names(joint) &&
+        identical(unname(joint[[kernel]]), saved_hash)))) {
+    return("preserve")
+  }
+  new_margin_first <- is.character(margin_first) &&
+    kernel %in% names(margin_first) &&
+    identical(unname(margin_first[[kernel]]), current_hash)
+  if (new_margin_first && identical(unname(original[[kernel]]), saved_hash)) {
+    return("legacy")
+  }
+  if (new_margin_first &&
+      (identical(unname(rotation[[kernel]]), saved_hash) ||
+       (is.character(helmert) && kernel %in% names(helmert) &&
+        identical(unname(helmert[[kernel]]), saved_hash)) ||
+       (is.character(joint) && kernel %in% names(joint) &&
+        identical(unname(joint[[kernel]]), saved_hash)) ||
+       (is.character(scale) && kernel %in% names(scale) &&
+        identical(unname(scale[[kernel]]), saved_hash)))) {
+    return("preserve")
+  }
   NULL
+}
+
+.bayes_bridge_migration_scale_policy <- function(saved_hash, current_hash,
+                                                  kernel, scale,
+                                                  margin_first) {
+  current_is_margin_first <- is.character(margin_first) &&
+    kernel %in% names(margin_first) &&
+    identical(unname(margin_first[[kernel]]), current_hash)
+  saved_has_scale_flag <- is.character(scale) && kernel %in% names(scale) &&
+    identical(unname(scale[[kernel]]), saved_hash)
+  if (current_is_margin_first && saved_has_scale_flag) "preserve" else "legacy"
 }
 
 .bayes_bridge_code_contract <- function(stanfit) {
@@ -196,22 +282,33 @@ validate_comparison_contract <- function(fits) {
   same_code <- identical(saved_hash, current_hash)
   migration <- FALSE
   migration_geometry <- NULL
+  migration_scale_policy <- NULL
   if (!same_code) {
     original <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$original)
     rotation <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$rotation)
     helmert <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$helmert)
+    joint <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$joint)
+    scale <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$scale)
+    margin_first <- .bayes_bridge_read_hashes(
+      .bayes_bridge_approved_hashes$margin_first
+    )
     migration_geometry <- .bayes_bridge_migration_geometry(
-      saved_hash, current_hash, kernel, original, rotation, helmert
+      saved_hash, current_hash, kernel, original, rotation, helmert, joint,
+      scale, margin_first
     )
     migration <- !is.null(migration_geometry)
     if (!migration) {
       stop("Saved and installed Stan code hashes differ for ", kernel,
            "; no approved saved-to-current kernel pair matches.", call. = FALSE)
     }
+    migration_scale_policy <- .bayes_bridge_migration_scale_policy(
+      saved_hash, current_hash, kernel, scale, margin_first
+    )
   }
   list(kernel = kernel, current_model = current, saved_hash = saved_hash,
        current_hash = current_hash, same_code = same_code,
-       migration = migration, migration_geometry = migration_geometry)
+       migration = migration, migration_geometry = migration_geometry,
+       migration_scale_policy = migration_scale_policy)
 }
 
 .bayes_bridge_canonicalize_data <- function(data) {
@@ -256,6 +353,27 @@ validate_comparison_contract <- function(fits) {
 .bayes_bridge_private_data <- function(fit, contract) {
   data <- .bayes_bridge_canonicalize_data(fit@stan_data)
   if (isTRUE(contract$migration)) {
+    ## Kernels predating the exact share/quality scale rotation implicitly use
+    ## its legacy coordinates. Inject only that target-preserving data flag;
+    ## never reinterpret a saved fit as total/fraction coordinates.
+    scale_policy <- contract$migration_scale_policy %||% "legacy"
+    if (identical(scale_policy, "legacy") &&
+        !"quality_scale_parameterization" %in% names(data)) {
+      data$quality_scale_parameterization <- 1L
+    }
+    if (identical(scale_policy, "preserve") &&
+        !"quality_scale_parameterization" %in% names(data)) {
+      stop("Approved scale-coordinate migration is missing its saved ",
+           "quality_scale_parameterization flag.", call. = FALSE)
+    }
+    scale_flag <- data$quality_scale_parameterization
+    if (!is.numeric(scale_flag) || length(scale_flag) != 1L ||
+        !is.finite(scale_flag) ||
+        (identical(scale_policy, "legacy") && scale_flag != 1L) ||
+        (identical(scale_policy, "preserve") && !scale_flag %in% c(1L, 2L))) {
+      stop("Approved migration has an invalid quality_scale_parameterization ",
+           "flag for its coordinate policy.", call. = FALSE)
+    }
     if (identical(contract$migration_geometry, "legacy")) {
       flag <- data$market_s0_parameterization
       if ("market_s0_parameterization" %in% names(data) &&
@@ -269,8 +387,8 @@ validate_comparison_contract <- function(fits) {
     } else if (identical(contract$migration_geometry, "preserve")) {
       flag <- data$market_s0_parameterization
       if (!is.numeric(flag) || length(flag) != 1L || !is.finite(flag) ||
-          !flag %in% c(1, 2)) {
-        stop("Approved performance migration requires its saved private data flag of 1 or 2.",
+          !flag %in% c(1, 2, 3)) {
+        stop("Approved performance migration requires its saved private data flag of 1, 2, or 3.",
              call. = FALSE)
       }
     } else {

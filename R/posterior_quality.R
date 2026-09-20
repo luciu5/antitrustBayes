@@ -227,14 +227,15 @@
     stop("Collapsed quality fit has malformed or non-unique group labels.",
          call. = FALSE)
   }
-  if (is.null(draws)) {
+  supplied_draws <- !is.null(draws)
+  if (!supplied_draws) {
     draws <- .posterior_extract(fit, "posterior_quality", conditioning)
   }
   if (!is.list(draws)) {
-    stop("'draws' must be a list containing share_mean, sigma_b_strat, and sigma_share.",
+    stop("'draws' must be a list containing share_mean, an economic quality scale, and sigma_share.",
          call. = FALSE)
   }
-  needed_draws <- c("share_mean", "sigma_b_strat", "sigma_share")
+  needed_draws <- c("share_mean", "sigma_share")
   missing_draws <- setdiff(needed_draws, names(draws))
   if (length(missing_draws)) {
     stop("Posterior draws are missing field(s): ",
@@ -252,7 +253,59 @@
          " draws; the fitted object records ", as.integer(metadata_draws), ".",
          call. = FALSE)
   }
-  tau <- .posterior_quality_vector(draws$sigma_b_strat, n_draw, "sigma_b_strat")
+  scale_mode <- fit@metadata$quality_scale_parameterization_effective %||%
+    fit@metadata$quality_scale_parameterization %||%
+    attr(stan_data, "quality_scale_parameterization", exact = TRUE) %||%
+    if (isTRUE(stan_data$quality_scale_parameterization == 2L)) {
+      "total_fraction"
+    } else {
+      "legacy"
+    }
+  if (!supplied_draws) {
+    ## .posterior_extract() canonicalizes the preferred economic alias to this
+    ## historical name, so it is already tau rather than a raw sampler field.
+    tau_value <- draws$sigma_b_strat
+    tau_name <- "sigma_b_strat"
+  } else if ("sigma_b_strat_economic" %in% names(draws)) {
+    tau_value <- draws$sigma_b_strat_economic
+    tau_name <- "sigma_b_strat_economic"
+  } else if (identical(scale_mode, "total_fraction")) {
+    if (!"sigma_b_strat" %in% names(draws)) {
+      stop("Posterior draws are missing the economic quality scale ",
+           "'sigma_b_strat_economic'.", call. = FALSE)
+    }
+    total <- .posterior_quality_vector(draws$sigma_b_strat, n_draw,
+                                       "sigma_b_strat")
+    if ("log_sigma_share" %in% names(draws)) {
+      fraction_logit <- .posterior_quality_vector(
+        draws$log_sigma_share, n_draw, "log_sigma_share"
+      )
+      tau_value <- exp(log(total) +
+        .5 * stats::plogis(-fraction_logit, log.p = TRUE))
+    } else if ("share_variance_fraction" %in% names(draws)) {
+      fraction <- .posterior_quality_vector(
+        draws$share_variance_fraction, n_draw, "share_variance_fraction"
+      )
+      if (any(!is.finite(fraction)) || any(fraction < 0) || any(fraction > 1)) {
+        stop("Posterior share_variance_fraction draws must lie in [0, 1].",
+             call. = FALSE)
+      }
+      tau_value <- total * sqrt(1 - fraction)
+    } else {
+      stop("Under quality_scale_parameterization = 'total_fraction', supplied ",
+           "draws must include 'sigma_b_strat_economic' or the raw pair ",
+           "'sigma_b_strat' and 'log_sigma_share'.", call. = FALSE)
+    }
+    tau_name <- "reconstructed sigma_b_strat_economic"
+  } else {
+    if (!"sigma_b_strat" %in% names(draws)) {
+      stop("Posterior draws are missing field(s): sigma_b_strat.",
+           call. = FALSE)
+    }
+    tau_value <- draws$sigma_b_strat
+    tau_name <- "sigma_b_strat"
+  }
+  tau <- .posterior_quality_vector(tau_value, n_draw, tau_name)
   sigma <- .posterior_quality_vector(draws$sigma_share, n_draw, "sigma_share")
   if (any(!is.finite(share_mean)) || any(!is.finite(tau)) || any(!is.finite(sigma))) {
     stop("Posterior draws contain non-finite values.", call. = FALSE)
@@ -581,8 +634,13 @@
 #'   conditional quality simulation. The prior random-number state is restored
 #'   after the function returns.
 #' @param draws Optional list containing numeric \code{share_mean} (draws by
-#'   observations), \code{sigma_b_strat}, and \code{sigma_share}. When omitted,
-#'   these are extracted from the fit's Stan object. Joint recovery also needs
+#'   observations), \code{sigma_share}, and the economic quality scale
+#'   \code{sigma_b_strat_economic} (or historical \code{sigma_b_strat}). Under
+#'   \code{quality_scale_parameterization = "total_fraction"}, unrestricted
+#'   Stan extraction supplies the economic alias; a restricted raw extraction
+#'   must instead include both \code{sigma_b_strat} (the total scale) and
+#'   \code{log_sigma_share} (the fraction logit) for reconstruction. When
+#'   omitted, these are extracted from the fit's Stan object. Joint recovery also needs
 #'   \code{rho} and \code{sigma_margin}; non-exact fits use
 #'   \code{pred_marginNormInv}, while exact market fits use the existing
 #'   component maps and structural draws.

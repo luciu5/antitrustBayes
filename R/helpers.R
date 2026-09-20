@@ -79,6 +79,40 @@ safe_sd <- function(x, floor = 1e-8) {
   )
 }
 
+## Resolve the sampler coordinates used for the two Gaussian share-variance
+## components.  Code 1 preserves the historical coordinates
+## (log(sigma_share), sigma_quality).  Code 2 samples log total scale and the
+## logit share-noise variance fraction, while evaluating exactly the same
+## normalized priors on the reconstructed historical parameters.
+.resolve_quality_scale_parameterization <- function(
+    quality_scale_parameterization = c("legacy", "total_fraction"),
+    quality_parameterization = c("collapsed", "sampled"),
+    share_likelihood = c("gaussian", "student_t"),
+    use_market_resid_scale = FALSE) {
+  quality_scale_parameterization <- match.arg(quality_scale_parameterization)
+  quality_parameterization <- match.arg(quality_parameterization)
+  share_likelihood <- match.arg(share_likelihood)
+  if (identical(quality_scale_parameterization, "total_fraction") &&
+      (!identical(quality_parameterization, "collapsed") ||
+       !identical(share_likelihood, "gaussian") ||
+       isTRUE(use_market_resid_scale))) {
+    stop("quality_scale_parameterization = 'total_fraction' requires ",
+         "Gaussian shares, collapsed quality, and a common residual scale.",
+         call. = FALSE)
+  }
+  list(
+    requested = quality_scale_parameterization,
+    effective = quality_scale_parameterization,
+    code = if (identical(quality_scale_parameterization, "legacy")) 1L else 2L,
+    coordinate_convention = if (identical(quality_scale_parameterization,
+                                           "legacy")) {
+      "log_sigma_share_and_positive_sigma_quality"
+    } else {
+      "log_total_scale_and_logit_share_variance_fraction"
+    }
+  )
+}
+
 ## Build the separate quality incidence and contiguous centering-block map.
 ## `group` remains the economic ownership/ranking identifier.  The returned
 ## `obs_to_quality` map is the only index used by the quality prior.  Pair keys
@@ -387,28 +421,49 @@ safe_sd <- function(x, floor = 1e-8) {
 }
 
 ## Resolve the market/outside-share coordinate convention.  The Stan data code
-## is deliberately stable: 1 = legacy coordinates, 2 = rotated coordinates.
-## The affine rotation is only active when there is more than one market;
-## single-market fits retain their historical normalization and dimensions.
+## is deliberately stable: 1 = legacy coordinates, 2 = the historical shifted
+## rotation, and 3 = the joint orthogonal rotation.  The joint rotation is an
+## exact, deliberately narrow experiment for a noncentered market-level s0
+## hierarchy; rejecting other uses avoids a silent change of coordinates.
 .resolve_market_s0_parameterization <- function(market_s0_parameterization =
-                                                 c("legacy", "rotated"),
-                                                 N_market = NULL) {
+                                                 c("legacy", "rotated", "joint"),
+                                                 N_market = NULL,
+                                                 use_s0_market_pool = NULL,
+                                                 use_centered_s0_pool = NULL) {
   market_s0_parameterization <- match.arg(
-    market_s0_parameterization, c("legacy", "rotated")
+    market_s0_parameterization, c("legacy", "rotated", "joint")
   )
   if (!is.null(N_market) &&
       (!is.numeric(N_market) || length(N_market) != 1L ||
        !is.finite(N_market) || N_market < 1)) {
     stop("'N_market' must be a positive numeric scalar.")
   }
-  active <- identical(market_s0_parameterization, "rotated") &&
+  if (identical(market_s0_parameterization, "joint")) {
+    if (!is.null(N_market) && N_market <= 1L) {
+      stop("market_s0_parameterization = 'joint' requires more than one market.")
+    }
+    if (!is.null(use_s0_market_pool) && !isTRUE(use_s0_market_pool)) {
+      stop("market_s0_parameterization = 'joint' requires market-level s0 pooling.")
+    }
+    if (!is.null(use_centered_s0_pool) && isTRUE(use_centered_s0_pool)) {
+      stop("market_s0_parameterization = 'joint' requires a noncentered s0 hierarchy.")
+    }
+  }
+  shifted_active <- identical(market_s0_parameterization, "rotated") &&
     (is.null(N_market) || N_market > 1)
+  joint_active <- identical(market_s0_parameterization, "joint")
+  active <- shifted_active || joint_active
   list(
     requested = market_s0_parameterization,
-    code = if (identical(market_s0_parameterization, "legacy")) 1L else 2L,
-    effective = if (isTRUE(active)) "rotated" else "legacy",
+    code = switch(market_s0_parameterization,
+                  legacy = 1L, rotated = 2L, joint = 3L),
+    effective = if (isTRUE(joint_active)) "joint" else
+      if (isTRUE(shifted_active)) "rotated" else "legacy",
     active = isTRUE(active),
-    coordinate_convention = if (isTRUE(active)) {
+    joint_active = isTRUE(joint_active),
+    coordinate_convention = if (isTRUE(joint_active)) {
+      "joint_orthogonal_market_outside_share"
+    } else if (isTRUE(shifted_active)) {
       "rotated_market_outside_share"
     } else {
       "legacy_market_outside_share"
@@ -592,6 +647,12 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #' @param quality_parameterization Quality effects are \code{"collapsed"}
 #'   (default) or \code{"sampled"}; collapsed quality integrates Gaussian
 #'   group effects and disallows market residual scales.
+#' @param quality_scale_parameterization Sampler coordinates for the Gaussian
+#'   share-noise and quality scales. \code{"legacy"} (default) samples
+#'   \code{log(sigma_share)} and the positive quality scale directly.
+#'   \code{"total_fraction"} is an exact experimental reparameterization that
+#'   samples the log total scale and logit share-noise variance fraction; it
+#'   requires Gaussian shares, collapsed quality, and a common residual scale.
 #' @param margin_likelihood Margin residual family: \code{"student_t"} or
 #'   \code{"gaussian"}; \code{NULL} (default) follows
 #'   \code{share_likelihood}, so the resolved default is Gaussian.
@@ -610,9 +671,11 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #' @param use_centered_alpha Logical.
 #' @param use_centered_s0_pool Logical. Select the centered parameterization
 #'   for either outside-share pooling mode.
-#' @param market_s0_parameterization Character string selecting the legacy or
-#'   market/outside-share rotated Stan coordinates. The rotation is a no-op for
-#'   single-market data.
+#' @param market_s0_parameterization Character string selecting legacy,
+#'   shifted rotated, or joint orthogonal market/outside-share Stan
+#'   coordinates. The shifted rotation is a no-op for single-market data. The
+#'   joint rotation requires multiple markets and a noncentered market-level
+#'   outside-share hierarchy.
 #' @param priors Named list of prior hyperparameters.
 #' @param X_s0 Optional model matrix for s0 covariates.
 #' @param outside_price Positive scalar or one value per market-year.
@@ -640,7 +703,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               use_s0_market_pool = FALSE,
                               use_centered_alpha = FALSE,
                               use_centered_s0_pool = FALSE,
-                              market_s0_parameterization = c("legacy", "rotated"),
+                              market_s0_parameterization = c("legacy", "rotated", "joint"),
                               priors = list(), X_s0 = NULL,
                               grainsize = 1L,
                               margin_observed = NULL,
@@ -657,6 +720,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               k_scope = "market",
                               share_likelihood = c("gaussian", "student_t"),
                               quality_parameterization = c("collapsed", "sampled"),
+                              quality_scale_parameterization = c("legacy", "total_fraction"),
                               margin_likelihood = NULL,
                               quality_scope = c("market", "global")) {
   N <- length(prices)
@@ -674,6 +738,12 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   share_likelihood <- likelihood_modes$share_likelihood
   margin_likelihood <- likelihood_modes$margin_likelihood
   quality_parameterization <- likelihood_modes$quality_parameterization
+  quality_scale_resolution <- .resolve_quality_scale_parameterization(
+    quality_scale_parameterization = quality_scale_parameterization,
+    quality_parameterization = quality_parameterization,
+    share_likelihood = share_likelihood,
+    use_market_resid_scale = use_market_resid_scale
+  )
   estimate_df <- isTRUE(estimate_df) && isTRUE(likelihood_modes$df_active)
   if (!estimate_df && identical(likelihood_modes$share_likelihood, "gaussian") &&
       identical(likelihood_modes$margin_likelihood, "gaussian")) {
@@ -760,9 +830,6 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   mky_f <- as.factor(mky_labels)
   mky_int <- as.integer(mky_f)
   N_market_year <- nlevels(mky_f)
-  market_s0_resolution <- .resolve_market_s0_parameterization(
-    market_s0_parameterization, N_market
-  )
   s0_resolution <- .resolve_s0_pooling(
     s0_pooling_supplied = FALSE,
     use_s0_market_pool = use_s0_market_pool,
@@ -773,6 +840,11 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   )
   use_s0_market_pool <- s0_resolution$use_s0_market_pool
   use_s0_market_year_pool <- s0_resolution$use_s0_market_year_pool
+  market_s0_resolution <- .resolve_market_s0_parameterization(
+    market_s0_parameterization, N_market,
+    use_s0_market_pool = use_s0_market_pool,
+    use_centered_s0_pool = use_centered_s0_pool
+  )
   outside_price <- resolve_outside_price(outside_price, N_market_year)
   cluster_f <- droplevels(as.factor(loo_cluster))
   if (length(cluster_f) != N || anyNA(cluster_f)) {
@@ -936,6 +1008,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       share_likelihood = likelihood_modes$share_likelihood_code,
       margin_likelihood = likelihood_modes$margin_likelihood_code,
       quality_parameterization = likelihood_modes$quality_parameterization_code,
+      quality_scale_parameterization = quality_scale_resolution$code,
       quality_scope = quality_incidence$quality_scope_code,
       N_quality = quality_incidence$N_quality,
       obs_to_quality = array(quality_incidence$obs_to_quality, dim = N),
@@ -992,6 +1065,12 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
   attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
   attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+  attr(stan_data, "quality_scale_parameterization") <-
+    quality_scale_resolution$requested
+  attr(stan_data, "quality_scale_parameterization_effective") <-
+    quality_scale_resolution$effective
+  attr(stan_data, "quality_scale_coordinate_convention") <-
+    quality_scale_resolution$coordinate_convention
   attr(stan_data, "quality_scope") <- quality_incidence$quality_scope
   attr(stan_data, "quality_scope_code") <- quality_incidence$quality_scope_code
   attr(stan_data, "quality_lookup") <- quality_incidence$quality_lookup
@@ -1008,6 +1087,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   attr(stan_data, "market_s0_parameterization_effective") <-
     market_s0_resolution$effective
   attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+  attr(stan_data, "market_s0_joint_active") <- market_s0_resolution$joint_active
   attr(stan_data, "market_s0_coordinate_convention") <-
     market_s0_resolution$coordinate_convention
   if (resolved_structure$name == "stackelberg" ||
@@ -1059,6 +1139,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     attr(stan_data, "market_s0_parameterization_effective") <-
       market_s0_resolution$effective
     attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+    attr(stan_data, "market_s0_joint_active") <- market_s0_resolution$joint_active
     attr(stan_data, "market_s0_coordinate_convention") <-
       market_s0_resolution$coordinate_convention
     attr(stan_data, "firm_market_ranking") <- ranking_metadata
@@ -1089,7 +1170,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   use_s0_market_pool = FALSE,
                                   use_centered_alpha = FALSE,
                                   use_centered_s0_pool = FALSE,
-                                  market_s0_parameterization = c("legacy", "rotated"),
+                                  market_s0_parameterization = c("legacy", "rotated", "joint"),
                                   margin_observed = NULL,
                                   outside_price = 1,
                                   likelihood_mode = 1L,
@@ -1104,6 +1185,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   k_scope = "market",
                                   share_likelihood = c("gaussian", "student_t"),
                                   quality_parameterization = c("collapsed", "sampled"),
+                                  quality_scale_parameterization = c("legacy", "total_fraction"),
                                   margin_likelihood = NULL,
                                   quality_scope = c("market", "global")) {
   N <- length(prices)
@@ -1121,6 +1203,12 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   share_likelihood <- likelihood_modes$share_likelihood
   margin_likelihood <- likelihood_modes$margin_likelihood
   quality_parameterization <- likelihood_modes$quality_parameterization
+  quality_scale_resolution <- .resolve_quality_scale_parameterization(
+    quality_scale_parameterization = quality_scale_parameterization,
+    quality_parameterization = quality_parameterization,
+    share_likelihood = share_likelihood,
+    use_market_resid_scale = use_market_resid_scale
+  )
   estimate_df <- isTRUE(estimate_df) && isTRUE(likelihood_modes$df_active)
   if (!estimate_df && identical(likelihood_modes$share_likelihood, "gaussian") &&
       identical(likelihood_modes$margin_likelihood, "gaussian")) {
@@ -1223,9 +1311,6 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   mky_f <- as.factor(mky_labels)
   mky_int <- as.integer(mky_f)
   N_market_year <- nlevels(mky_f)
-  market_s0_resolution <- .resolve_market_s0_parameterization(
-    market_s0_parameterization, N_market
-  )
   s0_resolution <- .resolve_s0_pooling(
     s0_pooling_supplied = FALSE,
     use_s0_market_pool = use_s0_market_pool,
@@ -1236,6 +1321,11 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   )
   use_s0_market_pool <- s0_resolution$use_s0_market_pool
   use_s0_market_year_pool <- s0_resolution$use_s0_market_year_pool
+  market_s0_resolution <- .resolve_market_s0_parameterization(
+    market_s0_parameterization, N_market,
+    use_s0_market_pool = use_s0_market_pool,
+    use_centered_s0_pool = use_centered_s0_pool
+  )
   outside_price <- resolve_outside_price(outside_price, N_market_year)
   cluster_f <- droplevels(as.factor(loo_cluster))
   if (length(cluster_f) != N || anyNA(cluster_f)) {
@@ -1405,6 +1495,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       share_likelihood = likelihood_modes$share_likelihood_code,
       margin_likelihood = likelihood_modes$margin_likelihood_code,
       quality_parameterization = likelihood_modes$quality_parameterization_code,
+      quality_scale_parameterization = quality_scale_resolution$code,
       quality_scope = quality_incidence$quality_scope_code,
       N_quality = quality_incidence$N_quality,
       obs_to_quality = array(quality_incidence$obs_to_quality, dim = N),
@@ -1462,6 +1553,12 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
   attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
   attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
+  attr(stan_data, "quality_scale_parameterization") <-
+    quality_scale_resolution$requested
+  attr(stan_data, "quality_scale_parameterization_effective") <-
+    quality_scale_resolution$effective
+  attr(stan_data, "quality_scale_coordinate_convention") <-
+    quality_scale_resolution$coordinate_convention
   attr(stan_data, "quality_scope") <- quality_incidence$quality_scope
   attr(stan_data, "quality_scope_code") <- quality_incidence$quality_scope_code
   attr(stan_data, "quality_lookup") <- quality_incidence$quality_lookup
@@ -1478,6 +1575,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   attr(stan_data, "market_s0_parameterization_effective") <-
     market_s0_resolution$effective
   attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+  attr(stan_data, "market_s0_joint_active") <- market_s0_resolution$joint_active
   attr(stan_data, "market_s0_coordinate_convention") <-
     market_s0_resolution$coordinate_convention
   if (resolved_structure$name == "stackelberg" ||
@@ -1530,6 +1628,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     attr(stan_data, "market_s0_parameterization_effective") <-
       market_s0_resolution$effective
     attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+    attr(stan_data, "market_s0_joint_active") <- market_s0_resolution$joint_active
     attr(stan_data, "market_s0_coordinate_convention") <-
       market_s0_resolution$coordinate_convention
     attr(stan_data, "firm_market_ranking") <- ranking_metadata

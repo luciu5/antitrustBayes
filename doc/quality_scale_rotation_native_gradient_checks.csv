@@ -1,0 +1,9 @@
+"kernel","scenario","max_relative_error","tolerance","passed"
+"logit_supply","ordinary",4.62846992103358e-10,3e-04,TRUE
+"logit_supply","small_share_negative_rho",2.3760102665087e-08,3e-04,TRUE
+"logit_stackelberg","ordinary",5.59450949643193e-10,3e-04,TRUE
+"logit_stackelberg","small_share_negative_rho",1.6824131434839e-08,3e-04,TRUE
+"ces_supply","ordinary",1.04986121493157e-09,3e-04,TRUE
+"ces_supply","small_share_negative_rho",2.957792309836e-08,3e-04,TRUE
+"ces_stackelberg","ordinary",1.06734694718315e-09,3e-04,TRUE
+"ces_stackelberg","small_share_negative_rho",3.62541342301205e-08,3e-04,TRUE

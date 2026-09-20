@@ -185,6 +185,43 @@ rho_structured_log_density <- function(z_share, group_share, margin_residual,
   out
 }
 
+rho_margin_first_log_density <- function(z_share, group_share, margin_residual,
+                                         matched_rows, tau, sigma_share,
+                                         sigma_margin, rho,
+                                         G = max(group_share)) {
+  L <- length(z_share)
+  q <- length(margin_residual)
+  if (length(group_share) != L || length(matched_rows) != q) {
+    stop("rho inputs have inconsistent lengths")
+  }
+  if (any(matched_rows < 1L) || any(matched_rows > L) ||
+      any(matched_rows != as.integer(matched_rows))) {
+    stop("matched_rows must be valid integer share-row indices")
+  }
+  if (sigma_share <= 0 || sigma_margin <= 0 || abs(rho) >= 1) {
+    stop("sigma values must be positive and |rho| < 1")
+  }
+  slope <- rho * sigma_share / sigma_margin
+  z_conditional <- z_share
+  z_conditional[matched_rows] <- z_conditional[matched_rows] -
+    slope * margin_residual
+  v <- rep(sigma_share^2, L)
+  v[matched_rows] <- sigma_share^2 * (1 - rho^2)
+  share <- structured_gaussian_log_density(
+    z_conditional, v, group_share, rep(1, L), tau, G
+  )
+  margin_logdet <- q * log(sigma_margin^2)
+  margin_quadratic <- sum(margin_residual^2 / sigma_margin^2)
+  list(
+    log_density = share$log_density - .5 * (
+      q * log(2 * pi) + margin_logdet + margin_quadratic
+    ),
+    logdet = share$logdet + margin_logdet,
+    quadratic = share$quadratic + margin_quadratic,
+    augmented = list(slope = slope, matched_rows = matched_rows)
+  )
+}
+
 rho_dense_original_log_density <- function(z_share, group_share,
                                            margin_residual, matched_rows,
                                            tau, sigma_share, sigma_margin,

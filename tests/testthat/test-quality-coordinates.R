@@ -63,7 +63,7 @@ test_that("all Stan graphs use the centered quality coordinate contract", {
     expect_true(grepl("for (block in 1:N_quality_block)", code, fixed = TRUE), info = f)
     expect_true(grepl("real suffix = 0.0;", code, fixed = TRUE), info = f)
     expect_true(grepl("b_quality_all[quality_block_start[block] + j - 1] = suffix - k * v_k;", code, fixed = TRUE), info = f)
-    expect_true(grepl("normal_lpdf(b_group_centered | 0, sigma_b_strat)",
+    expect_true(grepl("normal_lpdf(b_group_centered | 0, sigma_b_strat_economic)",
                       code, fixed = TRUE), info = f)
   }
 })

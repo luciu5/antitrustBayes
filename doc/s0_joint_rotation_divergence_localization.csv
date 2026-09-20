@@ -1,0 +1,13 @@
+"fixture","case","seed","divergent","n_draws","metric","mean","median","q05","q95"
+"synthetic_6_market_cross_section","market_rotated_nc",29091,FALSE,1580,"sigma_s0_pool",0.12369411689686,0.0967756476766399,0.0204267372429492,0.325005555789531
+"synthetic_6_market_cross_section","market_rotated_nc",29091,TRUE,20,"sigma_s0_pool",0.0748393356502703,0.024427250536871,0.0114769945870814,0.231073324180747
+"synthetic_6_market_cross_section","market_rotated_nc",29091,FALSE,1580,"sigma_b_market",0.100490605343069,0.0741606035453658,0.00826418562542719,0.281960743891888
+"synthetic_6_market_cross_section","market_rotated_nc",29091,TRUE,20,"sigma_b_market",0.117382922668536,0.0892014365191273,0.0122309380854449,0.278063516180258
+"synthetic_6_market_cross_section","market_rotated_nc",29091,FALSE,1580,"rho",0.916501060612995,0.92242338075205,0.863171392861963,0.947283713326031
+"synthetic_6_market_cross_section","market_rotated_nc",29091,TRUE,20,"rho",0.906115472402969,0.906463964393628,0.853719160744188,0.942361549600122
+"synthetic_6_market_cross_section","market_rotated_nc",29091,FALSE,1580,"max_abs_b_market",0.675537363052227,0.645964300401875,0.133386829455966,1.33373133827147
+"synthetic_6_market_cross_section","market_rotated_nc",29091,TRUE,20,"max_abs_b_market",0.786303674154957,0.821371685645033,0.306749906341653,1.25404882552087
+"synthetic_6_market_cross_section","market_rotated_nc",29091,FALSE,1580,"max_abs_b_over_sigma_s0",9.18201604261759,6.23092805473073,1.13780035486487,27.4861145203967
+"synthetic_6_market_cross_section","market_rotated_nc",29091,TRUE,20,"max_abs_b_over_sigma_s0",27.8623567246883,23.15787417776,4.65384105016316,54.0319539476288
+"synthetic_6_market_cross_section","market_rotated_nc",29091,FALSE,1580,"max_abs_reconstructed_z_s0",1.51490634539327,1.47423394203182,0.724461540695554,2.52635247505815
+"synthetic_6_market_cross_section","market_rotated_nc",29091,TRUE,20,"max_abs_reconstructed_z_s0",1.42600102265138,1.30456011568301,0.958322635965968,2.17108197320842

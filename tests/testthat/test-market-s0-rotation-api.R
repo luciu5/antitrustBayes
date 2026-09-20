@@ -22,6 +22,9 @@ test_that("market s0 rotation resolver distinguishes requested and active modes"
   legacy <- resolve("legacy", N_market = 2L)
   rotated <- resolve("rotated", N_market = 2L)
   one_market <- resolve("rotated", N_market = 1L)
+  joint <- resolve("joint", N_market = 2L,
+                   use_s0_market_pool = TRUE,
+                   use_centered_s0_pool = FALSE)
 
   expect_equal(legacy$code, 1L)
   expect_equal(legacy$requested, "legacy")
@@ -41,6 +44,24 @@ test_that("market s0 rotation resolver distinguishes requested and active modes"
   expect_false(one_market$active)
   expect_equal(one_market$coordinate_convention,
                "legacy_market_outside_share")
+  expect_equal(joint$code, 3L)
+  expect_equal(joint$effective, "joint")
+  expect_true(joint$active)
+  expect_true(joint$joint_active)
+  expect_equal(joint$coordinate_convention,
+               "joint_orthogonal_market_outside_share")
+  expect_error(resolve("joint", N_market = 1L,
+                       use_s0_market_pool = TRUE,
+                       use_centered_s0_pool = FALSE),
+               "requires more than one market")
+  expect_error(resolve("joint", N_market = 2L,
+                       use_s0_market_pool = FALSE,
+                       use_centered_s0_pool = FALSE),
+               "requires market-level")
+  expect_error(resolve("joint", N_market = 2L,
+                       use_s0_market_pool = TRUE,
+                       use_centered_s0_pool = TRUE),
+               "requires a noncentered")
   expect_error(resolve("invalid", N_market = 2L), "should be one of")
 })
 
@@ -94,6 +115,35 @@ test_that("multi-market helpers activate the rotated contract for both demand mo
   }
 })
 
+test_that("multi-market helpers expose the narrow joint orthogonal contract", {
+  d <- rotation_fixture(multi_market = TRUE)
+  args <- list(
+    prices = d$prices, quantities = d$quantities, margins = d$margins,
+    market = d$market, year = d$year, group = d$group,
+    supply_model = 1L, use_rho = FALSE, use_s0_market_pool = TRUE,
+    use_centered_s0_pool = FALSE, market_s0_parameterization = "joint"
+  )
+
+  logit <- do.call(prepare_stan_data, args)
+  ces <- do.call(prepare_ces_stan_data, c(args, list(
+    use_cutoff = FALSE, use_hmt = FALSE, priors = list(),
+    market_side = "output"
+  )))
+  for (sd in list(logit, ces)) {
+    expect_equal(sd$market_s0_parameterization, 3L)
+    expect_equal(attr(sd, "market_s0_parameterization_requested"), "joint")
+    expect_equal(attr(sd, "market_s0_parameterization_effective"), "joint")
+    expect_true(attr(sd, "market_s0_rotation_active"))
+    expect_true(attr(sd, "market_s0_joint_active"))
+    expect_equal(attr(sd, "market_s0_coordinate_convention"),
+                 "joint_orthogonal_market_outside_share")
+  }
+
+  expect_error(do.call(prepare_stan_data, within(args, {
+    use_s0_market_pool <- FALSE
+  })), "requires market-level")
+})
+
 test_that("all four Stan kernels retain rotation diagnostics and economic equations", {
   root <- testthat::test_path("..", "..")
   stan_dir <- file.path(root, "inst", "stan")
@@ -105,7 +155,7 @@ test_that("all four Stan kernels retain rotation diagnostics and economic equati
                             warn = FALSE), collapse = "\n")
     flat <- gsub("[[:space:]]+", " ", code)
     expect_match(flat,
-                 "int<lower=1, upper=2> market_s0_parameterization;",
+                 "int<lower=1, upper=3> market_s0_parameterization;",
                  fixed = TRUE)
     expect_match(flat, "market_s0_parameterization == 2 && is_single_market == 0",
                  fixed = TRUE)
@@ -132,6 +182,19 @@ test_that("all four Stan kernels retain rotation diagnostics and economic equati
     expect_match(flat,
                  "z_s0 = c_s0_raw - b_market / sigma_s0_pool_vec[1]",
                  fixed = TRUE)
+    expect_match(flat,
+                 "market_s0_parameterization == 3 && is_single_market == 0",
+                 fixed = TRUE)
+    expect_match(flat,
+                 "market_s0_joint_scale = hypot(sigma_b_market_vec[1], sigma_s0_pool_vec[1])",
+                 fixed = TRUE)
+    expect_match(flat,
+                 "sigma_b_market_vec[1] * b_market_raw - sigma_s0_pool_vec[1] * c_s0_raw",
+                 fixed = TRUE)
+    expect_match(flat,
+                 "sigma_s0_pool_vec[1] * b_market_raw[m] + sigma_b_market_vec[1] * c_s0_raw[m]",
+                 fixed = TRUE)
+    expect_match(flat, "target += std_normal_lpdf(c_s0_raw)", fixed = TRUE)
     if (grepl("stackelberg", nm, fixed = TRUE)) {
       expect_match(flat, "stack_", fixed = TRUE)
       expect_match(flat, "conduct == 1", fixed = TRUE)

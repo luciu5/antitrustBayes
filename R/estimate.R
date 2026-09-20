@@ -177,6 +177,14 @@
 #' @param quality_parameterization Quality effects are \code{"collapsed"}
 #'   (default) or \code{"sampled"}; collapsed quality integrates Gaussian
 #'   group effects and disallows market residual scales.
+#' @param quality_scale_parameterization Sampler coordinates for the Gaussian
+#'   share-noise and quality scales. \code{"legacy"} (default) preserves the
+#'   historical coordinates. \code{"total_fraction"} is an exact experimental
+#'   total-scale/variance-fraction rotation available with Gaussian shares,
+#'   collapsed quality, and a common residual scale. In that mode the raw Stan
+#'   fields \code{sigma_b_strat} and \code{log_sigma_share} are sampler
+#'   coordinates; use \code{sigma_b_strat_economic} and \code{sigma_share} for
+#'   the reconstructed economic scales.
 #' @param quality_scope Quality incidence for the hierarchical quality effect:
 #'   \code{"market"} (default), which centers persistent quality separately
 #'   within each market while retaining the original \code{group} ownership
@@ -219,10 +227,12 @@
 #'   The explicit legacy flags \code{use_s0_market_pool} and
 #'   \code{use_s0_market_year_pool} remain supported when \code{s0_pooling} is
 #'   omitted; supplying both interfaces together is ambiguous and errors.
-#' @param market_s0_parameterization Character string selecting the legacy or
-#'   market/outside-share rotated parameterization. The default is
-#'   \code{"legacy"}; \code{"rotated"} is active only for multi-market fits
-#'   and is a documented no-op for single-market fits.
+#' @param market_s0_parameterization Character string selecting legacy,
+#'   shifted rotated, or joint orthogonal market/outside-share coordinates.
+#'   The default is \code{"legacy"}; \code{"rotated"} is active only for
+#'   multi-market fits and is a documented no-op for single-market fits.
+#'   \code{"joint"} is the experimental orthogonal coordinate for a
+#'   noncentered market-level \code{s0} hierarchy with multiple markets.
 #' @param use_centered_alpha Logical. If \code{TRUE}, use the centered
 #'   parameterization for the selected market-level price-effect pool (Logit
 #'   price coefficients or CES structural elasticities). Default \code{FALSE}.
@@ -400,6 +410,7 @@ bayes_est <- function(prices, quantities, margins,
                       df = 5,
                       share_likelihood = c("gaussian", "student_t"),
                       quality_parameterization = c("collapsed", "sampled"),
+                      quality_scale_parameterization = c("legacy", "total_fraction"),
                       quality_scope = c("market", "global"),
                       margin_likelihood = NULL,
                       use_market_resid_scale = FALSE,
@@ -407,7 +418,7 @@ bayes_est <- function(prices, quantities, margins,
                       use_s0_market_year_pool = FALSE,
                       use_s0_market_pool = FALSE,
                       s0_pooling = c("auto", "none", "market", "market_year"),
-                      market_s0_parameterization = c("legacy", "rotated"),
+                      market_s0_parameterization = c("legacy", "rotated", "joint"),
                       use_centered_alpha = FALSE,
                       use_centered_s0_pool = FALSE,
                       use_hmt = FALSE,
@@ -447,6 +458,9 @@ bayes_est <- function(prices, quantities, margins,
   likelihood <- match.arg(likelihood)
   share_likelihood <- match.arg(share_likelihood)
   quality_parameterization <- match.arg(quality_parameterization)
+  quality_scale_parameterization <- match.arg(
+    quality_scale_parameterization, c("legacy", "total_fraction")
+  )
   quality_scope <- match.arg(quality_scope)
   if (!is.null(margin_likelihood)) {
     margin_likelihood <- match.arg(margin_likelihood, c("student_t", "gaussian"))
@@ -564,7 +578,9 @@ bayes_est <- function(prices, quantities, margins,
   use_s0_market_year_pool <- s0_resolution$use_s0_market_year_pool
   market_s0_resolution <- .resolve_market_s0_parameterization(
     market_s0_parameterization,
-    nlevels(droplevels(as.factor(market)))
+    nlevels(droplevels(as.factor(market))),
+    use_s0_market_pool = use_s0_market_pool,
+    use_centered_s0_pool = use_centered_s0_pool
   )
   observed_margins <- if (is.null(margin_observed)) margins else margins[margin_observed]
   if (market_side == "output" && any(observed_margins >= 1)) {
@@ -589,6 +605,12 @@ bayes_est <- function(prices, quantities, margins,
     estimate_df = estimate_df,
     likelihood_mode = match(likelihood, c("joint", "share", "margin")),
     quality_scope = quality_scope
+  )
+  quality_scale_resolution <- .resolve_quality_scale_parameterization(
+    quality_scale_parameterization = quality_scale_parameterization,
+    quality_parameterization = likelihood_modes$quality_parameterization,
+    share_likelihood = likelihood_modes$share_likelihood,
+    use_market_resid_scale = use_market_resid_scale
   )
   estimate_df <- isTRUE(estimate_df) && isTRUE(likelihood_modes$df_active)
   if (!estimate_df && identical(likelihood_modes$share_likelihood, "gaussian") &&
@@ -719,6 +741,7 @@ bayes_est <- function(prices, quantities, margins,
       k_scope = k_scope,
       share_likelihood = likelihood_modes$share_likelihood,
       quality_parameterization = likelihood_modes$quality_parameterization,
+      quality_scale_parameterization = quality_scale_resolution$requested,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope
     )
@@ -767,6 +790,7 @@ bayes_est <- function(prices, quantities, margins,
       k_scope = k_scope,
       share_likelihood = likelihood_modes$share_likelihood,
       quality_parameterization = likelihood_modes$quality_parameterization,
+      quality_scale_parameterization = quality_scale_resolution$requested,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope
     )
@@ -789,8 +813,15 @@ bayes_est <- function(prices, quantities, margins,
   attr(stan_data, "market_s0_parameterization_effective") <-
     market_s0_resolution$effective
   attr(stan_data, "market_s0_rotation_active") <- market_s0_resolution$active
+  attr(stan_data, "market_s0_joint_active") <- market_s0_resolution$joint_active
   attr(stan_data, "market_s0_coordinate_convention") <-
     market_s0_resolution$coordinate_convention
+  attr(stan_data, "quality_scale_parameterization") <-
+    quality_scale_resolution$requested
+  attr(stan_data, "quality_scale_parameterization_effective") <-
+    quality_scale_resolution$effective
+  attr(stan_data, "quality_scale_coordinate_convention") <-
+    quality_scale_resolution$coordinate_convention
 
   # Store the resolved market-year outside price on every observation so that
   # simulation and cross-demand comparison use the fitted normalization.
@@ -815,6 +846,11 @@ bayes_est <- function(prices, quantities, margins,
   metadata$share_likelihood <- likelihood_modes$share_likelihood
   metadata$margin_likelihood <- likelihood_modes$margin_likelihood
   metadata$quality_parameterization <- likelihood_modes$quality_parameterization
+  metadata$quality_scale_parameterization <- quality_scale_resolution$requested
+  metadata$quality_scale_parameterization_effective <-
+    quality_scale_resolution$effective
+  metadata$quality_scale_coordinate_convention <-
+    quality_scale_resolution$coordinate_convention
   metadata$quality_scope <- likelihood_modes$quality_scope
   metadata$quality_scope_code <- likelihood_modes$quality_scope_code
   metadata$quality_lookup <- attr(stan_data, "quality_lookup", exact = TRUE)
@@ -832,6 +868,7 @@ bayes_est <- function(prices, quantities, margins,
   metadata$market_s0_parameterization_requested <- market_s0_resolution$requested
   metadata$market_s0_parameterization_effective <- market_s0_resolution$effective
   metadata$market_s0_rotation_active <- market_s0_resolution$active
+  metadata$market_s0_joint_active <- market_s0_resolution$joint_active
   metadata$market_s0_coordinate_convention <-
     market_s0_resolution$coordinate_convention
   metadata$structure <- structure
@@ -861,6 +898,10 @@ bayes_est <- function(prices, quantities, margins,
     share_likelihood = likelihood_modes$share_likelihood,
     margin_likelihood = likelihood_modes$margin_likelihood,
     quality_parameterization = likelihood_modes$quality_parameterization,
+    quality_scale_parameterization = quality_scale_resolution$requested,
+    quality_scale_parameterization_effective = quality_scale_resolution$effective,
+    quality_scale_coordinate_convention =
+      quality_scale_resolution$coordinate_convention,
     quality_scope = likelihood_modes$quality_scope,
     quality_scope_code = likelihood_modes$quality_scope_code,
     quality_lookup = metadata$quality_lookup,
@@ -869,6 +910,7 @@ bayes_est <- function(prices, quantities, margins,
     market_s0_parameterization_requested = market_s0_resolution$requested,
     market_s0_parameterization_effective = market_s0_resolution$effective,
     market_s0_rotation_active = market_s0_resolution$active,
+    market_s0_joint_active = market_s0_resolution$joint_active,
     market_s0_coordinate_convention = market_s0_resolution$coordinate_convention,
     s0_pooling = s0_pooling,
     s0_pooling_requested = s0_pooling_requested,

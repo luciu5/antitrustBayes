@@ -176,7 +176,19 @@
   required <- unique(required)
   optional <- setdiff(unique(optional), required)
   available <- .posterior_fit_draw_names(fit)
-  alternatives <- list(s0_prob = c("s0_prob", "s0", "s0_logit"))
+  total_fraction_scale <- identical(
+    fit@metadata$quality_scale_parameterization_effective %||%
+      fit@metadata$quality_scale_parameterization,
+    "total_fraction"
+  ) || isTRUE(fit@stan_data$quality_scale_parameterization == 2L)
+  alternatives <- list(
+    s0_prob = c("s0_prob", "s0", "s0_logit"),
+    sigma_b_strat = if (total_fraction_scale) {
+      "sigma_b_strat_economic"
+    } else {
+      c("sigma_b_strat_economic", "sigma_b_strat")
+    }
+  )
   resolve <- function(canonical, optional = FALSE) {
     candidates <- alternatives[[canonical]] %||% canonical
     hit <- candidates[candidates %in% available]
@@ -184,7 +196,7 @@
     if (optional) return(NA_character_)
     ## Test doubles and a few old serialized objects do not expose model_pars;
     ## request the canonical name and validate the returned list below.
-    if (!length(available)) return(canonical)
+    if (!length(available)) return(candidates[[1L]])
     stop("Estimated fit is missing required posterior draw field(s): ",
          paste(canonical, collapse = ", "), ".", call. = FALSE)
   }
@@ -197,7 +209,8 @@
   canonical <- c(required, optional[keep_optional])
   names(actual) <- canonical
   list(canonical = canonical, actual = unname(actual), aliases = actual_required,
-       required = required, optional = optional[keep_optional], purpose = purpose)
+       required = required, optional = optional[keep_optional], purpose = purpose,
+       total_fraction_scale = total_fraction_scale)
 }
 
 .posterior_normalize_draw_names <- function(draws, contract) {
@@ -207,8 +220,15 @@
   for (i in seq_along(contract$canonical)) {
     canonical <- contract$canonical[[i]]
     actual <- contract$actual[[i]]
-    candidates <- if (identical(canonical, "s0_prob"))
-      c(canonical, "s0", "s0_logit") else canonical
+    candidates <- switch(canonical,
+      s0_prob = c("s0_prob", "s0", "s0_logit"),
+      sigma_b_strat = if (isTRUE(contract$total_fraction_scale)) {
+        "sigma_b_strat_economic"
+      } else {
+        c("sigma_b_strat_economic", "sigma_b_strat")
+      },
+      canonical
+    )
     value <- NULL
     source_name <- NULL
     ## Test doubles sometimes return a legacy alias even when the contract

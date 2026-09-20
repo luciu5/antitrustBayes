@@ -29,7 +29,7 @@ test_that("scoped quality Stan sources parse", {
   }
 })
 
-test_that("market collapsed helpers use the local observation count", {
+test_that("market collapsed helpers use margin-first joint Gaussian conditioning", {
   stan_root <- testthat::test_path("..", "..", "inst", "stan")
   models <- c("logit_supply", "ces_supply", "logit_stackelberg",
               "ces_stackelberg")
@@ -37,6 +37,11 @@ test_that("market collapsed helpers use the local observation count", {
     code <- paste(readLines(file.path(stan_root, paste0(model, ".stan")),
       warn = FALSE), collapse = "\n")
     expect_match(code,
-      "return centered_gaussian_from_stats\\(within, a, c, logv,\\s*share_n \\+ margin_n")
+      "real slope = rho \\* sigma_share / sigma_margin;")
+    expect_match(code,
+      "real paired_variance = square\\(sigma_share\\) \\* \\(1.0 - square\\(rho\\)\\);")
+    expect_match(code,
+      "return margin_ll \\+ centered_gaussian_density")
+    expect_match(code, "market_obs_position")
   }
 })

@@ -22,7 +22,7 @@ prepare_stan_data(
   use_s0_market_pool = FALSE,
   use_centered_alpha = FALSE,
   use_centered_s0_pool = FALSE,
-  market_s0_parameterization = c("legacy", "rotated"),
+  market_s0_parameterization = c("legacy", "rotated", "joint"),
   priors = list(),
   X_s0 = NULL,
   grainsize = 1L,
@@ -40,6 +40,7 @@ prepare_stan_data(
   k_scope = "market",
   share_likelihood = c("gaussian", "student_t"),
   quality_parameterization = c("collapsed", "sampled"),
+  quality_scale_parameterization = c("legacy", "total_fraction"),
   margin_likelihood = NULL,
   quality_scope = c("market", "global")
 )
@@ -80,6 +81,12 @@ margin is observed.}
 (default) or \code{"sampled"}; collapsed quality integrates Gaussian group
 effects and disallows market residual scales.}
 
+\item{quality_scale_parameterization}{Sampler coordinates for the Gaussian
+share-noise and quality scales. \code{"legacy"} (default) preserves the
+historical coordinates. \code{"total_fraction"} is an exact experimental
+contrast-total-scale/variance-fraction rotation requiring Gaussian shares,
+collapsed quality, and a common residual scale.}
+
 \item{margin_likelihood}{Margin residual family: \code{"student_t"} or
 \code{"gaussian"}; \code{NULL} (default) follows
 \code{share_likelihood}, so the resolved default is Gaussian.}
@@ -102,11 +109,11 @@ pooling mode is recorded in the returned list attributes.}
 \item{use_centered_s0_pool}{Logical. Select the centered parameterization
 for either outside-share pooling mode.}
 
-\item{market_s0_parameterization}{Character string selecting the legacy or
-market/outside-share rotated Stan coordinates. The default
-\code{"legacy"} preserves the historical parameterization;
-\code{"rotated"} is active only for multi-market fits and is a documented
-no-op for single-market fits.}
+\item{market_s0_parameterization}{Character string selecting legacy,
+shifted rotated, or joint orthogonal market/outside-share Stan coordinates.
+The shifted rotation is a no-op for single-market data. The joint rotation
+requires multiple markets and a noncentered market-level outside-share
+hierarchy.}
 
 \item{priors}{Named list of prior hyperparameters.}
 

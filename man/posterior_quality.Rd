@@ -26,7 +26,12 @@ conditional quality simulation. The prior random-number state is restored
 after the function returns.}
 
 \item{draws}{Optional list containing numeric \code{share_mean} (draws by
-observations), \code{sigma_b_strat}, and \code{sigma_share}. When omitted,
+observations), \code{sigma_share}, and the economic quality scale
+\code{sigma_b_strat_economic} (or historical \code{sigma_b_strat}). Under
+\code{quality_scale_parameterization = "total_fraction"}, unrestricted Stan
+extraction supplies the economic alias; a restricted raw extraction must
+instead include both \code{sigma_b_strat} (the total scale) and
+\code{log_sigma_share} (the fraction logit) for reconstruction. When omitted,
 these are extracted from the fit's Stan object. Joint recovery also needs
 \code{rho}, \code{sigma_margin}, and \code{pred_marginNormInv}; exact
 market ordered-k fits instead require \code{posterior_component_prob},
