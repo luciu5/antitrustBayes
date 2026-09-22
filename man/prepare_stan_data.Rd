@@ -155,7 +155,10 @@ the original ownership/ranking \code{group} field. \code{"global"}
 retains the historical pooled scope.}
 }
 \value{
-A list suitable for passing to \code{rstan::sampling}.
+A list suitable for passing to \code{rstan::sampling}. Provenance attributes
+\code{market_year_size}, \code{N_mt}, and \code{N_mt_by_observation} retain
+the positive totals of original inside quantities in input units; these are
+not likelihood inputs.
 }
 \description{
 Transforms user-supplied vectors into the list expected by the Logit Stan

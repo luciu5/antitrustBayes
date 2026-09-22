@@ -313,6 +313,11 @@ bayes_specify <- function(params, market) {
   spec <- .bayes_model_spec(params)
   specified_metadata <- .stack_specified_metadata(params, market)
   resolved_partition <- specified_metadata$partition
+  market_year_size <- .market_year_quantity_size(
+    quantities = market$quantities,
+    observation_to_market_year = rep.int(1L, market$n_prod),
+    market_year_labels = "unit_1_1"
+  )
   data <- data.frame(
     prices = market$prices,
     quantities = market$quantities,
@@ -322,6 +327,9 @@ bayes_specify <- function(params, market) {
     group = market$group,
     margin_observed = market$margin_observed,
     outside_price = rep(market$outside_price, market$n_prod),
+    market_year_idx = rep.int(1L, market$n_prod),
+    market_year = rep("unit_1_1", market$n_prod),
+    N_mt = rep(market_year_size$N_mt, market$n_prod),
     stringsAsFactors = FALSE
   )
   observed <- list(
@@ -331,7 +339,10 @@ bayes_specify <- function(params, market) {
     ownerPre = market$group,
     labels = market$labels,
     priceOutside = market$outside_price,
-    insideSize = market$insideSize
+    insideSize = market$insideSize,
+    market_year_idx = market_year_size$observation_to_market_year,
+    N_mt = rep(market_year_size$N_mt,
+               length(market_year_size$observation_to_market_year))
   )
   metadata <- list(
     source = "bayes_specify",
@@ -367,7 +378,13 @@ bayes_specify <- function(params, market) {
       resolved_partition$partition_supports,
     k_prior_resolved = if (is.null(resolved_partition)) NULL else
       resolved_partition$k_prior_by_unit,
-    firm_market_ranking = specified_metadata$ranking
+    firm_market_ranking = specified_metadata$ranking,
+    market_year_size = market_year_size,
+    N_mt = market_year_size$N_mt,
+    market_year_idx = market_year_size$observation_to_market_year,
+    market_year_labels = market_year_size$market_year_labels,
+    market_year_size_units = market_year_size$units,
+    market_year_size_source = market_year_size$source
   )
 
   methods::new(

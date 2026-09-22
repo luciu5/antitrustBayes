@@ -57,7 +57,10 @@ bayes_est(
 deposits). Must be positive. Within each market-year, the package
 normalizes these into conditional inside quantity shares for both Logit
 and CES. The outside-share level is a
-model parameter identified jointly with the supply FOCs.}
+model parameter identified jointly with the supply FOCs. The fitted object
+retains each market-year's original inside quantity total as
+\code{metadata$market_year_size$N_mt} and repeats it in \code{data$N_mt} for
+future cross-market aggregation.}
 
 \item{margins}{Numeric vector of positive price-normalized margins. For
 output markets this is the usual Lerner index \eqn{(p - c) / p}; for

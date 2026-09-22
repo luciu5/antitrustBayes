@@ -683,6 +683,66 @@ compositional_share_data <- function(shares, mky_int, N_market_year) {
   )
 }
 
+## Preserve the quantity scale that conditional shares intentionally remove.
+## N_mt is indexed by the canonical market-year factor and is repeated over
+## observations through observation_to_market_year.  This is provenance for
+## future cross-market portfolio calculations; it is not a Stan likelihood
+## input.
+.market_year_quantity_size <- function(quantities, observation_to_market_year,
+                                       market_year_labels = NULL) {
+  if (!is.numeric(quantities) || !length(quantities) ||
+      any(!is.finite(quantities)) || any(quantities <= 0)) {
+    stop("'quantities' must be positive and finite to compute market-year sizes.")
+  }
+  observation_to_market_year <- as.integer(observation_to_market_year)
+  if (length(observation_to_market_year) != length(quantities) ||
+      anyNA(observation_to_market_year) ||
+      any(observation_to_market_year < 1L)) {
+    stop("'observation_to_market_year' must map every observation to a valid market-year.")
+  }
+  n_market_year <- max(observation_to_market_year)
+  if (any(observation_to_market_year > n_market_year)) {
+    stop("'observation_to_market_year' contains an invalid market-year index.")
+  }
+  N_mt <- vapply(seq_len(n_market_year), function(m) {
+    sum(quantities[observation_to_market_year == m])
+  }, numeric(1))
+  if (any(!is.finite(N_mt)) || any(N_mt <= 0)) {
+    stop("Market-year inside quantity totals must be positive and finite.")
+  }
+  if (is.null(market_year_labels)) {
+    market_year_labels <- as.character(seq_len(n_market_year))
+  }
+  if (length(market_year_labels) != n_market_year) {
+    stop("'market_year_labels' must have one value per market-year.")
+  }
+  structure(
+    list(
+      N_mt = as.numeric(N_mt),
+      inside_quantity_total = as.numeric(N_mt),
+      observation_to_market_year = observation_to_market_year,
+      market_year_labels = as.character(market_year_labels),
+      units = "original input quantity units",
+      source = "sum of original inside quantities by market-year before conditional-share normalization",
+      definition = "N_mt = sum of inside quantities over products in market-year mt"
+    ),
+    class = "bayes_market_year_size"
+  )
+}
+
+.attach_market_year_quantity_size <- function(stan_data, market_year_size) {
+  attr(stan_data, "market_year_size") <- market_year_size
+  ## Short aliases make the canonical vector and row mapping easy to consume
+  ## without adding unknown fields to the Stan data list.
+  attr(stan_data, "N_mt") <- market_year_size$N_mt
+  attr(stan_data, "inside_quantity_total") <- market_year_size$inside_quantity_total
+  attr(stan_data, "N_mt_by_observation") <-
+    market_year_size$N_mt[market_year_size$observation_to_market_year]
+  attr(stan_data, "market_year_size_units") <- market_year_size$units
+  attr(stan_data, "market_year_size_source") <- market_year_size$source
+  stan_data
+}
+
 #' Convert Positive Draws to Log-Normal Prior Parameters
 #'
 #' Computes prior mean and SD from FOC-implied parameter draws. By default uses
@@ -838,7 +898,11 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #'   include zero; Stackelberg supports must be positive.
 #' @param k_prior Positional probabilities corresponding to \code{k_support};
 #'   \code{NULL} gives a uniform prior.
-#' @return A list suitable for passing to \code{rstan::sampling}.
+#' @return A list suitable for passing to \code{rstan::sampling}. The returned
+#'   list has provenance attributes \code{market_year_size}, \code{N_mt}, and
+#'   \code{N_mt_by_observation}. \code{N_mt} is the positive total of the
+#'   original inside quantities in each market-year, in the input quantity
+#'   units; it is not a likelihood input.
 #' @keywords internal
 prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               supply_model, use_cutoff = FALSE,
@@ -1051,6 +1115,12 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     mky_to_market[mky_int[i]] <- market_int[i]
     mky_to_year[mky_int[i]] <- year_int[i]
   }
+
+  market_year_size <- .market_year_quantity_size(
+    quantities = quantities,
+    observation_to_market_year = mky_int,
+    market_year_labels = levels(mky_f)
+  )
 
   # Compute quantity shares within each market-year
   shares <- numeric(N)
@@ -1332,6 +1402,8 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     attr(stan_data, "partition_metadata") <- partition_metadata
   }
 
+  stan_data <- .attach_market_year_quantity_size(stan_data, market_year_size)
+
   stan_data
 }
 
@@ -1343,7 +1415,11 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
 #' for the CES supply first-order conditions.
 #'
 #' @inheritParams prepare_stan_data
-#' @return A list suitable for passing to \code{rstan::sampling}.
+#' @return A list suitable for passing to \code{rstan::sampling}. The returned
+#'   list has provenance attributes \code{market_year_size}, \code{N_mt}, and
+#'   \code{N_mt_by_observation}. \code{N_mt} is the positive total of the
+#'   original inside quantities in each market-year, in the input quantity
+#'   units; it is not a likelihood input.
 #' @keywords internal
 prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   group, supply_model, use_cutoff, use_rho,
@@ -1570,6 +1646,12 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     mky_to_market[mky_int[i]] <- market_int[i]
     mky_to_year[mky_int[i]] <- year_int[i]
   }
+
+  market_year_size <- .market_year_quantity_size(
+    quantities = quantities,
+    observation_to_market_year = mky_int,
+    market_year_labels = levels(mky_f)
+  )
 
   # Compute the common conditional quantity-share response plus the
   # conditional revenue shares needed by CES supply FOCs.
@@ -1858,6 +1940,8 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     attr(stan_data, "firm_market_ranking") <- ranking_metadata
     attr(stan_data, "partition_metadata") <- partition_metadata
   }
+
+  stan_data <- .attach_market_year_quantity_size(stan_data, market_year_size)
 
   stan_data
 }

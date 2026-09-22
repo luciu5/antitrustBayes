@@ -124,6 +124,9 @@
 #'   normalizes these into conditional inside quantity shares for both Logit
 #'   and CES. The outside-share level is a
 #'   model parameter identified jointly with the supply FOCs.
+#'   The fitted object also retains each market-year's original inside
+#'   quantity total as \code{metadata$market_year_size$N_mt} (and repeats it
+#'   in \code{data$N_mt}) for future cross-market aggregation.
 #' @param margins Numeric vector of positive price-normalized margins. For
 #'   output markets this is the usual Lerner index \eqn{(p - c) / p}; for
 #'   input markets it may be an input markdown ratio \eqn{(v - w) / w}.
@@ -865,6 +868,18 @@ bayes_est <- function(prices, quantities, margins,
     stan_data$market_year_idx
   ])
 
+  ## Keep the original market-year quantity scale alongside the normalized
+  ## outcomes.  The corresponding Stan-data attributes are provenance only;
+  ## N_mt is deliberately absent from the Stan data list and current target.
+  market_year_size <- attr(stan_data, "market_year_size", exact = TRUE)
+  if (is.null(market_year_size)) {
+    stop("Prepared Stan data is missing market-year quantity-size provenance.",
+         call. = FALSE)
+  }
+  df$market_year_idx <- market_year_size$observation_to_market_year
+  df$market_year <- market_year_size$market_year_labels[df$market_year_idx]
+  df$N_mt <- market_year_size$N_mt[df$market_year_idx]
+
   # Run sampling
   stanfit <- do.call(rstan::sampling, c(
     list(object = stan_mod, data = stan_data),
@@ -932,6 +947,12 @@ bayes_est <- function(prices, quantities, margins,
     partition_metadata$k_prior_by_unit
   metadata$firm_market_ranking <- attr(stan_data, "firm_market_ranking", exact = TRUE)
   metadata$resolved_priors <- priors
+  metadata$market_year_size <- market_year_size
+  metadata$N_mt <- market_year_size$N_mt
+  metadata$market_year_idx <- market_year_size$observation_to_market_year
+  metadata$market_year_labels <- market_year_size$market_year_labels
+  metadata$market_year_size_units <- market_year_size$units
+  metadata$market_year_size_source <- market_year_size$source
   metadata$df_mode <- if (!isTRUE(likelihood_modes$df_active)) "inactive" else
     if (estimate_df) "estimated" else "fixed"
   metadata$resid_df_fixed <- if (!isTRUE(likelihood_modes$df_active) || estimate_df) NA_real_ else resid_df_fixed
@@ -992,7 +1013,9 @@ bayes_est <- function(prices, quantities, margins,
     year = as.character(df$year),
     group = as.character(df$group),
     margin_observed = as.logical(df$margin_observed),
-    outside_price = as.numeric(df$outside_price)
+    outside_price = as.numeric(df$outside_price),
+    market_year_idx = as.integer(df$market_year_idx),
+    N_mt = as.numeric(df$N_mt)
   )
   parameters <- list(
     source = "stanfit",
