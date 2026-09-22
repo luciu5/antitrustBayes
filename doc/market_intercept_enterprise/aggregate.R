@@ -84,7 +84,7 @@ print(table(audit$status, useNA = "ifany"))
 strict <- mic_truthy(mic_env("MIC_ENTERPRISE_STRICT", "false"))
 unusable_gate <- if (!nrow(results) || !all(c("benchmark_kind", "usable") %in%
                                             names(results))) FALSE else {
-  gate <- results$status == "completed" & results$benchmark_kind == "hmc_gate"
+  gate <- results$status == "completed" & grepl("^hmc_", results$benchmark_kind)
   any(gate & (is.na(results$usable) | !as.logical(results$usable)))
 }
 if (strict && (any(audit$status != "completed") || unusable_gate ||

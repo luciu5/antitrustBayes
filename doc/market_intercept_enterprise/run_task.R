@@ -199,8 +199,13 @@ summarise_fit <- function(fit, task, fixture, wall_seconds) {
   row$observed_margins <- sum(dat$margin_observed); row$fixture_hash <- fixture$source_hash
   row$fixed_rank_hash <- mic_rank_hash(fixture)
   row$wall_seconds <- wall_seconds
-  row$native_warmup_seconds_mean <- if (is.null(native)) NA_real_ else mean(native[, "warmup"])
-  row$native_sampling_seconds_mean <- if (is.null(native)) NA_real_ else mean(native[, "sampling"])
+  warmup_column <- if (!is.null(native)) intersect("warmup", colnames(native)) else character()
+  sample_column <- if (!is.null(native)) intersect(c("sampling", "sample"),
+                                                   colnames(native)) else character()
+  row$native_warmup_seconds_mean <- if (!length(warmup_column)) NA_real_ else
+    mean(native[, warmup_column[[1L]]])
+  row$native_sampling_seconds_mean <- if (!length(sample_column)) NA_real_ else
+    mean(native[, sample_column[[1L]]])
   row$peak_rss_kb <- {
     z <- readLines("/proc/self/status", warn = FALSE)
     hit <- z[grepl("^VmHWM:", z)]
@@ -231,6 +236,11 @@ row <- tryCatch({
   fixture <- mic_load_fixture(task)
   invisible(mic_smoke_task(task))
   fit_args <- mic_fit_args(task, fixture)
+  if (mic_truthy(mic_env("MIC_ENTERPRISE_KEEP_STAN_CSV", "false"))) {
+    fit_args$stan_options$sample_file <- file.path(
+      task_dir, sprintf("attempt-%03d-stan.csv", attempt)
+    )
+  }
   fit <- withCallingHandlers(do.call(antitrustBayes::bayes_est, fit_args),
     warning = function(w) { warnings <<- c(warnings, conditionMessage(w));
       invokeRestart("muffleWarning") })
