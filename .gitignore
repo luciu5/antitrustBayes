@@ -41,6 +41,8 @@ tmp_lib/
 !/doc/stackelberg/package_validation.md
 !/doc/stackelberg/bertrand_k_layout_scores.csv
 !/doc/stackelberg/compositional_share_noise_spec.md
+!/doc/stackelberg/core_fringe_nesting_validation.R
+!/doc/stackelberg/core_fringe_nesting_validation.csv
 
 # Full collapsed-Gaussian posteriors and logs stay local, outside GitHub.
 /doc/collapsed_gaussian_runs/
