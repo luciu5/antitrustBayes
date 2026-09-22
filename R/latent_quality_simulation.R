@@ -88,6 +88,21 @@
   stop("Unable to resolve the fitted quality parameterization.", call. = FALSE)
 }
 
+.lq_market_labels <- function(fit) {
+  if (methods::is(fit, "BayesSpecifiedFit")) return(character())
+  labels <- attr(fit@stan_data, "market_levels", exact = TRUE) %||%
+    fit@metadata$market_levels %||%
+    if ("market" %in% names(fit@data))
+      sort(unique(as.character(fit@data$market))) else character()
+  labels <- as.character(labels)
+  n_market <- as.integer(fit@stan_data$N_market %||% length(labels))
+  if (length(labels) != n_market || !length(labels) || anyNA(labels) ||
+      any(!nzchar(labels)) || anyDuplicated(labels)) {
+    stop("The fitted market-level map is malformed.", call. = FALSE)
+  }
+  labels
+}
+
 .lq_draw_count <- function(fit, draws = NULL) {
   if (methods::is(fit, "BayesSpecifiedFit")) return(as.integer(fit@params$n_draws))
   if (is.null(draws)) draws <- .posterior_extract(fit, "simulation")
@@ -167,7 +182,8 @@
     return(list(draws = out, source = "none", conditioning = "none",
                 mode = mode, group_labels = groups, quality_units = units,
                 quality_scope = scope, quality_lookup = incidence$quality_lookup,
-                incidence = incidence))
+                incidence = incidence, market_intercept_draws = NULL,
+                market_labels = NULL))
   }
   if (mode == "sampled") {
     q <- .lq_draw_matrix(draws$b_quality_all, n_draw, n_quality,
@@ -193,7 +209,8 @@
     return(list(draws = q, source = "sampled_stan", conditioning = "joint_draw",
                 mode = mode, group_labels = groups, quality_units = units,
                 quality_scope = scope, quality_lookup = incidence$quality_lookup,
-                incidence = incidence))
+                incidence = incidence, market_intercept_draws = NULL,
+                market_labels = NULL))
   }
   ## posterior_quality() supplies the exact Gaussian conditional draw. Restrict
   ## every draw-indexed field first, then request all rows of that subset. This
@@ -230,11 +247,29 @@
     stop("Conditional quality draws are non-finite.", call. = FALSE)
   }
   dimnames(q) <- list(as.character(draw_indices), units)
+  market_intercept_draws <- pq$market_intercept_draws
+  market_labels <- pq$market_intercept_labels
+  if (identical(.market_intercept_parameterization_from_fit(fit), "collapsed")) {
+    if (!is.matrix(market_intercept_draws) ||
+        nrow(market_intercept_draws) != length(draw_indices) ||
+        ncol(market_intercept_draws) != length(market_labels) ||
+        any(!is.finite(market_intercept_draws))) {
+      stop("Joint market-intercept recovery returned malformed draws.",
+           call. = FALSE)
+    }
+    rownames(market_intercept_draws) <- as.character(draw_indices)
+    colnames(market_intercept_draws) <- as.character(market_labels)
+  } else {
+    market_intercept_draws <- NULL
+    market_labels <- NULL
+  }
   list(draws = q, source = "posterior_quality", conditioning =
          pq$metadata$conditioning, mode = mode, group_labels = groups,
        quality_units = units, quality_scope = scope,
        quality_lookup = incidence$quality_lookup, incidence = incidence,
-       realized_k = pq$realized_k)
+       realized_k = pq$realized_k,
+       market_intercept_draws = market_intercept_draws,
+       market_labels = market_labels)
 }
 
 .lq_all_units <- function(fit) {
@@ -256,7 +291,7 @@
 .lq_fit_fingerprint <- function(fit, draws = NULL, version = 2L) {
   if (length(version) != 1L || !is.numeric(version) ||
       !is.finite(version) || version != as.integer(version) ||
-      !version %in% c(1L, 2L)) {
+      !version %in% c(1L, 2L, 3L)) {
     stop("Unsupported latent-quality fit fingerprint version.", call. = FALSE)
   }
   version <- as.integer(version)
@@ -264,7 +299,7 @@
     if (is.null(fit@stanfit)) stop("Cannot validate a legacy plan without its Stan fit.", call. = FALSE)
     draws <- rstan::extract(fit@stanfit)
   }
-  if (version == 2L && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
+  if (version %in% c(2L, 3L) && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
     draws <- .posterior_extract(fit, "policy_plan")
   }
   canonical_draws <- if (version == 1L || methods::is(fit, "BayesSpecifiedFit")) {
@@ -283,7 +318,7 @@
     market = if (methods::is(fit, "BayesSpecifiedFit")) fit@market else NULL,
     draws = if (methods::is(fit, "BayesSpecifiedFit")) NULL else canonical_draws
   )
-  if (version == 2L) payload$fit_signature_version <- 2L
+  if (version %in% c(2L, 3L)) payload$fit_signature_version <- as.integer(version)
   digest::digest(payload, algo = "xxhash64", serialize = TRUE)
 }
 
@@ -291,7 +326,7 @@
   incidence <- .lq_quality_incidence(fit)
   scope <- .lq_quality_scope(fit)
   list(
-    fit_signature_version = 2L,
+    fit_signature_version = 3L,
     demand_model = as.character(fit@demand_model),
     market_side = as.character(fit@market_side),
     posterior_draws = as.integer(n_total),
@@ -302,7 +337,7 @@
     quality_lookup = if (is.null(incidence)) NULL else incidence$quality_lookup,
     quality_mode = mode,
     structure = as.character(.lq_or(fit@metadata$structure, "simultaneous")),
-    fit_fingerprint = .lq_fit_fingerprint(fit, draws, version = 2L)
+    fit_fingerprint = .lq_fit_fingerprint(fit, draws, version = 3L)
   )
 }
 
@@ -318,6 +353,10 @@
   if (identical(version, 2L)) {
     keys <- append(keys, c("quality_scope", "quality_units", "quality_lookup"),
                    after = 3L)
+  } else if (identical(version, 3L)) {
+    keys <- append(keys, c("quality_scope", "quality_units", "quality_lookup"),
+                   after = 3L)
+    keys <- c(keys, "market_intercept_draws", "market_labels")
   }
   digest::digest(plan[keys], algo = "xxhash64", serialize = TRUE)
 }
@@ -342,6 +381,8 @@
                                k_cache = k_cache)
   plan <- structure(list(
     draw_indices = as.integer(draw_indices), quality_draws = quality$draws,
+    market_intercept_draws = quality$market_intercept_draws,
+    market_labels = quality$market_labels,
     quality_source = quality$source, quality_conditioning = quality$conditioning,
     quality_mode = quality$mode, group_labels = quality$group_labels,
     quality_scope = quality$quality_scope, quality_units = quality$quality_units,
@@ -358,6 +399,9 @@
       quality_parameterization = quality$mode, group_labels = quality$group_labels,
       quality_scope = quality$quality_scope, quality_units = quality$quality_units,
       quality_lookup = quality$quality_lookup,
+      market_intercept_parameterization =
+        .market_intercept_parameterization_from_fit(fit),
+      market_labels = quality$market_labels,
       role_mapping = "mixture", role_offset = 0L, exact_k = !is.null(k_cache)
     )
   ), class = c("bayes_policy_draw_plan", "list"))
@@ -377,10 +421,11 @@
 #' @param n_draws Number of posterior draws, defaulting to at most 200.
 #' @param seed Optional nonnegative integer random seed.
 #' @return A reusable object of class \code{bayes_policy_draw_plan}.
-#' @details New plans bind a version-2 canonical, name-ordered economic draw
-#' fingerprint. Unversioned historical plans are validated through their
+#' @details New plans bind a version-3 canonical, name-ordered economic draw
+#' fingerprint, including reconstructed market-intercept states when those
+#' effects were integrated during fitting. Unversioned historical plans are validated through their
 #' version-1 unrestricted-draw fingerprint as an explicit compatibility path;
-#' they are not reinterpreted as version-2 plans.
+#' they are not reinterpreted as current plans.
 #' @export
 posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.", call. = FALSE)
@@ -466,6 +511,26 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
     stop("'draw_plan' quality draws are non-finite or violate centering.",
          call. = FALSE)
   }
+  intercept_mode <- .market_intercept_parameterization_from_fit(fit)
+  if (identical(intercept_mode, "collapsed")) {
+    market_labels <- .lq_market_labels(fit)
+    if (!is.matrix(plan$market_intercept_draws) ||
+        nrow(plan$market_intercept_draws) != length(di) ||
+        ncol(plan$market_intercept_draws) != length(market_labels) ||
+        !identical(rownames(plan$market_intercept_draws), as.character(di)) ||
+        !identical(colnames(plan$market_intercept_draws), market_labels) ||
+        !identical(as.character(plan$market_labels), market_labels) ||
+        !identical(as.character(plan$metadata$market_labels), market_labels) ||
+        any(!is.finite(plan$market_intercept_draws))) {
+      stop("'draw_plan' has malformed reconstructed market-intercept draws or labels.",
+           call. = FALSE)
+    }
+  } else if (identical(signature_version, 3L) &&
+             (!is.null(plan$market_intercept_draws) ||
+              !is.null(plan$market_labels))) {
+    stop("'draw_plan' contains market-intercept draws for a sampled-intercept fit.",
+         call. = FALSE)
+  }
   plan
 }
 
@@ -492,9 +557,34 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
                 quality = rep(0, length(plan$group_labels)),
                 draw_index = as.integer(draw)))
   }
-  sm <- .lq_draw_matrix(draws$share_mean, .lq_draw_count(object, draws),
-                        nrow(object@data), "share_mean")
+  intercept_mode <- .market_intercept_parameterization_from_fit(object)
+  mean_name <- if (identical(intercept_mode, "collapsed"))
+    "share_mean_integrated" else "share_mean"
+  mean_draws <- if (identical(intercept_mode, "collapsed"))
+    draws$share_mean_integrated else draws$share_mean
+  sm <- .lq_draw_matrix(mean_draws, .lq_draw_count(object, draws),
+                        nrow(object@data), mean_name)
   score <- as.numeric(sm[draw, unit$idx])
+  if (identical(intercept_mode, "collapsed")) {
+    market_index <- as.integer(unit$market_index)
+    if (length(market_index) != 1L || is.na(market_index) ||
+        market_index < 1L || market_index > ncol(plan$market_intercept_draws)) {
+      stop("Latent-quality market-intercept map is invalid.", call. = FALSE)
+    }
+    intercept_row <- match(as.integer(draw), plan$draw_indices)
+    if (is.na(intercept_row))
+      stop("The draw plan has no market-intercept state for posterior draw ",
+           draw, ".", call. = FALSE)
+    mu_b <- .lq_draw_matrix(draws$mu_b_market_vec,
+                            .lq_draw_count(object, draws), 1L,
+                            "mu_b_market_vec")[draw, 1L]
+    intercept <- plan$market_intercept_draws[intercept_row, market_index]
+    if (!is.finite(mu_b) || !is.finite(intercept))
+      stop("Latent-quality market-intercept state is non-finite.", call. = FALSE)
+    ## The integrated mean already contains mu_b. Restore only the realized
+    ## centered offset represented by this plan's actual intercept draw.
+    score <- score + intercept - mu_b
+  }
   if (identical(plan$quality_mode, "collapsed")) {
     incidence <- .lq_quality_incidence(object)
     quality_index <- if (is.null(incidence)) match(

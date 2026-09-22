@@ -41,6 +41,7 @@ prepare_ces_stan_data(
   share_likelihood = c("gaussian", "student_t"),
   quality_parameterization = c("collapsed", "sampled"),
   quality_scale_parameterization = c("legacy", "total_fraction"),
+  market_intercept_parameterization = c("sampled", "collapsed"),
   margin_likelihood = NULL,
   quality_scope = c("market", "global")
 )
@@ -72,23 +73,6 @@ additional dependence through integrated group effects. The correlation
 coordinate is inactive for share-only or margin-only data and when no
 margin is observed.}
 
-\item{share_likelihood}{Share residual family: \code{"gaussian"}
-(default) or \code{"student_t"}.}
-
-\item{quality_parameterization}{Quality effects are \code{"collapsed"}
-(default) or \code{"sampled"}; collapsed quality integrates Gaussian group
-effects and disallows market residual scales.}
-
-\item{quality_scale_parameterization}{Sampler coordinates for the Gaussian
-share-noise and quality scales. \code{"legacy"} (default) preserves the
-historical coordinates. \code{"total_fraction"} is an exact experimental
-contrast-total-scale/variance-fraction rotation requiring Gaussian shares,
-collapsed quality, and a common residual scale.}
-
-\item{margin_likelihood}{Margin residual family: \code{"student_t"} or
-\code{"gaussian"}; \code{NULL} (default) follows
-\code{share_likelihood}, so the resolved default is Gaussian.}
-
 \item{use_hmt}{Logical.}
 
 \item{priors}{Named list of prior hyperparameters.}
@@ -115,11 +99,11 @@ pooling mode is recorded in the returned list attributes.}
 \item{use_centered_s0_pool}{Logical. Select the centered parameterization
 for either outside-share pooling mode.}
 
-\item{market_s0_parameterization}{Character string selecting the legacy or
-market/outside-share rotated Stan coordinates. The default
-\code{"legacy"} preserves the historical parameterization;
-\code{"rotated"} is active only for multi-market fits and is a documented
-no-op for single-market fits.}
+\item{market_s0_parameterization}{Character string selecting legacy,
+shifted rotated, or joint orthogonal market/outside-share Stan
+coordinates. The shifted rotation is a no-op for single-market data. The
+joint rotation requires multiple markets and a noncentered market-level
+outside-share hierarchy.}
 
 \item{margin_observed}{Optional logical margin-observation mask.}
 
@@ -140,10 +124,35 @@ include zero; Stackelberg supports must be positive.}
 \item{k_prior}{Positional probabilities corresponding to \code{k_support};
 \code{NULL} gives a uniform prior.}
 
+\item{share_likelihood}{Share residual family: \code{"gaussian"}
+(default) or \code{"student_t"}.}
+
+\item{quality_parameterization}{Quality effects are \code{"collapsed"}
+(default) or \code{"sampled"}; collapsed quality integrates Gaussian
+group effects and disallows market residual scales.}
+
+\item{quality_scale_parameterization}{Sampler coordinates for the Gaussian
+share-noise and quality scales. \code{"legacy"} (default) samples
+\code{log(sigma_share)} and the positive quality scale directly.
+\code{"total_fraction"} is an exact experimental reparameterization that
+samples the log total scale and logit share-noise variance fraction; it
+requires Gaussian shares, collapsed quality, and a common residual scale.}
+
+\item{market_intercept_parameterization}{Character string selecting
+\code{"sampled"} (default) or \code{"collapsed"} Gaussian
+market-intercept coordinates. The collapsed mode requires multiple
+markets, Gaussian shares and margins, collapsed market-scoped quality, a
+joint likelihood, and legacy/base s0 coordinates. A single market resolves
+to the existing sampled/no-op path.}
+
+\item{margin_likelihood}{Margin residual family: \code{"student_t"} or
+\code{"gaussian"}; \code{NULL} (default) follows
+\code{share_likelihood}, so the resolved default is Gaussian.}
+
 \item{quality_scope}{Quality incidence is \code{"market"} (default), which
-centers persistent quality within each market while retaining the original
-ownership/ranking \code{group} field. \code{"global"} retains the historical
-pooled scope.}
+centers persistent quality separately within each market while retaining
+the original ownership/ranking \code{group} field. \code{"global"}
+retains the historical pooled scope.}
 }
 \value{
 A list suitable for passing to \code{rstan::sampling}.

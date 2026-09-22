@@ -31,11 +31,6 @@ bayes_core_fringe_model(
 
 \item{fixed_k}{Optional explicit strategic-core count, including zero.}
 
-\item{price_domain}{\code{"positive"} (default) or \code{"real"}.
-Real rates are an explicit input Logit Cournot counterfactual domain extension
-and require coordination >= 0.0.0.9004. The fitted posterior, observed
-calibration prices, and role semantics are unchanged.}
-
 \item{role_offset}{Integer adjacent-partition sensitivity offset.}
 
 \item{insideSize}{Bayesian inside quantity convention.}
@@ -43,6 +38,11 @@ calibration prices, and role semantics are unchanged.}
 \item{priceOutside}{Outside-good price override.}
 
 \item{labels}{Product labels override.}
+
+\item{price_domain}{\code{"positive"} (default) or \code{"real"}.
+Real rates are an explicit input Logit Cournot counterfactual domain
+extension and require coordination >= 0.0.0.9004. The fitted posterior,
+observed calibration prices, and role semantics are unchanged.}
 
 \item{...}{Passed to \code{coordination::core_fringe()}.}
 }

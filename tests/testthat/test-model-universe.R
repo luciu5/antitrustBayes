@@ -70,7 +70,7 @@ make_model_universe_exact_fit <- function(markets = c("m1", "m2"),
       share_likelihood = share_likelihood, margin_likelihood = margin_likelihood,
       quality_parameterization = quality_parameterization, quality_scope = "global",
       likelihood = "joint", posterior_draws = 2L,
-      prior_normalization = list(mode = "native_stan_normalized", model_spec_version = 10L)
+      prior_normalization = list(mode = "native_stan_normalized", model_spec_version = 11L)
     )
   )
 }

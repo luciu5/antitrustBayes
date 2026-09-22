@@ -1,0 +1,4 @@
+"fixture","max_structured_dense_mean_error","max_structured_dense_covariance_error","collapsed_vs_joint_b_mean_error","collapsed_vs_joint_b_variance_error","max_bq_cross_covariance_error","q_given_b_formula_error","sequential_draw_max_mean_mc_z","sequential_draw_max_covariance_mc_z","monte_carlo_z_tolerance","passed"
+"unbalanced_three_year_partial_margins",5.06539254985228e-16,1.77809156287623e-17,2.77555756156289e-16,1.38777878078145e-17,1.77809156287623e-17,6.17561557447743e-16,1.16148529272565,2.31701962968409,6,TRUE
+"all_margins_missing",5.55111512312578e-17,2.08166817117217e-17,0,1.73472347597681e-18,2.08166817117217e-17,1.11022302462516e-16,1.39484083109393,1.68188392305994,6,TRUE
+"single_product_repeated_years",3.33066907387547e-16,7.80625564189563e-18,3.33066907387547e-16,7.80625564189563e-18,0,0,0.759848567671424,1.23001877332601,6,TRUE

@@ -18,7 +18,8 @@ bayes_compare(
 )
 }
 \arguments{
-\item{...}{One or more \code{BayesLogit} objects, optionally named.}
+\item{...}{One or more \code{BayesLogit} objects, optionally named. With
+\code{universe}, a single named list of source fits is also accepted.}
 
 \item{restrictions}{Optional named restrictions on ordered-k states. When
 supplied, \code{...} must contain exactly one exact ordered-k
@@ -50,11 +51,10 @@ Must be the same length as the number of models and sum to 1. If
 \code{NULL} (default), recorded \code{model_prior} values are used when
 all are available; otherwise equal probabilities are used.}
 
-\item{universe}{Optional \code{bayes_model_universe} descriptor. The named fits
-in \code{...} are its source fits and its explicit scientific prior is used.
-Alternatively, supply one named list of source fits.
-This route requires bridge-sampling evidence and cannot be combined with
-\code{restrictions} or a separate \code{prior_weights} argument.}
+\item{universe}{Optional \code{bayes_model_universe} descriptor. When
+supplied, the named fits in \code{...} are its source fits and the
+descriptor's explicit scientific prior is used. This route requires
+bridge-sampling evidence.}
 }
 \value{
 With multiple fitted models, a data frame containing model name,

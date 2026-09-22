@@ -1,9 +1,18 @@
 # Plan: integrate Gaussian market intercepts
 
-Status: proposed experiment, not a production implementation. The earlier
-geometry work and its failed runs are checkpointed in `b28384a`, following
-`64fc60c`. Preserve that checkpoint. Do not change package defaults during
-this experiment.
+Status: implemented as an opt-in experiment; sampler promotion is still
+pending the frozen HMC comparison. The earlier geometry work and its failed
+runs are checkpointed in `b28384a`, following `64fc60c`. The implementation
+starts from checkpoint `d75fc9c`. Package defaults remain unchanged.
+
+Implemented scope: all four Logit/CES simultaneous and exact ordered-k Stan
+kernels, the public R data/API contract, conditional intercept-and-quality
+reconstruction, reusable policy draw plans, normalized market-level generated
+likelihoods, bridge migration guards, and specification version 11. A
+single-market request remains the historical zero-intercept model and is
+recorded as a no-op. The new path requires multiple markets, Gaussian shares
+and margins, collapsed market-scoped quality, the joint likelihood, and base
+(`legacy`) s0 coordinates.
 
 ## Objective and ownership
 
@@ -13,8 +22,9 @@ changing the statistical model or policy counterfactuals.
 
 Sol xhigh owns the specification, mathematics, acceptance gates, integration,
 and final assessment. Luna xhigh workers perform bounded implementation and
-independent verification. This division describes the proposed workflow; it
-does not assert that the implementation has already been assigned or done.
+independent verification. The bounded implementation and an independent
+read-only red-team review are complete. Sol retains responsibility for final
+integration and the HMC decision.
 
 The outside-good utility convention, centered quality prior, all scale priors,
 outside-share pooling, demand and conduct equations, exact-k support, and policy
@@ -231,9 +241,38 @@ use. If performance does not improve materially, retain the evidence and avoid
 promoting an implementation that adds complexity without benefit. Do not claim
 that integrating intercepts must remove all variance-component or s0 geometry.
 
-## Independent planning review
+## Executed validation status
 
-A read-only Luna xhigh review accepted the overall design and requested the
-explicit exact-k target/GQ, intercept-state fingerprint, residual-scale naming,
-generated-output, and joint-recovery gates now included above. No production
-implementation or sampler test of intercept collapse has been performed.
+The independent dense oracle covers ordinary and boundary-scale covariance
+states, missing margins, nonzero rho, unequal groups, the one-group case, and
+explicit enumeration of all 27 states in a three-market exact-k fixture. Its
+largest structured-versus-dense log-density error is
+`7.105427e-15`; the exact-k evidence error is zero and the largest state
+probability error is `3.330669e-16`.
+
+A native Stan harness compiles the exact production likelihood helpers. Across
+five ordinary and boundary cases its largest normalized target error is
+`3.86e-10`. This target includes the normalized production hyperpriors for the
+integrated intercept, quality scale, residual scales, and rho. Stan automatic
+derivatives agree with an independent dense-oracle central difference in all
+165 comparisons under the prespecified tolerance; the largest scaled
+discrepancy is `5.07e-6` at a deliberately difficult
+small-share-noise state.
+
+All four full kernels pass `stanc`, and the complete package compiles and
+installs. The intercept-collapse tests and the focused API, market-quality,
+model-universe, policy-reconstruction, bridge, and Stackelberg contract tests
+have been executed. The complete non-sampling package suite passes after
+updating the policy-plan signature and adding an explicit forward-only bridge
+migration stage for the new kernels. Historical kernel stages remain accepted
+only through their reviewed coordinate policies; collapsed-intercept saved
+sources cannot be reinterpreted as sampled-intercept fits. The frozen Supreme
+Court HMC comparison has not yet been run, so no claim about improved sampling
+or a new default is made.
+
+The independent red team found no economic-target defect. It confirmed that
+sampled and integrated coordinates remain one statistical hypothesis in the
+model universe, while cache and policy-plan identities retain the
+parameterization and reconstructed latent state. It also confirmed that exact
+ordered-k reconstruction uses the same realized market state for the
+intercept, centered qualities, and policy simulation.

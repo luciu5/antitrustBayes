@@ -92,11 +92,11 @@ test_that("collapsed joint quality is realized once in an auction policy plan", 
   attr(stan_data, "quality_scope") <- "market"
   attr(stan_data, "group_levels") <- c("A", "B")
   attr(stan_data, "market_levels") <- "market_1"
-  attr(stan_data, "model_spec_version") <- 10L
+  attr(stan_data, "model_spec_version") <- 11L
   fit <- methods::new("BayesLogit", stanfit = NULL, data = data,
     stan_data = stan_data, price_sd = 1, supply_model = 4L,
     demand_model = "logit", market_side = "output", call = quote(fixed_draw_fixture()),
-    metadata = list(model_spec_version = 10L, quality_scope = "market",
+    metadata = list(model_spec_version = 11L, quality_scope = "market",
       quality_parameterization = "collapsed", share_likelihood = "gaussian",
       margin_likelihood = "gaussian", structure = "simultaneous",
       partition_prior = "cutoff", posterior_draws = 2L))

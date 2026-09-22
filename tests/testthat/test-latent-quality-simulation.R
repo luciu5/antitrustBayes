@@ -363,15 +363,16 @@ test_that("the observed-share route remains the default and numerically unchange
 })
 
 
-test_that("historical policy-plan state hashes retain their version-1 key set", {
+test_that("policy-plan state hashes retain versioned key sets", {
   fx <- .latent_policy_fixture(n_draws = 4L)
   plan <- posterior_policy_draws(fx$fit, n_draws = 3L, seed = 12L)
-  v2_keys <- c("draw_indices", "quality_draws", "group_labels",
+  v3_keys <- c("draw_indices", "quality_draws", "group_labels",
                "quality_scope", "quality_units", "quality_lookup",
                "quality_source", "quality_conditioning", "quality_mode",
-               "k_cache", "role_mapping", "fixed_k", "role_offset")
+               "k_cache", "role_mapping", "fixed_k", "role_offset",
+               "market_intercept_draws", "market_labels")
   expect_identical(.lq_plan_state_fingerprint(plan),
-                   digest::digest(plan[v2_keys], algo = "xxhash64", serialize = TRUE))
+                   digest::digest(plan[v3_keys], algo = "xxhash64", serialize = TRUE))
 
   historical_keys <- c("draw_indices", "quality_draws", "group_labels",
                        "quality_source", "quality_conditioning", "quality_mode",

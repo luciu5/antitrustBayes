@@ -20,6 +20,7 @@ bayes_est(
   share_likelihood = c("gaussian", "student_t"),
   quality_parameterization = c("collapsed", "sampled"),
   quality_scale_parameterization = c("legacy", "total_fraction"),
+  market_intercept_parameterization = c("sampled", "collapsed"),
   quality_scope = c("market", "global"),
   margin_likelihood = NULL,
   use_market_resid_scale = FALSE,
@@ -126,20 +127,28 @@ group effects and disallows market residual scales.}
 \item{quality_scale_parameterization}{Sampler coordinates for the Gaussian
 share-noise and quality scales. \code{"legacy"} (default) preserves the
 historical coordinates. \code{"total_fraction"} is an exact experimental
-contrast-total-scale/variance-fraction rotation available with Gaussian
-shares, collapsed quality, and a common residual scale. In that mode the raw
-Stan fields \code{sigma_b_strat} and \code{log_sigma_share} are sampler
-coordinates; use \code{sigma_b_strat_economic} and \code{sigma_share} for the
-reconstructed economic scales.}
+total-scale/variance-fraction rotation available with Gaussian shares,
+collapsed quality, and a common residual scale. In that mode the raw Stan
+fields \code{sigma_b_strat} and \code{log_sigma_share} are sampler
+coordinates; use \code{sigma_b_strat_economic} and \code{sigma_share} for
+the reconstructed economic scales.}
 
-\item{quality_scope}{Quality incidence is \code{"market"} (default), which
-gives each observed market/group pair a persistent quality effect and centers
-the effects within each market; the economic \code{group} ownership/ranking
-identifier is unchanged. \code{"global"} retains the historical pooled scope.}
+\item{market_intercept_parameterization}{Character string selecting
+\code{"sampled"} (default) or \code{"collapsed"} Gaussian market-
+intercept coordinates. The collapsed mode requires multiple markets,
+Gaussian shares and margins, collapsed market-scoped quality, a joint
+likelihood, and legacy/base s0 coordinates. It is an opt-in sampler
+parameterization; single-market requests resolve to the existing no-op.}
+
+\item{quality_scope}{Quality incidence for the hierarchical quality effect:
+\code{"market"} (default), which centers persistent quality separately
+within each market while retaining the original \code{group} ownership
+identifiers, or \code{"global"} for the historical pooled scope.}
 
 \item{margin_likelihood}{Margin residual family, \code{"student_t"} or
 \code{"gaussian"}; \code{NULL} (default) follows
-\code{share_likelihood}, so the resolved default is Gaussian. Gaussian-share Student-t margins require
+\code{share_likelihood}, so the resolved default is Gaussian. Gaussian-share
+Student-t margins require
 collapsed quality, fixed \code{df}, and \code{use_rho = FALSE}.}
 
 \item{use_market_resid_scale}{Logical. If \code{TRUE}, allow market-level
@@ -181,12 +190,11 @@ The explicit legacy flags \code{use_s0_market_pool} and
 omitted; supplying both interfaces together is ambiguous and errors.}
 
 \item{market_s0_parameterization}{Character string selecting legacy,
-shifted rotated, or joint orthogonal market/outside-share coordinates. The
-default \code{"legacy"} preserves the historical parameterization.
-\code{"rotated"} is active only for multi-market fits and is a documented
-no-op for single-market fits. \code{"joint"} is the experimental orthogonal
-coordinate for a noncentered market-level \code{s0} hierarchy with multiple
-markets. The requested and effective modes are recorded in fit metadata.}
+shifted rotated, or joint orthogonal market/outside-share coordinates.
+The default is \code{"legacy"}; \code{"rotated"} is active only for
+multi-market fits and is a documented no-op for single-market fits.
+\code{"joint"} is the experimental orthogonal coordinate for a
+noncentered market-level \code{s0} hierarchy with multiple markets.}
 
 \item{use_centered_alpha}{Logical. If \code{TRUE}, use the centered
 parameterization for the selected market-level price-effect pool (Logit
@@ -222,8 +230,8 @@ posterior model odds are computed by \code{bayes_compare}.}
 \item{stan_options}{Named list of arguments passed to
 \code{\link[rstan]{sampling}} (e.g., \code{chains}, \code{iter},
 \code{warmup}, \code{cores}). If \code{cores} is omitted or
-\code{NULL}, it defaults to \code{min(chains, getOption("mc.cores", 1L))}.
-An explicit \code{cores} value is validated and used unchanged.}
+\code{NULL}, the default is \code{min(chains, getOption("mc.cores", 1L))};
+an explicit \code{cores} value is validated and used unchanged.}
 
 \item{margin_observed}{Optional logical vector (length \code{N}, one per
 row) indicating which observations have a usable margin. \code{NA} is

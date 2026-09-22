@@ -106,9 +106,16 @@
   }
 
   quality_scope <- .quality_scope_from_fit(fit, strict = FALSE)
+  market_intercept <- .market_intercept_parameterization_from_fit(fit)
+  if (identical(market_intercept, "collapsed") &&
+      !identical(quality_scope, "market")) {
+    stop("Collapsed market-intercept recovery requires market-scoped quality.",
+         call. = FALSE)
+  }
   list(quality_parameterization = quality, share_likelihood = share,
        likelihood_mode = if (is.null(likelihood_mode)) NULL else as.integer(likelihood_mode),
-       quality_scope = quality_scope)
+       quality_scope = quality_scope,
+       market_intercept_parameterization = market_intercept)
 }
 
 .posterior_quality_matrix <- function(x, n_obs, name) {
@@ -232,16 +239,34 @@
     draws <- .posterior_extract(fit, "posterior_quality", conditioning)
   }
   if (!is.list(draws)) {
-    stop("'draws' must be a list containing share_mean, an economic quality scale, and sigma_share.",
+    stop("'draws' must be a list containing a share-mean field, an economic quality scale, and sigma_share.",
          call. = FALSE)
   }
-  needed_draws <- c("share_mean", "sigma_share")
+  modes <- .posterior_quality_resolve_modes(fit, stan_data)
+  intercept_collapsed <- identical(
+    modes$market_intercept_parameterization, "collapsed"
+  )
+  share_mean_name <- if (intercept_collapsed) "share_mean_integrated" else "share_mean"
+  share_mean_value <- if (intercept_collapsed) {
+    draws$share_mean_integrated
+  } else {
+    draws$share_mean
+  }
+  needed_draws <- c("sigma_share")
+  if (intercept_collapsed)
+    needed_draws <- c(needed_draws, "mu_b_market_vec", "sigma_b_market_vec")
   missing_draws <- setdiff(needed_draws, names(draws))
   if (length(missing_draws)) {
     stop("Posterior draws are missing field(s): ",
          paste(missing_draws, collapse = ", "), ".", call. = FALSE)
   }
-  share_mean <- .posterior_quality_matrix(draws$share_mean, n_obs, "share_mean")
+  if (is.null(share_mean_value)) missing_draws <- c(missing_draws, share_mean_name)
+  if (length(missing_draws)) {
+    stop("Posterior draws are missing field(s): ",
+         paste(unique(missing_draws), collapse = ", "), ".")
+  }
+  share_mean <- .posterior_quality_matrix(share_mean_value, n_obs,
+                                           share_mean_name)
   n_draw <- nrow(share_mean)
   if (!n_draw) stop("Posterior draws contain zero draws.", call. = FALSE)
   metadata_draws <- fit@metadata$posterior_draws
@@ -307,6 +332,46 @@
   }
   tau <- .posterior_quality_vector(tau_value, n_draw, tau_name)
   sigma <- .posterior_quality_vector(draws$sigma_share, n_draw, "sigma_share")
+  n_market <- as.integer(stan_data$N_market %||%
+    if (!is.null(stan_data$market)) max(as.integer(stan_data$market)) else 1L)
+  market_labels <- attr(stan_data, "market_levels", exact = TRUE) %||%
+    fit@metadata$market_levels %||% if ("market" %in% names(fit@data)) {
+      unique(as.character(fit@data$market))
+    } else {
+      as.character(seq_len(n_market))
+    }
+  market_labels <- as.character(market_labels)
+  if (length(market_labels) != n_market || anyNA(market_labels) ||
+      any(!nzchar(market_labels)) || anyDuplicated(market_labels)) {
+    stop("Collapsed quality fit has malformed market labels.", call. = FALSE)
+  }
+  mu_b_market <- sigma_b_market <- sigma_share_market <- sigma_margin_market <- NULL
+  if (intercept_collapsed) {
+    mu_b_market <- .posterior_quality_vector(
+      draws$mu_b_market_vec, n_draw, "mu_b_market_vec"
+    )
+    sigma_b_market <- .posterior_quality_vector(
+      draws$sigma_b_market_vec, n_draw, "sigma_b_market_vec"
+    )
+    if (any(!is.finite(mu_b_market)) || any(!is.finite(sigma_b_market)) ||
+        any(sigma_b_market <= 0)) {
+      stop("Collapsed market-intercept hyperparameter draws are unusable.",
+           call. = FALSE)
+    }
+    if (isTRUE(stan_data$use_market_resid_scale == 1L)) {
+      sigma_share_market <- .posterior_quality_matrix(
+        draws$sigma_share_market, n_market, "sigma_share_market"
+      )
+      if (nrow(sigma_share_market) != n_draw ||
+          any(!is.finite(sigma_share_market)) || any(sigma_share_market <= 0)) {
+        stop("Market-specific share residual scales are malformed.",
+             call. = FALSE)
+      }
+      if (any(sigma_share_market > sqrt(.Machine$double.xmax)))
+        stop("Market-specific share residual scales are too large for stable Gaussian calculations.",
+             call. = FALSE)
+    }
+  }
   if (any(!is.finite(share_mean)) || any(!is.finite(tau)) || any(!is.finite(sigma))) {
     stop("Posterior draws contain non-finite values.", call. = FALSE)
   }
@@ -339,6 +404,27 @@
     }
     out
   }
+  if (length(market) != n_obs || anyNA(market) ||
+      any(market < 1L | market > n_market)) {
+    stop("Collapsed quality fit has malformed market observation indices.",
+         call. = FALSE)
+  }
+  margin_scale_active <- intercept_collapsed &&
+    isTRUE(stan_data$use_market_resid_scale == 1L) &&
+    isTRUE(stan_data$use_rho == 1L) &&
+    isTRUE(stan_data$likelihood_mode == 1L) &&
+    length(stan_data$margin_idx) > 0L && identical(conditioning, "auto")
+  if (margin_scale_active) {
+    sigma_margin_market <- .posterior_quality_matrix(
+      draws$sigma_margin_market, n_market, "sigma_margin_market"
+    )
+    if (nrow(sigma_margin_market) != n_draw ||
+        any(!is.finite(sigma_margin_market)) || any(sigma_margin_market <= 0) ||
+        any(sigma_margin_market > sqrt(.Machine$double.xmax))) {
+      stop("Market-specific margin residual scales are malformed.",
+           call. = FALSE)
+    }
+  }
   list(y = as.numeric(y), group = group, quality = quality,
        counts = tabulate(quality, nbins = n_quality),
        n_group = n_group, n_quality = n_quality, labels = labels,
@@ -346,10 +432,13 @@
        quality_units = as.character(lookup$quality_unit),
        quality_lookup = lookup, quality_scope = scope,
        blocks = blocks, block_starts = starts,
-       market = market,
        incidence = incidence,
        share_mean = share_mean, tau = tau, sigma = sigma, n_draw = n_draw,
-       modes = .posterior_quality_resolve_modes(fit, stan_data))
+       n_market = n_market, market = market, market_labels = market_labels,
+       mu_b_market = mu_b_market, sigma_b_market = sigma_b_market,
+       sigma_share_market = sigma_share_market,
+       sigma_margin_market = sigma_margin_market,
+       modes = modes)
 }
 
 .posterior_quality_with_seed <- function(seed, fun) {
@@ -593,6 +682,12 @@
     paste(missing, collapse = ", "), ".", call. = FALSE)
   rho <- .posterior_quality_vector(draws$rho, parsed$n_draw, "rho")
   sigma <- .posterior_quality_vector(draws$sigma_margin, parsed$n_draw, "sigma_margin")
+  sigma_by_market <- if (!is.null(parsed$sigma_margin_market)) {
+    parsed$sigma_margin_market
+  } else {
+    matrix(rep(sigma, parsed$n_market), nrow = parsed$n_draw,
+           ncol = parsed$n_market)
+  }
   prediction <- if (is.null(realized_k)) {
     .posterior_quality_matrix(draws$pred_marginNormInv, length(parsed$y),
       "pred_marginNormInv")
@@ -614,13 +709,114 @@
       any(!is.finite(sigma)) || any(sigma <= 0) ||
       any(sigma > sqrt(.Machine$double.xmax)))
     stop("Unusable Gaussian joint quality draw values.", call. = FALSE)
+  if (any(!is.finite(sigma_by_market)) || any(sigma_by_market <= 0) ||
+      any(sigma_by_market > sqrt(.Machine$double.xmax)))
+    stop("Unusable market-specific Gaussian margin scale draw values.",
+         call. = FALSE)
   if (!identical(as.integer(draw_indices), seq_len(parsed$n_draw))) {
     rho <- rho[draw_indices]
     sigma <- sigma[draw_indices]
+    sigma_by_market <- sigma_by_market[draw_indices, , drop = FALSE]
     if (is.null(realized_k)) prediction <- prediction[draw_indices, , drop = FALSE]
   }
-  list(rho = rho, sigma = sigma, prediction = prediction,
+  list(rho = rho, sigma = sigma, sigma_by_market = sigma_by_market,
+       prediction = prediction,
        idx = idx, y = as.numeric(y), realized_k = realized_k)
+}
+
+## Recover one market's joint Gaussian posterior using only group sufficient
+## statistics. First draw the centered intercept offset from its marginal
+## posterior, then draw centered quality conditional on that same offset.
+.posterior_quality_market_intercept_conditional <- function(
+    z, variance, group, tau, mu_b, sigma_b) {
+  if (!length(z) || length(z) != length(variance) ||
+      length(z) != length(group) || any(!is.finite(z)) ||
+      any(!is.finite(variance)) || any(variance <= 0) ||
+      anyNA(group) || any(group < 1L) || any(group != floor(group)) ||
+      length(tau) != 1L || !is.finite(tau) || tau < 0 ||
+      length(mu_b) != 1L || !is.finite(mu_b) ||
+      length(sigma_b) != 1L || !is.finite(sigma_b) || sigma_b <= 0) {
+    stop("Collapsed market-intercept recovery received malformed Gaussian inputs.",
+         call. = FALSE)
+  }
+  group <- as.integer(group)
+  n_group <- max(group)
+  ## A single quality group is fixed at zero by the within-market centering
+  ## constraint.  Match the Stan kernel by removing its otherwise spurious
+  ## random-effect variance before recovering the market intercept.
+  if (n_group == 1L) tau <- 0
+  a <- cstat <- numeric(n_group)
+  for (i in seq_along(z)) {
+    g <- group[[i]]
+    a[[g]] <- a[[g]] + 1 / variance[[i]]
+    cstat[[g]] <- cstat[[g]] + z[[i]] / variance[[i]]
+  }
+  if (any(!is.finite(a)) || any(a <= 0) || any(!is.finite(cstat))) {
+    stop("Collapsed market-intercept sufficient statistics are unusable.",
+         call. = FALSE)
+  }
+  tau_sq <- tau^2
+  sigma_b_sq <- sigma_b^2
+  if (!is.finite(tau_sq) || !is.finite(sigma_b_sq)) {
+    stop("Collapsed market-intercept scale draws are too large.", call. = FALSE)
+  }
+  h <- 1 / (1 + tau_sq * a)
+  ah <- a * h
+  A <- sum(ah)
+  d_bar <- mean(h)
+  den_b <- d_bar + sigma_b_sq * A
+  if (!is.finite(A) || A <= 0 || !is.finite(den_b) || den_b <= 0) {
+    stop("Collapsed market-intercept marginal variance is unusable.",
+         call. = FALSE)
+  }
+  c_bar <- sum(h * cstat) / A
+  b0_mean <- sigma_b_sq * A * c_bar / den_b
+  b0_variance <- sigma_b_sq * d_bar / den_b
+  if (!is.finite(b0_mean) || !is.finite(b0_variance) || b0_variance <= 0) {
+    stop("Collapsed market-intercept posterior moments are unusable.",
+         call. = FALSE)
+  }
+
+  d <- if (tau_sq == 0) rep(0, n_group) else tau_sq / (1 + tau_sq * a)
+  d_sum <- sum(d)
+  if (d_sum > 0) {
+    slope_q <- -d * a + d * sum(d * a) / d_sum
+    q_conditional_mean <- function(b0) {
+      raw <- d * (cstat - b0 * a)
+      raw - d * sum(raw) / d_sum
+    }
+    q_mean <- q_conditional_mean(b0_mean)
+    q_variance_given_b <- pmax(0, d - d^2 / d_sum)
+    q_variance <- q_variance_given_b + slope_q^2 * b0_variance
+  } else {
+    slope_q <- rep(0, n_group)
+    q_conditional_mean <- function(b0) rep(0, n_group)
+    q_mean <- rep(0, n_group)
+    q_variance <- rep(0, n_group)
+  }
+  b0_draw <- stats::rnorm(1L, mean = b0_mean, sd = sqrt(b0_variance))
+  q_draw <- if (d_sum > 0) {
+    raw <- stats::rnorm(n_group, mean = d * (cstat - b0_draw * a),
+                        sd = sqrt(d))
+    centered <- raw - d * sum(raw) / d_sum
+    centered[[n_group]] <- -sum(centered[-n_group])
+    centered
+  } else {
+    rep(0, n_group)
+  }
+  if (any(!is.finite(q_mean)) || any(!is.finite(q_variance)) ||
+      any(q_variance < 0) || any(!is.finite(q_draw))) {
+    stop("Collapsed market-intercept quality recovery produced non-finite values.",
+         call. = FALSE)
+  }
+  list(intercept = mu_b + b0_draw,
+       intercept_mean = mu_b + b0_mean,
+       intercept_sd = sqrt(b0_variance),
+       quality_draw = q_draw,
+       quality_mean = q_mean,
+       quality_sd = sqrt(q_variance),
+       intercept_offset_mean = b0_mean,
+       intercept_offset_variance = b0_variance)
 }
 
 #' Reconstruct conditional group quality after a collapsed Gaussian fit
@@ -720,64 +916,124 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
                       dimnames = list(as.character(draw_indices), parsed$quality_units))
     means <- quality
     sds <- quality
+    market_intercepts <- market_intercept_means <- market_intercept_sds <- NULL
+    intercept_collapsed <- identical(
+      parsed$modes$market_intercept_parameterization, "collapsed"
+    )
+    if (intercept_collapsed) {
+      dn <- list(as.character(draw_indices), parsed$market_labels)
+      market_intercepts <- matrix(NA_real_, nrow = n_use,
+                                  ncol = parsed$n_market, dimnames = dn)
+      market_intercept_means <- market_intercept_sds <- market_intercepts
+    }
     for (row in seq_len(n_use)) {
       draw <- draw_indices[[row]]
-      sigma_sq <- parsed$sigma[[draw]]^2
-      if (!is.finite(sigma_sq) || sigma_sq <= 0) {
-        stop("Posterior draw ", draw,
-             " has an unusable sigma_share squared.", call. = FALSE)
-      }
       tau_sq <- parsed$tau[[draw]]^2
-      if (!is.finite(tau_sq)) {
+      if (!is.finite(tau_sq))
         stop("Posterior draw ", draw,
              " has an unusable sigma_b_strat squared.", call. = FALSE)
-      }
-      ## Accumulate observation-level sufficient statistics once. The block
-      ## loop below only slices these vectors, keeping market scope linear in
-      ## N + Q rather than rescanning all observations for every market.
-      a_all <- tabulate(parsed$quality, nbins = parsed$n_quality) / sigma_sq
-      c_all <- numeric(parsed$n_quality)
-      share_residual <- (parsed$y - parsed$share_mean[draw, ]) / sigma_sq
-      for (jj in seq_along(parsed$quality)) {
-        qj <- parsed$quality[[jj]]
-        c_all[[qj]] <- c_all[[qj]] + share_residual[[jj]]
-      }
-      if (!is.null(joint)) {
-        slope <- joint$rho[[row]] * joint$sigma[[row]] / parsed$sigma[[draw]]
-        variance <- joint$sigma[[row]]^2 * (1 - joint$rho[[row]]^2)
-        if (!is.finite(variance) || variance <= 0 || !is.finite(slope))
-          stop("Unusable Gaussian rho sufficient statistics.", call. = FALSE)
-        jidx <- joint$idx
-        residual <- joint$y[jidx] - log(joint$prediction[row, jidx] + 1e-9) -
-          slope * (parsed$y[jidx] - parsed$share_mean[draw, jidx])
-        if (any(!is.finite(residual)))
-          stop("Unusable Gaussian joint quality residuals.", call. = FALSE)
-        for (jj in seq_along(jidx)) {
-          qj <- parsed$quality[[jidx[[jj]]]]
-          a_all[[qj]] <- a_all[[qj]] + slope^2 / variance
-          c_all[[qj]] <- c_all[[qj]] - slope * residual[[jj]] / variance
+      if (intercept_collapsed) {
+        for (m in seq_len(parsed$n_market)) {
+          obs <- which(parsed$market == m)
+          units <- which(parsed$quality_lookup$market_index == m)
+          if (!length(obs) || !length(units))
+            stop("Collapsed market-intercept recovery has an empty market block.",
+                 call. = FALSE)
+          local_group <- match(parsed$quality[obs], units)
+          if (anyNA(local_group))
+            stop("Collapsed market-intercept recovery has an invalid quality map.",
+                 call. = FALSE)
+          sigma_share <- if (is.null(parsed$sigma_share_market))
+            parsed$sigma[[draw]] else parsed$sigma_share_market[draw, m]
+          if (!is.finite(sigma_share) || sigma_share <= 0)
+            stop("Posterior draw ", draw,
+                 " has an unusable market share residual scale.", call. = FALSE)
+          z <- parsed$y[obs] - parsed$share_mean[draw, obs]
+          variance <- rep(sigma_share^2, length(obs))
+          if (!is.null(joint)) {
+            jpos <- which(joint$idx %in% obs)
+            if (length(jpos)) {
+              jidx <- joint$idx[jpos]
+              local_obs <- match(jidx, obs)
+              sigma_margin <- joint$sigma_by_market[row, m]
+              slope <- joint$rho[[row]] * sigma_share / sigma_margin
+              margin_residual <- joint$y[jidx] -
+                log(joint$prediction[row, jidx] + 1e-9)
+              if (!is.finite(slope) ||
+                  !is.finite(sigma_share^2 * (1 - joint$rho[[row]]^2)) ||
+                  any(!is.finite(margin_residual)))
+                stop("Unusable market-specific Gaussian rho sufficient statistics.",
+                     call. = FALSE)
+              z[local_obs] <- z[local_obs] - slope * margin_residual
+              variance[local_obs] <- sigma_share^2 *
+                (1 - joint$rho[[row]]^2)
+            }
+          }
+          recovered <- .posterior_quality_market_intercept_conditional(
+            z = z, variance = variance, group = local_group,
+            tau = sqrt(tau_sq), mu_b = parsed$mu_b_market[[draw]],
+            sigma_b = parsed$sigma_b_market[[draw]]
+          )
+          quality[row, units] <- recovered$quality_draw
+          means[row, units] <- recovered$quality_mean
+          sds[row, units] <- recovered$quality_sd
+          market_intercepts[row, m] <- recovered$intercept
+          market_intercept_means[row, m] <- recovered$intercept_mean
+          market_intercept_sds[row, m] <- recovered$intercept_sd
         }
-      }
-      if (any(!is.finite(a_all)) || any(!is.finite(c_all)))
-        stop("Posterior draw ", draw, " produced non-finite Gaussian sufficient statistics.", call. = FALSE)
-      for (block in seq_along(parsed$blocks)) {
-        first <- parsed$block_starts[[block]]
-        last <- first + parsed$blocks[[block]] - 1L
-        units <- first:last
-        a <- a_all[units]
-        cstat <- c_all[units]
-        d <- if (tau_sq == 0) rep(0, length(units)) else tau_sq / (1 + tau_sq * a)
-        if (any(!is.finite(d))) stop("Posterior draw ", draw, " produced non-finite conditional quality variances.", call. = FALSE)
-        raw_mean <- d * cstat
-        den <- sum(d)
-        if (!is.finite(den) || any(!is.finite(raw_mean)))
-          stop("Posterior draw ", draw, " produced non-finite conditional quality moments.", call. = FALSE)
-        if (den > 0) {
-          means[row, units] <- raw_mean - d * (sum(raw_mean) / den)
-          sds[row, units] <- sqrt(pmax(0, d - d * d / den))
-          u <- stats::rnorm(length(units), mean = raw_mean, sd = sqrt(d))
-          quality[row, units] <- u - d * (sum(u) / den)
-          quality[row, units[[length(units)]]] <- -sum(quality[row, units[-length(units)]])
+      } else {
+        sigma_sq <- parsed$sigma[[draw]]^2
+        if (!is.finite(sigma_sq) || sigma_sq <= 0) {
+          stop("Posterior draw ", draw,
+               " has an unusable sigma_share squared.", call. = FALSE)
+        }
+        ## Accumulate observation-level sufficient statistics once. The block
+        ## loop below only slices these vectors, keeping market scope linear in
+        ## N + Q rather than rescanning all observations for every market.
+        a_all <- tabulate(parsed$quality, nbins = parsed$n_quality) / sigma_sq
+        c_all <- numeric(parsed$n_quality)
+        share_residual <- (parsed$y - parsed$share_mean[draw, ]) / sigma_sq
+        for (jj in seq_along(parsed$quality)) {
+          qj <- parsed$quality[[jj]]
+          c_all[[qj]] <- c_all[[qj]] + share_residual[[jj]]
+        }
+        if (!is.null(joint)) {
+          slope <- joint$rho[[row]] * joint$sigma[[row]] / parsed$sigma[[draw]]
+          variance <- joint$sigma[[row]]^2 * (1 - joint$rho[[row]]^2)
+          if (!is.finite(variance) || variance <= 0 || !is.finite(slope))
+            stop("Unusable Gaussian rho sufficient statistics.", call. = FALSE)
+          jidx <- joint$idx
+          residual <- joint$y[jidx] - log(joint$prediction[row, jidx] + 1e-9) -
+            slope * (parsed$y[jidx] - parsed$share_mean[draw, jidx])
+          if (any(!is.finite(residual)))
+            stop("Unusable Gaussian joint quality residuals.", call. = FALSE)
+          for (jj in seq_along(jidx)) {
+            qj <- parsed$quality[[jidx[[jj]]]]
+            a_all[[qj]] <- a_all[[qj]] + slope^2 / variance
+            c_all[[qj]] <- c_all[[qj]] - slope * residual[[jj]] / variance
+          }
+        }
+        if (any(!is.finite(a_all)) || any(!is.finite(c_all)))
+          stop("Posterior draw ", draw, " produced non-finite Gaussian sufficient statistics.", call. = FALSE)
+        for (block in seq_along(parsed$blocks)) {
+          first <- parsed$block_starts[[block]]
+          last <- first + parsed$blocks[[block]] - 1L
+          units <- first:last
+          a <- a_all[units]
+          cstat <- c_all[units]
+          d <- if (tau_sq == 0) rep(0, length(units)) else tau_sq / (1 + tau_sq * a)
+          if (any(!is.finite(d))) stop("Posterior draw ", draw, " produced non-finite conditional quality variances.", call. = FALSE)
+          raw_mean <- d * cstat
+          den <- sum(d)
+          if (!is.finite(den) || any(!is.finite(raw_mean)))
+            stop("Posterior draw ", draw, " produced non-finite conditional quality moments.", call. = FALSE)
+          if (den > 0) {
+            means[row, units] <- raw_mean - d * (sum(raw_mean) / den)
+            sds[row, units] <- sqrt(pmax(0, d - d * d / den))
+            u <- stats::rnorm(length(units), mean = raw_mean, sd = sqrt(d))
+            quality[row, units] <- u - d * (sum(u) / den)
+            quality[row, units[[length(units)]]] <- -sum(quality[row, units[-length(units)]])
+          }
         }
       }
     }
@@ -819,7 +1075,14 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
       quality_units = parsed$quality_units,
       market_labels = as.character(parsed$quality_lookup$market_label),
       quality_scope = parsed$quality_scope,
+      market_intercept_parameterization =
+        parsed$modes$market_intercept_parameterization,
       realized_k = if (is.null(joint)) NULL else joint$realized_k,
+      market_intercept_draws = market_intercepts,
+      market_intercept_conditional_means = market_intercept_means,
+      market_intercept_conditional_sds = market_intercept_sds,
+      market_intercept_labels = if (intercept_collapsed)
+        parsed$market_labels else NULL,
       draw_indices = as.integer(draw_indices),
       draws_long = draws_long,
       summary = summary,
@@ -831,8 +1094,15 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
         likelihood_mode = parsed$modes$likelihood_mode,
         conditioning = if (is.null(joint)) "observed log shares only" else
           "observed log shares and matched Gaussian margins",
-        conditional_moments = if (!is.null(joint$realized_k))
-          "conditional_on_realized_k" else "conditional_on_observed_quality_state",
+        conditional_moments = if (intercept_collapsed) {
+          "quality_moments_integrate_market_intercept_conditional_on_observed_state"
+        } else if (!is.null(joint$realized_k)) {
+          "conditional_on_realized_k"
+        } else {
+          "conditional_on_observed_quality_state"
+        },
+        market_intercept_moments = if (intercept_collapsed)
+          "conditional_on_observed_shares_margins_and_realized_k" else NULL,
         quality_scope = parsed$quality_scope,
         centered_constraint = if (parsed$quality_scope == "global")
           "sum(group quality) = 0" else "sum(group quality) = 0 within each market"

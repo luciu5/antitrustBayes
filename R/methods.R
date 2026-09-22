@@ -169,6 +169,9 @@ setMethod("show", "BayesLogit", function(object) {
   cat("  Markets:", length(unique(object@data$market)), "\n")
   cat("  Groups:", length(unique(object@data$group)), "\n")
   cat("  Quality scope:", .quality_scope_from_fit(object, strict = FALSE), "\n")
+  intercept_mode <- .market_intercept_parameterization_from_fit(object)
+  if (identical(intercept_mode, "collapsed"))
+    cat("  Market intercept: collapsed Gaussian integration\n")
   if (!is.null(object@stan_data$N_quality))
     cat("  Persistent quality units:", object@stan_data$N_quality, "\n")
   price_label <- if (demand_label == "CES") "Log-price SD" else "Price SD"

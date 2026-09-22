@@ -135,6 +135,16 @@ validate_comparison_contract <- function(fits) {
       "9abe4d66a2f4d154b322338bba691303a3c483df44a8593d4948ce758b617355",
     logit_supply =
       "f6bffa9ce0282dc08b12871a549c3ad3d14cc8e458f3c5c3308bd404a358374e"
+  ),
+  intercept_collapse = c(
+    ces_stackelberg =
+      "89700d43789a4c4109633858f551dc537fd20f7c7a74e50bb107b0c4b7cd9716",
+    ces_supply =
+      "4eaf21ee78113b8d934a7c1bd123be22dee01e1a5594aa7da9e863a196d22821",
+    logit_stackelberg =
+      "371dd99d72684f7e8f5ead2b51a8bfc505a9e3b5df6c0623d288e386bf7f5074",
+    logit_supply =
+      "cb8ba797461801cfba6bbe4e6b2e9d76c554d75de48030f0801160f8a16507fe"
   )
 )
 
@@ -168,10 +178,11 @@ validate_comparison_contract <- function(fits) {
                                                 kernel, original, rotation,
                                                 helmert = NULL, joint = NULL,
                                                 scale = NULL,
-                                                margin_first = NULL) {
+                                                margin_first = NULL,
+                                                intercept_collapse = NULL) {
   !is.null(.bayes_bridge_migration_geometry(
     saved_hash, current_hash, kernel, original, rotation, helmert, joint,
-    scale, margin_first
+    scale, margin_first, intercept_collapse
   ))
 }
 
@@ -179,7 +190,8 @@ validate_comparison_contract <- function(fits) {
                                               kernel, original, rotation,
                                               helmert = NULL, joint = NULL,
                                               scale = NULL,
-                                              margin_first = NULL) {
+                                              margin_first = NULL,
+                                              intercept_collapse = NULL) {
   valid <- is.character(saved_hash) && length(saved_hash) == 1L &&
     is.character(current_hash) && length(current_hash) == 1L &&
     is.character(kernel) && length(kernel) == 1L &&
@@ -236,18 +248,44 @@ validate_comparison_contract <- function(fits) {
         identical(unname(scale[[kernel]]), saved_hash)))) {
     return("preserve")
   }
+  new_intercept_collapse <- is.character(intercept_collapse) &&
+    kernel %in% names(intercept_collapse) &&
+    identical(unname(intercept_collapse[[kernel]]), current_hash)
+  if (new_intercept_collapse &&
+      identical(unname(original[[kernel]]), saved_hash)) {
+    return("legacy")
+  }
+  if (new_intercept_collapse &&
+      (identical(unname(rotation[[kernel]]), saved_hash) ||
+       (is.character(helmert) && kernel %in% names(helmert) &&
+        identical(unname(helmert[[kernel]]), saved_hash)) ||
+       (is.character(joint) && kernel %in% names(joint) &&
+        identical(unname(joint[[kernel]]), saved_hash)) ||
+       (is.character(scale) && kernel %in% names(scale) &&
+        identical(unname(scale[[kernel]]), saved_hash)) ||
+       (is.character(margin_first) && kernel %in% names(margin_first) &&
+        identical(unname(margin_first[[kernel]]), saved_hash)))) {
+    return("preserve")
+  }
   NULL
 }
 
 .bayes_bridge_migration_scale_policy <- function(saved_hash, current_hash,
                                                   kernel, scale,
-                                                  margin_first) {
-  current_is_margin_first <- is.character(margin_first) &&
-    kernel %in% names(margin_first) &&
-    identical(unname(margin_first[[kernel]]), current_hash)
-  saved_has_scale_flag <- is.character(scale) && kernel %in% names(scale) &&
-    identical(unname(scale[[kernel]]), saved_hash)
-  if (current_is_margin_first && saved_has_scale_flag) "preserve" else "legacy"
+                                                  margin_first,
+                                                  intercept_collapse = NULL) {
+  current_supports_scale_flag <-
+    (is.character(margin_first) && kernel %in% names(margin_first) &&
+     identical(unname(margin_first[[kernel]]), current_hash)) ||
+    (is.character(intercept_collapse) &&
+     kernel %in% names(intercept_collapse) &&
+     identical(unname(intercept_collapse[[kernel]]), current_hash))
+  saved_has_scale_flag <-
+    (is.character(scale) && kernel %in% names(scale) &&
+     identical(unname(scale[[kernel]]), saved_hash)) ||
+    (is.character(margin_first) && kernel %in% names(margin_first) &&
+     identical(unname(margin_first[[kernel]]), saved_hash))
+  if (current_supports_scale_flag && saved_has_scale_flag) "preserve" else "legacy"
 }
 
 .bayes_bridge_code_contract <- function(stanfit) {
@@ -292,9 +330,12 @@ validate_comparison_contract <- function(fits) {
     margin_first <- .bayes_bridge_read_hashes(
       .bayes_bridge_approved_hashes$margin_first
     )
+    intercept_collapse <- .bayes_bridge_read_hashes(
+      .bayes_bridge_approved_hashes$intercept_collapse
+    )
     migration_geometry <- .bayes_bridge_migration_geometry(
       saved_hash, current_hash, kernel, original, rotation, helmert, joint,
-      scale, margin_first
+      scale, margin_first, intercept_collapse
     )
     migration <- !is.null(migration_geometry)
     if (!migration) {
@@ -302,7 +343,8 @@ validate_comparison_contract <- function(fits) {
            "; no approved saved-to-current kernel pair matches.", call. = FALSE)
     }
     migration_scale_policy <- .bayes_bridge_migration_scale_policy(
-      saved_hash, current_hash, kernel, scale, margin_first
+      saved_hash, current_hash, kernel, scale, margin_first,
+      intercept_collapse
     )
   }
   list(kernel = kernel, current_model = current, saved_hash = saved_hash,
@@ -353,6 +395,19 @@ validate_comparison_contract <- function(fits) {
 .bayes_bridge_private_data <- function(fit, contract) {
   data <- .bayes_bridge_canonicalize_data(fit@stan_data)
   if (isTRUE(contract$migration)) {
+    ## Approved saved sources predate intercept collapse and therefore have
+    ## sampled-intercept coordinates. Do not interpret a reduced-dimension
+    ## posterior as a source for a sampled-intercept bridge migration.
+    if (!"market_intercept_parameterization" %in% names(data)) {
+      data$market_intercept_parameterization <- 1L
+    }
+    intercept_flag <- data$market_intercept_parameterization
+    if (!is.numeric(intercept_flag) || length(intercept_flag) != 1L ||
+        !is.finite(intercept_flag) || intercept_flag != 1L) {
+      stop("Approved saved-source bridge migrations require the sampled ",
+           "market-intercept data code 1; cross-dimensional bridge ",
+           "equivalence is not supported.", call. = FALSE)
+    }
     ## Kernels predating the exact share/quality scale rotation implicitly use
     ## its legacy coordinates. Inject only that target-preserving data flag;
     ## never reinterpret a saved fit as total/fraction coordinates.

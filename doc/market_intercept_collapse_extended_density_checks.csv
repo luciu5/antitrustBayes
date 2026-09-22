@@ -1,0 +1,4 @@
+"fixture","years","observations","groups","observed_margins","missing_margins","mu_b","share_sd","margin_sd","rho","structured_log_density","dense_log_density","absolute_error","tolerance","passed"
+"unbalanced_three_year_partial_margins",3,9,3,4,5,0.27,0.23,0.41,0.73,-10.2905981525818,-10.2905981525818,3.5527136788005e-15,1e-07,TRUE
+"all_margins_missing",3,6,3,0,6,-0.34,0.31,NA,-0.81,-11.2883730531903,-11.2883730531903,7.105427357601e-15,1e-07,TRUE
+"single_product_repeated_years",3,6,1,2,4,0.31,0.19,0.33,-0.68,-4.02244494872578,-4.02244494872578,5.32907051820075e-15,1e-07,TRUE

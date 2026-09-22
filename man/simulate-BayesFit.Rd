@@ -106,24 +106,26 @@ named by simulation unit). Fringe permits zero.}
 override. An empty vector gives a wholly MonCom post state.}
 
 \item{demand_anchoring}{Demand baseline for policy simulation. The default
-\code{"observed"} retains observed-share reconstruction. \code{"latent_quality"}
-draws fitted quality under the stored global or market scope, normalizes
-relative latent shares while retaining
-the posterior outside share, and solves a new pre-policy equilibrium using the
-observed-share FOC cost primitive. It supports output Logit/CES and input Logit; input value primitives
-are held fixed unless changed by the counterfactual.}
-
-\item{price_domain}{Counterfactual rate domain. The default
-\code{"positive"} retains existing solvers. \code{"real"} permits finite
-negative or zero solved rates for input Logit Cournot native exact fringe or
-Stackelberg models, using coordination >= 0.0.0.9004. It is an explicit domain
-extension, not a rate-floor model, and leaves the fitted posterior unchanged.
-Unsupported combinations are rejected. Percentage changes from zero baseline
-rates are undefined; use level-rate changes.}
+\code{"observed"} retains the historical observed-share reconstruction.
+\code{"latent_quality"} draws the fitted scoped quality state, normalizes
+latent relative shares while retaining the posterior outside share, and
+solves a new pre-policy equilibrium using the observed-share FOC cost
+primitive. It supports output Logit/CES and input Logit. For input Logit,
+the native positive dollar markdown is retained and the observed
+value/procurement-price primitive is held fixed.}
 
 \item{draw_plan}{Optional object returned by
-\code{\link{posterior_policy_draws}}. It fixes posterior draw, quality, and
-exact-k role realizations for reuse across policy scenarios.}
+\code{\link{posterior_policy_draws}}. A plan fixes posterior draw,
+quality, and exact-k role realizations so multiple scenarios can reuse one
+fit-level draw plan.}
+
+\item{price_domain}{Counterfactual rate domain. The default
+\code{"positive"} retains existing solvers. \code{"real"} permits
+finite negative or zero solved rates for input Logit Cournot native exact
+fringe or Stackelberg models, using coordination >= 0.0.0.9004. It is an
+explicit domain extension, not a rate-floor model, and leaves the fitted
+posterior unchanged. Unsupported combinations are rejected. Percentage
+changes from zero baseline rates are undefined; use level-rate changes.}
 
 \item{...}{Additional arguments passed to \code{antitrust::simulate()}.}
 }

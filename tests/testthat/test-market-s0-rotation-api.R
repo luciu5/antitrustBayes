@@ -165,10 +165,11 @@ test_that("all four Stan kernels retain rotation diagnostics and economic equati
                  fixed = TRUE)
     expect_match(flat, "s0_prob[mky] = bounded_inv_logit(s0[mky])",
                  fixed = TRUE)
-    expect_match(flat, "c_unbounded_mky[mky] = s0[mky] + b_market[m]",
+    expect_match(flat,
+                 "c_unbounded_mky[mky] = s0[mky] + market_intercept_location[m]",
                  fixed = TRUE)
     expect_match(flat,
-                 "c_effective_mky[mky] = logit(s0_prob[mky]) + b_market[m]",
+                 "c_effective_mky[mky] = logit(s0_prob[mky]) + market_intercept_location[m]",
                  fixed = TRUE)
     expect_match(flat,
                  "if (is_single_market == 0 && use_s0_market_pool == 1 && use_centered_s0_pool == 0)",
@@ -202,7 +203,8 @@ test_that("all four Stan kernels retain rotation diagnostics and economic equati
     } else {
       expect_match(flat, "supply_model == 3", fixed = TRUE)
     }
-    expect_match(flat, "share_mean[i] = logit(s0_prob[mky]) + b_market[m]",
+    expect_match(flat,
+                 "share_mean[i] = logit(s0_prob[mky]) + market_intercept_location[m]",
                  fixed = TRUE)
   }
 

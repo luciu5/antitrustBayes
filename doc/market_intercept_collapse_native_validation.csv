@@ -1,0 +1,6 @@
+"source","case","N","markets","k_states","margin_obs","no_margin_markets","sigma_share","sigma_margin","sigma_quality","sigma_intercept","rho","stan_log_target","dense_oracle_log_target","abs_target_error","max_state_error","max_market_mixture_error","pass"
+"logit_supply.stan","ordinary",12,3,3,5,1,0.31,0.43,0.48,0.37,0.63,-10.1009644586812,-10.1009644586812,0,8.88178419700125e-16,6.66133814775094e-16,TRUE
+"logit_supply.stan","low_share_high_rho",12,3,3,5,1,0.012,0.34,0.52,0.41,0.939,-857.758691508641,-857.758691509027,3.86080500902608e-10,3.34694050252438e-10,3.17754711431917e-10,TRUE
+"logit_supply.stan","low_both_scales",12,3,3,5,1,0.018,0.29,0.009,0.004,-0.91,-1420.00210915581,-1420.00210915581,4.54747350886464e-13,2.27373675443232e-13,2.27373675443232e-13,TRUE
+"logit_supply.stan","low_intercept_scale",12,3,3,5,1,0.27,0.39,0.44,0.0015,0.72,-7.45446062649525,-7.45446062649525,8.88178419700125e-16,2.22044604925031e-15,4.44089209850063e-16,TRUE
+"logit_supply.stan","rho_zero",12,3,3,5,1,0.25,0.36,0.31,0.22,0,-5.88989582746512,-5.88989582746512,1.77635683940025e-15,6.66133814775094e-16,6.66133814775094e-16,TRUE

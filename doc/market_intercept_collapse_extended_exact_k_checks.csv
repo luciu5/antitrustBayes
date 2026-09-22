@@ -1,0 +1,2 @@
+"markets","states_per_market","enumerated_joint_states","factorized_log_evidence","enumerated_log_evidence","absolute_log_evidence_error","max_market_state_probability_error","normalized_state_densities","tolerance","passed"
+3,3,27,-6.25319475955191,-6.25319475955191,0,3.33066907387547e-16,TRUE,1e-10,TRUE

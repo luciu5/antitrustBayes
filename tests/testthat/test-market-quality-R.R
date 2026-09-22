@@ -43,7 +43,7 @@ test_that("missing historical quality scope is explicitly global", {
     market_side = "input", call = quote(fake()), metadata = list()
   )
   expect_identical(antitrustBayes:::.quality_scope_from_fit(fit), "global")
-  attr(fit@stan_data, "model_spec_version") <- 10L
+  attr(fit@stan_data, "model_spec_version") <- 11L
   expect_error(antitrustBayes:::.quality_scope_from_fit(fit), "missing quality_scope")
 })
 
@@ -96,7 +96,7 @@ test_that("posterior quality uses scoped blocks and accepts missing margins", {
                       group = c("A", "B", "A", "B")),
     stan_data = stan_data, price_sd = 1, supply_model = 1L,
     demand_model = "logit", market_side = "input", call = quote(fake()),
-    metadata = list(model_spec_version = 10L, quality_scope = "market",
+    metadata = list(model_spec_version = 11L, quality_scope = "market",
                     quality_parameterization = "collapsed",
                     share_likelihood = "gaussian", posterior_draws = 2L,
                     group_levels = c("A", "B"))
@@ -142,7 +142,7 @@ test_that("exact-k quality recovery maps one supported state per market", {
                       group = c("A", "B", "A", "B")),
     stan_data = stan_data, price_sd = 1, supply_model = 1L,
     demand_model = "logit", market_side = "input", call = quote(fake()),
-    metadata = list(model_spec_version = 10L, quality_scope = "market",
+    metadata = list(model_spec_version = 11L, quality_scope = "market",
                     structure = "stackelberg", partition_prior = "ordered_k")
   )
   draws <- list(posterior_component_prob = rbind(
@@ -181,9 +181,9 @@ test_that("exact-k quality recovery maps one supported state per market", {
   )
 })
 
-test_that("specification 10 missing scope errors even through non-strict callers", {
+test_that("current specification missing scope errors even through non-strict callers", {
   stan_data <- list(group = c(1L, 2L), N_group = 2L)
-  attr(stan_data, "model_spec_version") <- 10L
+  attr(stan_data, "model_spec_version") <- 11L
   fit <- methods::new(
     "BayesLogit", stanfit = NULL,
     data = data.frame(group = c("a", "b")), stan_data = stan_data,
@@ -223,7 +223,7 @@ market_quality_fingerprint_fit <- function(quality_scope,
   attr(stan_data, "quality_incidence") <- incidence
   attr(stan_data, "quality_scope") <- quality_scope
   attr(stan_data, "market_levels") <- market_levels
-  attr(stan_data, "model_spec_version") <- 10L
+  attr(stan_data, "model_spec_version") <- 11L
   data <- data.frame(
     prices = rep(1, length(market_int)), quantities = rep(1, length(market_int)),
     margins = rep(.5, length(market_int)),
@@ -235,11 +235,11 @@ market_quality_fingerprint_fit <- function(quality_scope,
     "BayesLogit", stanfit = NULL, data = data, stan_data = stan_data,
     price_sd = 1, supply_model = 1L, demand_model = "logit",
     market_side = "input", call = quote(fake()), metadata = list(
-      model_spec_version = 10L, quality_scope = quality_scope,
+      model_spec_version = 11L, quality_scope = quality_scope,
       quality_parameterization = "collapsed", share_likelihood = "gaussian",
       margin_likelihood = "gaussian", structure = "simultaneous",
       partition_prior = "cutoff", posterior_draws = 1L,
-      prior_normalization = list(model_spec_version = 10L),
+      prior_normalization = list(model_spec_version = 11L),
       resolved_priors = list(prior_alpha_sd = 1)
     )
   )

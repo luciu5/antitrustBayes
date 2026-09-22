@@ -14,23 +14,19 @@ posterior_policy_draws(fit, n_draws = NULL, seed = NULL)
 \item{seed}{Optional nonnegative integer random seed.}
 }
 \value{
-A reusable object of class \code{bayes_policy_draw_plan} containing selected
-posterior indices, one scoped quality draw per selected draw, and exact-k role
-realizations when the fit uses a native ordered-k structure.
+A reusable object of class \code{bayes_policy_draw_plan}.
 }
 \description{
-The plan fixes posterior and latent-state randomness so multiple policy
-counterfactuals can be evaluated from one fit-level draw plan.
+The plan samples posterior indices once and, for collapsed fits, draws one
+conditional quality vector per selected parameter draw, centered globally
+or within each market according to the fit's quality scope. Exact native
+ordered-k fits also receive one role realization per market and draw. Reuse
+the returned object in observed-anchor and latent-quality simulations.
 }
 \details{
-The plan binds quality and role states to their selected posterior rows.
-Quality is centered globally or within each market according to the fit's
-stored quality scope; market-specific effects persist across periods.
-Reuse it intact across interventions. Changing its indices or latent states
-requires constructing a new plan with this function; fitting again is unnecessary.
-
-New plans also bind a version-2 canonical, name-ordered economic draw
-fingerprint. Unversioned historical plans are validated through their
+New plans bind a version-3 canonical, name-ordered economic draw
+fingerprint, including reconstructed market-intercept states when those
+effects were integrated during fitting. Unversioned historical plans are validated through their
 version-1 unrestricted-draw fingerprint as an explicit compatibility path;
-they are not reinterpreted as version-2 plans.
+they are not reinterpreted as current plans.
 }

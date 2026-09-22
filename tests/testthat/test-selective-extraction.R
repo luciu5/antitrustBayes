@@ -66,7 +66,7 @@ test_that("policy plans use one selected union and normalize s0 aliases", {
   ## the mocked response uses `s0` and is normalized back to `s0_prob`.
   expect_equal(requested, c("a_market", "s0_prob", "share_mean", "b_quality_all"))
   expect_s3_class(plan, "bayes_policy_draw_plan")
-  expect_equal(plan$fit_signature$fit_signature_version, 2L)
+  expect_equal(plan$fit_signature$fit_signature_version, 3L)
   expect_equal(plan$fit_signature$posterior_draws, 2L)
 })
 

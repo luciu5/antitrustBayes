@@ -185,6 +185,12 @@
 #'   fields \code{sigma_b_strat} and \code{log_sigma_share} are sampler
 #'   coordinates; use \code{sigma_b_strat_economic} and \code{sigma_share} for
 #'   the reconstructed economic scales.
+#' @param market_intercept_parameterization Character string selecting
+#'   \code{"sampled"} (default) or \code{"collapsed"} Gaussian market-
+#'   intercept coordinates. The collapsed mode requires multiple markets,
+#'   Gaussian shares and margins, collapsed market-scoped quality, a joint
+#'   likelihood, and legacy/base s0 coordinates. It is an opt-in sampler
+#'   parameterization; single-market requests resolve to the existing no-op.
 #' @param quality_scope Quality incidence for the hierarchical quality effect:
 #'   \code{"market"} (default), which centers persistent quality separately
 #'   within each market while retaining the original \code{group} ownership
@@ -411,6 +417,7 @@ bayes_est <- function(prices, quantities, margins,
                       share_likelihood = c("gaussian", "student_t"),
                       quality_parameterization = c("collapsed", "sampled"),
                       quality_scale_parameterization = c("legacy", "total_fraction"),
+                      market_intercept_parameterization = c("sampled", "collapsed"),
                       quality_scope = c("market", "global"),
                       margin_likelihood = NULL,
                       use_market_resid_scale = FALSE,
@@ -460,6 +467,9 @@ bayes_est <- function(prices, quantities, margins,
   quality_parameterization <- match.arg(quality_parameterization)
   quality_scale_parameterization <- match.arg(
     quality_scale_parameterization, c("legacy", "total_fraction")
+  )
+  market_intercept_parameterization <- match.arg(
+    market_intercept_parameterization, c("sampled", "collapsed")
   )
   quality_scope <- match.arg(quality_scope)
   if (!is.null(margin_likelihood)) {
@@ -582,6 +592,18 @@ bayes_est <- function(prices, quantities, margins,
     use_s0_market_pool = use_s0_market_pool,
     use_centered_s0_pool = use_centered_s0_pool
   )
+  market_intercept_resolution <- .resolve_market_intercept_parameterization(
+    market_intercept_parameterization = market_intercept_parameterization,
+    N_market = nlevels(droplevels(as.factor(market))),
+    share_likelihood = share_likelihood,
+    margin_likelihood = margin_likelihood,
+    quality_parameterization = quality_parameterization,
+    quality_scope = quality_scope,
+    likelihood_mode = match(likelihood, c("joint", "share", "margin")),
+    market_s0_parameterization = market_s0_resolution$requested,
+    use_market_resid_scale = use_market_resid_scale,
+    quality_scale_parameterization = quality_scale_parameterization
+  )
   observed_margins <- if (is.null(margin_observed)) margins else margins[margin_observed]
   if (market_side == "output" && any(observed_margins >= 1)) {
     stop("Output-market Lerner indices must be strictly less than 1. ",
@@ -604,13 +626,15 @@ bayes_est <- function(prices, quantities, margins,
     use_market_resid_scale = use_market_resid_scale,
     estimate_df = estimate_df,
     likelihood_mode = match(likelihood, c("joint", "share", "margin")),
-    quality_scope = quality_scope
+    quality_scope = quality_scope,
+    market_intercept_parameterization = market_intercept_resolution$effective
   )
   quality_scale_resolution <- .resolve_quality_scale_parameterization(
     quality_scale_parameterization = quality_scale_parameterization,
     quality_parameterization = likelihood_modes$quality_parameterization,
     share_likelihood = likelihood_modes$share_likelihood,
-    use_market_resid_scale = use_market_resid_scale
+    use_market_resid_scale = use_market_resid_scale,
+    market_intercept_parameterization = market_intercept_resolution$effective
   )
   estimate_df <- isTRUE(estimate_df) && isTRUE(likelihood_modes$df_active)
   if (!estimate_df && identical(likelihood_modes$share_likelihood, "gaussian") &&
@@ -742,6 +766,7 @@ bayes_est <- function(prices, quantities, margins,
       share_likelihood = likelihood_modes$share_likelihood,
       quality_parameterization = likelihood_modes$quality_parameterization,
       quality_scale_parameterization = quality_scale_resolution$requested,
+      market_intercept_parameterization = market_intercept_resolution$requested,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope
     )
@@ -791,6 +816,7 @@ bayes_est <- function(prices, quantities, margins,
       share_likelihood = likelihood_modes$share_likelihood,
       quality_parameterization = likelihood_modes$quality_parameterization,
       quality_scale_parameterization = quality_scale_resolution$requested,
+      market_intercept_parameterization = market_intercept_resolution$requested,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope
     )
@@ -816,6 +842,16 @@ bayes_est <- function(prices, quantities, margins,
   attr(stan_data, "market_s0_joint_active") <- market_s0_resolution$joint_active
   attr(stan_data, "market_s0_coordinate_convention") <-
     market_s0_resolution$coordinate_convention
+  attr(stan_data, "market_intercept_parameterization") <-
+    market_intercept_resolution$requested
+  attr(stan_data, "market_intercept_parameterization_requested") <-
+    market_intercept_resolution$requested
+  attr(stan_data, "market_intercept_parameterization_effective") <-
+    market_intercept_resolution$effective
+  attr(stan_data, "market_intercept_parameterization_no_op") <-
+    market_intercept_resolution$no_op
+  attr(stan_data, "market_intercept_coordinate_convention") <-
+    market_intercept_resolution$coordinate_convention
   attr(stan_data, "quality_scale_parameterization") <-
     quality_scale_resolution$requested
   attr(stan_data, "quality_scale_parameterization_effective") <-
@@ -846,6 +882,17 @@ bayes_est <- function(prices, quantities, margins,
   metadata$share_likelihood <- likelihood_modes$share_likelihood
   metadata$margin_likelihood <- likelihood_modes$margin_likelihood
   metadata$quality_parameterization <- likelihood_modes$quality_parameterization
+  metadata$market_intercept_parameterization <-
+    market_intercept_resolution$requested
+  metadata$market_intercept_parameterization_requested <-
+    market_intercept_resolution$requested
+  metadata$market_intercept_parameterization_effective <-
+    market_intercept_resolution$effective
+  metadata$market_intercept_parameterization_no_op <-
+    market_intercept_resolution$no_op
+  metadata$market_intercept_coordinate_convention <-
+    market_intercept_resolution$coordinate_convention
+  metadata$model_spec_version <- .antitrust_bayes_model_spec_version
   metadata$quality_scale_parameterization <- quality_scale_resolution$requested
   metadata$quality_scale_parameterization_effective <-
     quality_scale_resolution$effective
@@ -898,6 +945,15 @@ bayes_est <- function(prices, quantities, margins,
     share_likelihood = likelihood_modes$share_likelihood,
     margin_likelihood = likelihood_modes$margin_likelihood,
     quality_parameterization = likelihood_modes$quality_parameterization,
+    market_intercept_parameterization = market_intercept_resolution$requested,
+    market_intercept_parameterization_requested =
+      market_intercept_resolution$requested,
+    market_intercept_parameterization_effective =
+      market_intercept_resolution$effective,
+    market_intercept_parameterization_no_op =
+      market_intercept_resolution$no_op,
+    market_intercept_coordinate_convention =
+      market_intercept_resolution$coordinate_convention,
     quality_scale_parameterization = quality_scale_resolution$requested,
     quality_scale_parameterization_effective = quality_scale_resolution$effective,
     quality_scale_coordinate_convention =

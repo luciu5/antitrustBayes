@@ -84,6 +84,14 @@
   partition <- .posterior_contract_partition(fit)
   native <- .posterior_contract_native(fit)
   quality <- .posterior_contract_quality(fit)
+  intercept_collapsed <- identical(
+    .market_intercept_parameterization_from_fit(fit), "collapsed"
+  )
+  share_mean_field <- if (intercept_collapsed) {
+    "share_mean_integrated"
+  } else {
+    "share_mean"
+  }
   required <- character()
   optional <- character()
   if (purpose %in% c("simulation", "policy_plan", "native_model")) {
@@ -104,13 +112,21 @@
           required <- c(required, "b_quality_all")
       }
       if (quality == "collapsed") {
-        required <- c(required, "share_mean", "sigma_b_strat", "sigma_share")
+        required <- c(required, share_mean_field, "sigma_b_strat", "sigma_share")
+        if (intercept_collapsed) {
+          required <- c(required, "mu_b_market_vec", "sigma_b_market_vec")
+          if (isTRUE(fit@stan_data$use_market_resid_scale == 1L))
+            required <- c(required, "sigma_share_market")
+        }
         scope <- if (methods::is(fit, "BayesLogit"))
           .quality_scope_from_fit(fit, strict = FALSE) else "global"
         if (.posterior_contract_rho_active(fit) &&
             identical(conditioning, "auto") &&
             !(native || identical(partition, "ordered_k"))) {
           required <- c(required, "rho", "sigma_margin", "pred_marginNormInv")
+          if (intercept_collapsed &&
+              isTRUE(fit@stan_data$use_market_resid_scale == 1L))
+            required <- c(required, "sigma_margin_market")
         }
         exact_quality <- .posterior_contract_rho_active(fit) &&
           identical(conditioning, "auto") &&
@@ -122,6 +138,9 @@
         if (exact_quality)
           required <- c(required, "rho", "sigma_margin", "posterior_component_prob",
                         "a_market", "s0_prob")
+        if (exact_quality && intercept_collapsed &&
+            isTRUE(fit@stan_data$use_market_resid_scale == 1L))
+          required <- c(required, "sigma_margin_market")
       }
     }
   }
@@ -129,11 +148,19 @@
     if (!identical(quality, "collapsed")) {
       stop("posterior_quality extraction requires a collapsed-quality fit.", call. = FALSE)
     }
-    required <- c("share_mean", "sigma_b_strat", "sigma_share")
+    required <- c(share_mean_field, "sigma_b_strat", "sigma_share")
+    if (intercept_collapsed) {
+      required <- c(required, "mu_b_market_vec", "sigma_b_market_vec")
+      if (isTRUE(fit@stan_data$use_market_resid_scale == 1L))
+        required <- c(required, "sigma_share_market")
+    }
     scope <- .quality_scope_from_fit(fit, strict = FALSE)
     if (.posterior_contract_rho_active(fit) && identical(conditioning, "auto") &&
         !(native || identical(partition, "ordered_k"))) {
       required <- c(required, "rho", "sigma_margin", "pred_marginNormInv")
+      if (intercept_collapsed &&
+          isTRUE(fit@stan_data$use_market_resid_scale == 1L))
+        required <- c(required, "sigma_margin_market")
     }
     exact_quality <- .posterior_contract_rho_active(fit) &&
       identical(conditioning, "auto") &&
@@ -145,6 +172,9 @@
     if (exact_quality)
       required <- c(required, "rho", "sigma_margin", "posterior_component_prob",
                     "a_market", "s0_prob")
+    if (exact_quality && intercept_collapsed &&
+        isTRUE(fit@stan_data$use_market_resid_scale == 1L))
+      required <- c(required, "sigma_margin_market")
   }
   if (purpose == "posterior_k") {
     if (!native || !identical(partition, "ordered_k")) {
@@ -183,6 +213,7 @@
   ) || isTRUE(fit@stan_data$quality_scale_parameterization == 2L)
   alternatives <- list(
     s0_prob = c("s0_prob", "s0", "s0_logit"),
+    share_mean_integrated = "share_mean_integrated",
     sigma_b_strat = if (total_fraction_scale) {
       "sigma_b_strat_economic"
     } else {
@@ -210,7 +241,8 @@
   names(actual) <- canonical
   list(canonical = canonical, actual = unname(actual), aliases = actual_required,
        required = required, optional = optional[keep_optional], purpose = purpose,
-       total_fraction_scale = total_fraction_scale)
+       total_fraction_scale = total_fraction_scale,
+       market_intercept_collapsed = intercept_collapsed)
 }
 
 .posterior_normalize_draw_names <- function(draws, contract) {
@@ -222,6 +254,7 @@
     actual <- contract$actual[[i]]
     candidates <- switch(canonical,
       s0_prob = c("s0_prob", "s0", "s0_logit"),
+      share_mean_integrated = "share_mean_integrated",
       sigma_b_strat = if (isTRUE(contract$total_fraction_scale)) {
         "sigma_b_strat_economic"
       } else {
