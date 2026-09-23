@@ -1,0 +1,9 @@
+"case_id","dgp","coordinate","M","T","F","N","true_sigma_b_market","dgp_identity_error","seed","dgp_seed","chains","iter","warmup","adapt_delta","elapsed_seconds","warnings","error","divergences","max_treedepth","treedepth_hits","min_bfmi","bfmi_by_chain","max_rhat","min_bulk_ess","min_tail_ess","sigma_b_market_median","sigma_s0_pool_median","rho_median","alpha_median","s0_median","gate_pass"
+2,"boundary","collapsed_total_fraction",6,3,5,90,0,0,19091,271828,2,600,300,0.99,59.392,"There were 6 divergent transitions after warmup. See
+https://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+to find out why this is a problem and how to eliminate them. | Examine the pairs() plot to diagnose sampling problems
+ | Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess","",6,9,0,0.610426269443404,"0.7347;0.6104",1.04524959378832,58,99,0.0557371723292182,0.0454239651475326,0.254805598844194,0.761930230524026,0.139364939976148,FALSE

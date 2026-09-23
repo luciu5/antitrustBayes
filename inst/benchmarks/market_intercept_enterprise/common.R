@@ -270,9 +270,55 @@ mic_apply_stress <- function(fixture, scenario) {
   fixture
 }
 
+mic_apply_market_intercept_truth <- function(fixture, sigma_b_market = 0,
+                                             seed = 272729L) {
+  sigma_b_market <- as.numeric(sigma_b_market)
+  if (length(sigma_b_market) != 1L || !is.finite(sigma_b_market) ||
+      sigma_b_market < 0)
+    stop("sigma_b_market must be one finite nonnegative number.", call. = FALSE)
+  if (fixture$M < 2L && sigma_b_market > 0)
+    stop("A nonzero market-intercept dispersion requires multiple markets.",
+         call. = FALSE)
+
+  b_market <- numeric(fixture$M)
+  if (sigma_b_market > 0) {
+    had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    if (had_seed) old_seed <- get(".Random.seed", envir = .GlobalEnv)
+    on.exit({
+      if (had_seed) assign(".Random.seed", old_seed, envir = .GlobalEnv)
+      else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE))
+        rm(".Random.seed", envir = .GlobalEnv)
+    }, add = TRUE)
+    set.seed(as.integer(seed))
+    raw <- stats::rnorm(fixture$M)
+    raw <- raw - mean(raw)
+    if (!is.finite(stats::sd(raw)) || stats::sd(raw) <= 1e-12)
+      stop("Could not generate a nondegenerate market-intercept fixture.",
+           call. = FALSE)
+    b_market <- sigma_b_market * raw / stats::sd(raw)
+  }
+
+  ## The observed outcomes are conditional inside shares.  A common market
+  ## intercept therefore cancels from relative inside shares and instead
+  ## changes the outside share.  If eta_old generated the original fixture,
+  ## eta_new = eta_old - b_m makes eta_new + b_m exactly equal eta_old.
+  old_eta <- stats::qlogis(fixture$truth$s0)
+  b_mky <- rep(b_market, each = fixture$T)
+  fixture$truth$s0 <- stats::plogis(old_eta - b_mky)
+  fixture$truth$market_intercept <- b_market
+  fixture$truth$mu_b_market <- mean(b_market)
+  fixture$truth$sigma_b_market <- if (length(b_market) > 1L)
+    stats::sd(b_market) else 0
+  fixture$truth$market_intercept_identity_error <- max(abs(
+    stats::qlogis(fixture$truth$s0) + b_mky - old_eta
+  ))
+  fixture
+}
+
 mic_make_synthetic <- function(model, demand = "logit", M = 10L, T = 1L,
                                F = 6L, seed = 271828L,
-                               scenario = "standard") {
+                               scenario = "standard",
+                               sigma_b_market = 0) {
   spec <- mic_model_contract(model)
   engine <- mic_fixture_engine()
   base_supply <- if (spec$supply %in% c("bertrand", "cournot")) spec$supply else "bertrand"
@@ -281,7 +327,11 @@ mic_make_synthetic <- function(model, demand = "logit", M = 10L, T = 1L,
     seed = as.integer(seed))
   fixture <- mic_rewrite_atomic_margins(fixture, model)
   fixture <- mic_apply_stress(fixture, scenario)
-  if (scenario %in% c("low_share_noise", "high_rho")) {
+  fixture <- mic_apply_market_intercept_truth(
+    fixture, sigma_b_market = sigma_b_market,
+    seed = as.integer(seed) + 901L
+  )
+  if (sigma_b_market > 0 || scenario %in% c("low_share_noise", "high_rho")) {
     fixture <- mic_rebuild_margins(fixture, model,
       rho = if (scenario == "high_rho") .90 else .30,
       seed = as.integer(seed) + 7301L)
@@ -289,7 +339,8 @@ mic_make_synthetic <- function(model, demand = "logit", M = 10L, T = 1L,
   fixture$model <- model
   fixture$scenario <- scenario
   fixture$source <- paste0("synthetic:", model, ":", demand, ":M", M, ":T", T,
-                           ":F", F, ":", scenario, ":seed", seed)
+                           ":F", F, ":", scenario, ":sigma_b", sigma_b_market,
+                           ":seed", seed)
   fixture$source_hash <- mic_hash(fixture$data)
   fixture
 }

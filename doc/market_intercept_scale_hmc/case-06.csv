@@ -1,0 +1,6 @@
+"case_id","dgp","coordinate","M","T","F","N","true_sigma_b_market","dgp_identity_error","seed","dgp_seed","chains","iter","warmup","adapt_delta","elapsed_seconds","warnings","error","divergences","max_treedepth","treedepth_hits","min_bfmi","bfmi_by_chain","max_rhat","min_bulk_ess","min_tail_ess","sigma_b_market_median","sigma_s0_pool_median","rho_median","alpha_median","s0_median","gate_pass"
+6,"interior","sampled_joint",6,3,5,90,0.18,4.44089209850063e-16,19091,271828,2,600,300,0.99,173.734,"Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess","",0,10,0,0.753441742408387,"0.7534;0.8749",1.01865266956011,112,157,0.0560238751838818,0.0446789627772163,0.275894844620256,0.762022050394513,0.141196378062034,FALSE

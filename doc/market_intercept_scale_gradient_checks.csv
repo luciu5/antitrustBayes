@@ -1,0 +1,13 @@
+"kernel","scenario","max_scaled_error","tolerance","passed"
+"logit_supply","ordinary",2.81254454070457e-10,5e-04,TRUE
+"logit_supply","small_intercept",6.51222574682154e-09,5e-04,TRUE
+"logit_supply","small_s0",2.63985693048334e-10,5e-04,TRUE
+"logit_stackelberg","ordinary",2.71455048486913e-10,5e-04,TRUE
+"logit_stackelberg","small_intercept",6.51036801150274e-09,5e-04,TRUE
+"logit_stackelberg","small_s0",2.48974504726246e-10,5e-04,TRUE
+"ces_supply","ordinary",1.67525660355363e-09,5e-04,TRUE
+"ces_supply","small_intercept",5.13169696466617e-09,5e-04,TRUE
+"ces_supply","small_s0",8.96592120574571e-10,5e-04,TRUE
+"ces_stackelberg","ordinary",1.4642540896084e-09,5e-04,TRUE
+"ces_stackelberg","small_intercept",5.5939186227757e-09,5e-04,TRUE
+"ces_stackelberg","small_s0",4.73208244861671e-10,5e-04,TRUE

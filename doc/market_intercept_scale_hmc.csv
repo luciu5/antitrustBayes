@@ -1,0 +1,37 @@
+"case_id","dgp","coordinate","M","T","F","N","true_sigma_b_market","dgp_identity_error","seed","dgp_seed","chains","iter","warmup","adapt_delta","elapsed_seconds","warnings","error","divergences","max_treedepth","treedepth_hits","min_bfmi","bfmi_by_chain","max_rhat","min_bulk_ess","min_tail_ess","sigma_b_market_median","sigma_s0_pool_median","rho_median","alpha_median","s0_median","gate_pass"
+1,"boundary","collapsed_legacy",6,3,5,90,0,0,19091,271828,2,600,300,0.99,46.242,"There were 9 divergent transitions after warmup. See
+https://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+to find out why this is a problem and how to eliminate them. | Examine the pairs() plot to diagnose sampling problems
+ | Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess",NA,9,8,0,0.505525103907948,"0.5804;0.5055",1.02808061823318,64,73,0.0519517526797348,0.0494993213089538,0.291708073590645,0.761735603352038,0.140520536975912,FALSE
+2,"boundary","collapsed_total_fraction",6,3,5,90,0,0,19091,271828,2,600,300,0.99,59.392,"There were 6 divergent transitions after warmup. See
+https://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+to find out why this is a problem and how to eliminate them. | Examine the pairs() plot to diagnose sampling problems
+ | Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess",NA,6,9,0,0.610426269443404,"0.7347;0.6104",1.04524959378832,58,99,0.0557371723292182,0.0454239651475326,0.254805598844194,0.761930230524026,0.139364939976148,FALSE
+3,"boundary","sampled_joint",6,3,5,90,0,0,19091,271828,2,600,300,0.99,265.665,"Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess",NA,0,12,0,0.853567054459691,"0.8536;0.8991",1.02134601051154,143,177,0.0548087592841648,0.0539836936433551,0.269964551890704,0.762453774488768,0.139415297109494,FALSE
+4,"interior","collapsed_legacy",6,3,5,90,0.18,4.44089209850063e-16,19091,271828,2,600,300,0.99,72,"Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess",NA,0,9,0,0.518166995512129,"0.5182;0.7178",1.01826490509804,78,121,0.054959408192312,0.0468667294966233,0.296009966097253,0.762532867464584,0.14084570558215,FALSE
+5,"interior","collapsed_total_fraction",6,3,5,90,0.18,4.44089209850063e-16,19091,271828,2,600,300,0.99,69.656,"Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess",NA,0,8,0,0.548280343504986,"0.5483;0.6486",1.03276079777305,91,153,0.0598612529845874,0.047856702684765,0.27699559553782,0.76205443255064,0.13999957655285,FALSE
+6,"interior","sampled_joint",6,3,5,90,0.18,4.44089209850063e-16,19091,271828,2,600,300,0.99,173.734,"Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess | Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#tail-ess",NA,0,10,0,0.753441742408387,"0.7534;0.8749",1.01865266956011,112,157,0.0560238751838818,0.0446789627772163,0.275894844620256,0.762022050394513,0.141196378062034,FALSE

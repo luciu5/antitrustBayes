@@ -93,6 +93,33 @@ test_that("stress fixtures implement the declared statistical regimes", {
   expect_true(any(partial_fx$data$margin_observed[partial_fx$data$market != first]))
 })
 
+test_that("synthetic market-intercept truth covers boundary and interior regimes", {
+  skip_if_not(file.exists(testthat::test_path("..", "..", "doc",
+                                             "market_quality_benchmark.R")),
+              "source-repository DGP helpers are excluded from package builds")
+  boundary <- .mic_enterprise_env$mic_make_synthetic(
+    "B", "logit", M = 6L, T = 2L, F = 4L, seed = 1701L,
+    scenario = "compositional", sigma_b_market = 0
+  )
+  interior <- .mic_enterprise_env$mic_make_synthetic(
+    "B", "logit", M = 6L, T = 2L, F = 4L, seed = 1701L,
+    scenario = "compositional", sigma_b_market = .18
+  )
+  expect_equal(boundary$truth$market_intercept, rep(0, 6L))
+  expect_equal(boundary$truth$sigma_b_market, 0)
+  expect_equal(stats::sd(interior$truth$market_intercept), .18,
+               tolerance = 1e-12)
+  expect_equal(mean(interior$truth$market_intercept), 0, tolerance = 1e-14)
+  expect_lt(interior$truth$market_intercept_identity_error, 1e-12)
+  ## A common market intercept changes the outside share, not conditional
+  ## inside shares.  The same compositional realization is therefore retained.
+  expect_equal(boundary$data$quantities, interior$data$quantities,
+               tolerance = 1e-12)
+  expect_false(isTRUE(all.equal(boundary$truth$s0, interior$truth$s0)))
+  expect_true(all(is.finite(interior$data$margins)))
+  expect_true(all(interior$data$margins > 0 & interior$data$margins < 1))
+})
+
 test_that("atomic DGP conduct schedules match the public package equations", {
   theory <- new.env(parent = globalenv())
   sys.source(testthat::test_path("..", "..", "R", "priors.R"), envir = theory)
