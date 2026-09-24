@@ -4,7 +4,14 @@
 \alias{posterior_policy_draws}
 \title{Build a reusable posterior draw plan for policy simulation}
 \usage{
-posterior_policy_draws(fit, n_draws = NULL, seed = NULL)
+posterior_policy_draws(
+  fit,
+  n_draws = NULL,
+  seed = NULL,
+  role_mapping = c("mixture", "map", "threshold"),
+  fixed_k = NULL,
+  role_offset = 0L
+)
 }
 \arguments{
 \item{fit}{A \code{BayesFit}.}
@@ -12,6 +19,15 @@ posterior_policy_draws(fit, n_draws = NULL, seed = NULL)
 \item{n_draws}{Number of posterior draws, defaulting to at most 200.}
 
 \item{seed}{Optional nonnegative integer random seed.}
+
+\item{role_mapping}{Exact role realization: posterior mixture, posterior
+MAP, or legacy cutoff threshold where supported by the fit. Exact
+ordered-k fits store the selected role state in the plan.}
+
+\item{fixed_k}{Optional exact leader/core count, scalar or named by
+simulation unit. When supplied, every selected draw uses this count.}
+
+\item{role_offset}{Integer adjacent-partition sensitivity offset.}
 }
 \value{
 A reusable object of class \code{bayes_policy_draw_plan}.
@@ -28,5 +44,7 @@ New plans bind a version-3 canonical, name-ordered economic draw
 fingerprint, including reconstructed market-intercept states when those
 effects were integrated during fitting. Unversioned historical plans are validated through their
 version-1 unrestricted-draw fingerprint as an explicit compatibility path;
-they are not reinterpreted as current plans.
+they are not reinterpreted as current plans. Reuse a plan with the same
+\code{role_mapping}, \code{fixed_k}, and \code{role_offset} arguments used to
+create it; simulation rejects conflicting controls.
 }

@@ -281,11 +281,60 @@
   else .estimated_simulation_units(fit, NULL, NULL)
 }
 
-.lq_role_cache <- function(fit, draws, draw_indices) {
+.lq_role_cache <- function(fit, draws, draw_indices,
+                           role_mapping = "mixture", fixed_k = NULL,
+                           role_offset = 0L) {
   if (is.null(.native_ordered_structure(fit))) return(NULL)
   setup <- .lq_all_units(fit)
   .stack_k_cache(fit, draws, setup, draw_indices,
-                 role_mapping = "mixture", fixed_k = NULL, role_offset = 0L)
+                 role_mapping = role_mapping, fixed_k = fixed_k,
+                 role_offset = role_offset)
+}
+
+.lq_validate_role_plan_args <- function(fit, role_mapping, fixed_k,
+                                        role_offset) {
+  role_mapping <- match.arg(role_mapping, c("mixture", "map", "threshold"))
+  if (length(role_offset) != 1L || !is.numeric(role_offset) ||
+      !is.finite(role_offset) || abs(role_offset) > .Machine$integer.max ||
+      role_offset != as.integer(role_offset)) {
+    stop("'role_offset' must be an integer scalar.", call. = FALSE)
+  }
+  role_offset <- as.integer(role_offset)
+  native_structure <- .native_ordered_structure(fit)
+  if (is.null(native_structure) &&
+      (!identical(role_mapping, "mixture") || !is.null(fixed_k) ||
+       !identical(role_offset, 0L))) {
+    stop("Exact role controls require a Stackelberg or exact ordered-k fringe fit.",
+         call. = FALSE)
+  }
+  if (!is.null(fixed_k)) {
+    if (!is.numeric(fixed_k) || !length(fixed_k) ||
+        any(!is.finite(fixed_k)) ||
+        any(abs(fixed_k) > .Machine$integer.max) ||
+        any(fixed_k != as.integer(fixed_k)) ||
+        (length(fixed_k) > 1L &&
+         (is.null(names(fixed_k)) || anyNA(names(fixed_k)) ||
+          any(!nzchar(names(fixed_k))) || anyDuplicated(names(fixed_k))))) {
+      stop("'fixed_k' must be an integer scalar or uniquely named integer vector.",
+           call. = FALSE)
+    }
+    fixed_k_names <- names(fixed_k)
+    fixed_k <- as.integer(fixed_k)
+    names(fixed_k) <- fixed_k_names
+  }
+  list(role_mapping = role_mapping, fixed_k = fixed_k,
+       role_offset = role_offset)
+}
+
+.lq_fixed_k_equal <- function(x, y) {
+  if (is.null(x) || is.null(y)) return(is.null(x) && is.null(y))
+  if (!is.numeric(x) || !is.numeric(y) || !length(x) || !length(y) ||
+      any(!is.finite(x)) || any(!is.finite(y)) ||
+      any(abs(x) > .Machine$integer.max) ||
+      any(abs(y) > .Machine$integer.max) || any(x != as.integer(x)) ||
+      any(y != as.integer(y))) return(FALSE)
+  identical(as.integer(x), as.integer(y)) &&
+    identical(names(x), names(y))
 }
 
 .lq_fit_fingerprint <- function(fit, draws = NULL, version = 2L) {
@@ -363,8 +412,12 @@
 
 #' Internal draw-plan constructor.  `draws` is the policy-plan contract union;
 #' the public wrapper below performs one selected extraction and delegates here.
-.lq_make_policy_plan <- function(fit, draws, n_draws = NULL, seed = NULL) {
+.lq_make_policy_plan <- function(fit, draws, n_draws = NULL, seed = NULL,
+                                role_mapping = c("mixture", "map", "threshold"),
+                                fixed_k = NULL, role_offset = 0L) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.", call. = FALSE)
+  role_args <- .lq_validate_role_plan_args(fit, role_mapping, fixed_k,
+                                          role_offset)
   seed <- .lq_validate_seed(seed)
   n_total <- .lq_draw_count(fit, draws)
   if (is.null(n_draws)) n_draws <- min(200L, n_total)
@@ -375,7 +428,12 @@
     if (n_total == 1L) 1L else sample.int(n_total, n_draws)
   })
   role_seed <- if (is.null(seed)) NULL else as.integer((as.double(seed) + 2) %% .Machine$integer.max)
-  k_cache <- .lq_with_seed(role_seed, function() .lq_role_cache(fit, draws, draw_indices))
+  k_cache <- .lq_with_seed(role_seed, function() {
+    .lq_role_cache(fit, draws, draw_indices,
+                   role_mapping = role_args$role_mapping,
+                   fixed_k = role_args$fixed_k,
+                   role_offset = role_args$role_offset)
+  })
   quality_seed <- if (is.null(seed)) NULL else as.integer((as.double(seed) + 1) %% .Machine$integer.max)
   quality <- .lq_quality_draws(fit, draws, draw_indices, seed = quality_seed,
                                k_cache = k_cache)
@@ -387,8 +445,8 @@
     quality_mode = quality$mode, group_labels = quality$group_labels,
     quality_scope = quality$quality_scope, quality_units = quality$quality_units,
     quality_lookup = quality$quality_lookup,
-    k_cache = k_cache, role_mapping = "mixture", fixed_k = NULL,
-    role_offset = 0L,
+    k_cache = k_cache, role_mapping = role_args$role_mapping,
+    fixed_k = role_args$fixed_k, role_offset = role_args$role_offset,
     fit_signature = .lq_plan_signature(fit, quality$group_labels, n_total,
                                        quality$mode, draws = draws),
     metadata = list(
@@ -402,7 +460,8 @@
       market_intercept_parameterization =
         .market_intercept_parameterization_from_fit(fit),
       market_labels = quality$market_labels,
-      role_mapping = "mixture", role_offset = 0L, exact_k = !is.null(k_cache)
+      role_mapping = role_args$role_mapping, fixed_k = role_args$fixed_k,
+      role_offset = role_args$role_offset, exact_k = !is.null(k_cache)
     )
   ), class = c("bayes_policy_draw_plan", "list"))
   plan$fit_signature$latent_state_fingerprint <- .lq_plan_state_fingerprint(plan)
@@ -420,18 +479,30 @@
 #' @param fit A \code{BayesFit}.
 #' @param n_draws Number of posterior draws, defaulting to at most 200.
 #' @param seed Optional nonnegative integer random seed.
+#' @param role_mapping Exact role realization: posterior mixture, posterior
+#'   MAP, or legacy cutoff threshold where supported by the fit. Exact
+#'   ordered-k fits store the selected role state in the plan.
+#' @param fixed_k Optional exact leader/core count, scalar or named by
+#'   simulation unit. When supplied, every selected draw uses this count.
+#' @param role_offset Integer adjacent-partition sensitivity offset.
 #' @return A reusable object of class \code{bayes_policy_draw_plan}.
 #' @details New plans bind a version-3 canonical, name-ordered economic draw
 #' fingerprint, including reconstructed market-intercept states when those
 #' effects were integrated during fitting. Unversioned historical plans are validated through their
 #' version-1 unrestricted-draw fingerprint as an explicit compatibility path;
-#' they are not reinterpreted as current plans.
+#' they are not reinterpreted as current plans. Reuse a plan with the same
+#' \code{role_mapping}, \code{fixed_k}, and \code{role_offset} arguments used to
+#' create it; simulation rejects conflicting controls.
 #' @export
-posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
+posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
+                                   role_mapping = c("mixture", "map", "threshold"),
+                                   fixed_k = NULL, role_offset = 0L) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.", call. = FALSE)
   draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else
     .posterior_extract(fit, "policy_plan")
-  .lq_make_policy_plan(fit, draws, n_draws = n_draws, seed = seed)
+  .lq_make_policy_plan(fit, draws, n_draws = n_draws, seed = seed,
+                       role_mapping = role_mapping, fixed_k = fixed_k,
+                       role_offset = role_offset)
 }
 
 .lq_validate_plan <- function(fit, plan, n_draws = NULL,
@@ -484,6 +555,19 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
     stop("'draw_plan' latent states or selected posterior rows were changed; ",
          "rebuild it with posterior_policy_draws().", call. = FALSE)
   }
+  metadata_role_offset <- plan$metadata$role_offset
+  valid_metadata_role_offset <- length(metadata_role_offset) == 1L &&
+    is.numeric(metadata_role_offset) && is.finite(metadata_role_offset) &&
+    metadata_role_offset == as.integer(metadata_role_offset)
+  if (!identical(plan$metadata$role_mapping, plan$role_mapping) ||
+      !.lq_fixed_k_equal(plan$metadata$fixed_k, plan$fixed_k) ||
+      !valid_metadata_role_offset ||
+      !identical(as.integer(metadata_role_offset),
+                 as.integer(plan$role_offset)) ||
+      !identical(isTRUE(plan$metadata$exact_k), !is.null(plan$k_cache))) {
+    stop("'draw_plan' role metadata does not match its role realization.",
+         call. = FALSE)
+  }
   if (!is.null(n_draws) &&
       (length(n_draws) != 1L || !is.numeric(n_draws) ||
        !is.finite(n_draws) || n_draws != as.integer(n_draws) ||
@@ -493,8 +577,11 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL) {
   if (!identical(match.arg(role_mapping, c("mixture", "map", "threshold")), plan$role_mapping)) {
     stop("'role_mapping' conflicts with the draw_plan role realization.", call. = FALSE)
   }
-  if (!is.null(fixed_k) || !identical(as.integer(role_offset), as.integer(plan$role_offset))) {
-    stop("'fixed_k' or 'role_offset' conflicts with the draw_plan role realization.", call. = FALSE)
+  if (!is.null(fixed_k) && !.lq_fixed_k_equal(fixed_k, plan$fixed_k)) {
+    stop("'fixed_k' conflicts with the draw_plan role realization.", call. = FALSE)
+  }
+  if (!identical(as.integer(role_offset), as.integer(plan$role_offset))) {
+    stop("'role_offset' conflicts with the draw_plan role realization.", call. = FALSE)
   }
   if (!is.matrix(plan$quality_draws) || nrow(plan$quality_draws) != length(di) ||
       ncol(plan$quality_draws) != length(units) ||
