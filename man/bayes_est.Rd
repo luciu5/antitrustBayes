@@ -39,6 +39,8 @@ bayes_est(
   loo_cluster = NULL,
   model_prior = NA_real_,
   stan_options = list(),
+  inference = c("hmc", "pathfinder"),
+  pathfinder_options = list(),
   margin_observed = NULL,
   outside_price = 1,
   structure = NULL,
@@ -57,10 +59,10 @@ bayes_est(
 deposits). Must be positive. Within each market-year, the package
 normalizes these into conditional inside quantity shares for both Logit
 and CES. The outside-share level is a
-model parameter identified jointly with the supply FOCs. The fitted object
-retains each market-year's original inside quantity total as
-\code{metadata$market_year_size$N_mt} and repeats it in \code{data$N_mt} for
-future cross-market aggregation.}
+model parameter identified jointly with the supply FOCs.
+The fitted object also retains each market-year's original inside
+quantity total as \code{metadata$market_year_size$N_mt} (and repeats it
+in \code{data$N_mt}) for future cross-market aggregation.}
 
 \item{margins}{Numeric vector of positive price-normalized margins. For
 output markets this is the usual Lerner index \eqn{(p - c) / p}; for
@@ -230,11 +232,19 @@ cluster (for example, a Supreme Court case). Defaults to \code{market}.}
 probability assigned to this conduct model. It is provenance metadata;
 posterior model odds are computed by \code{bayes_compare}.}
 
-\item{stan_options}{Named list of arguments passed to
-\code{\link[rstan]{sampling}} (e.g., \code{chains}, \code{iter},
-\code{warmup}, \code{cores}). If \code{cores} is omitted or
+\item{stan_options}{Named HMC options translated to CmdStanR sampling
+arguments (e.g., \code{chains}, total \code{iter}, \code{warmup},
+\code{cores}, and \code{control}). If \code{cores} is omitted or
 \code{NULL}, the default is \code{min(chains, getOption("mc.cores", 1L))};
 an explicit \code{cores} value is validated and used unchanged.}
+
+\item{inference}{\code{"hmc"} (default) for CmdStanR sampling, or
+\code{"pathfinder"} for exploratory approximate draws. Pathfinder
+diagnostics do not establish HMC convergence or valid model evidence.}
+
+\item{pathfinder_options}{Named CmdStanR Pathfinder options such as
+\code{num_paths}, \code{draws}, and \code{seed}. Used only with
+\code{inference = "pathfinder"}.}
 
 \item{margin_observed}{Optional logical vector (length \code{N}, one per
 row) indicating which observations have a usable margin. \code{NA} is

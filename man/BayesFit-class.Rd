@@ -39,7 +39,8 @@ posterior and \code{BayesSpecifiedFit} stores directly supplied draws.
 
 \item{\code{metadata}}{Bayesian provenance and prior metadata.}
 
-\item{\code{stanfit}}{A \code{stanfit} object from \pkg{rstan}.}
+\item{\code{stanfit}}{A CmdStanR fit object (\code{CmdStanMCMC} or exploratory
+\code{CmdStanPathfinder}).}
 
 \item{\code{stan_data}}{A \code{list} of the data passed to Stan.}
 

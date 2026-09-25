@@ -258,7 +258,7 @@
 #' @param level Credible interval level for the discrete posterior summary.
 #' @param draws Optional generated-quantity draw list. This is primarily for
 #'   testing and serialized-fit recovery; when \code{NULL}, draws are obtained
-#'   from \code{rstan::extract}.
+#'   from the package's posterior draw extraction contract.
 #' @return A data frame with one row per market and supported k. Columns are
 #'   \code{market}, \code{k}, \code{prior}, \code{posterior}, \code{role},
 #'   \code{posterior_mean}, \code{posterior_median},

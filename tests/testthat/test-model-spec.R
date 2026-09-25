@@ -1,8 +1,5 @@
 test_that("Stan likelihoods implement the current model contract", {
-  installed_path <- system.file("stan", package = "antitrustBayes")
-  root <- testthat::test_path("..", "..")
-  stan_dir <- if (nzchar(installed_path)) installed_path else
-    file.path(root, "inst", "stan")
+  stan_dir <- .ab_test_path("inst", "stan")
   logit_code <- paste(
     readLines(file.path(stan_dir, "logit_supply.stan"), warn = FALSE),
     collapse = "\n"

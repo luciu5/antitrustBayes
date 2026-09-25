@@ -62,6 +62,8 @@
 #'   \code{\link{posterior_policy_draws}}. A plan fixes posterior draw,
 #'   quality, and exact-k role realizations so multiple scenarios can reuse one
 #'   fit-level draw plan.
+#' @param allow_experimental Explicitly allow exploratory Pathfinder draws
+#'   for policy simulation.
 #' @param mc.cores Number of parallel fork workers. The default is the number
 #'   of detected cores capped at four; Windows always uses one.
 #' @param ... Additional arguments passed to \code{antitrust::simulate()}.
@@ -740,7 +742,9 @@ NULL
     core_unit <- if (is.null(corePost)) NULL else .select_unit_arg(
       corePost, idx, unit_id, unit$market_id, nrow(setup$data), arg = "corePost")
     run_one <- function(draw_index, draw_pos, context) {
-      k <- cache[[draw_pos]][[unit_id]]
+      k <- .lq_plan_k_for_unit(
+        list(k_cache = cache), draw_pos, unit
+      )
       if (identical(structure_name, "stackelberg")) {
         native <- .stack_bridge_model_draw(
           object, unit = bridge_unit, draw = draw_index,
@@ -1008,7 +1012,9 @@ NULL
                                 leadersPost = NULL, corePost = NULL,
                                 demand_anchoring = c("observed", "latent_quality"),
                                 draw_plan = NULL,
-                                price_domain = c("positive", "real"), ..., .call) {
+                                price_domain = c("positive", "real"),
+                                allow_experimental = FALSE, ..., .call) {
+  .cmdstan_require_policy_inference(object, allow_experimental)
   price_domain <- .validate_simulation_price_domain(object, price_domain)
   .require_real_rate_coordination(price_domain)
   demand_anchoring <- match.arg(demand_anchoring)
@@ -1032,7 +1038,7 @@ NULL
   draws <- if (specified) NULL else if (legacy_plan) {
     ## Version-1 plans hash the old unrestricted extract.  This is the one
     ## deliberate compatibility exception to the selective draw contract.
-    rstan::extract(object@stanfit)
+    .cmdstan_extract(object@stanfit)
   } else .posterior_extract(
     object,
     if (!is.null(draw_plan) || identical(demand_anchoring, "latent_quality"))
@@ -1335,7 +1341,8 @@ setMethod(
            role_mapping = c("mixture", "map", "threshold"), fixed_k = NULL,
            role_offset = 0L, leadersPost = NULL, corePost = NULL,
            demand_anchoring = c("observed", "latent_quality"),
-           draw_plan = NULL, price_domain = c("positive", "real"), ...) {
+           draw_plan = NULL, price_domain = c("positive", "real"),
+           allow_experimental = FALSE, ...) {
     native_structure <- .native_ordered_structure(object)
     if (missing(ownerPost) && is.null(native_structure)) {
       stop("'ownerPost' must be supplied for simulate().")
@@ -1348,6 +1355,7 @@ setMethod(
       fixed_k = fixed_k, role_offset = role_offset, leadersPost = leadersPost,
       corePost = corePost, demand_anchoring = demand_anchoring,
       draw_plan = draw_plan, price_domain = price_domain,
+      allow_experimental = allow_experimental,
       ..., .call = match.call()
     )
   }
@@ -1364,7 +1372,8 @@ bayes_sim <- function(fit, ownerPost = NULL, n_draws = NULL, mcDelta = NULL,
                       fixed_k = NULL, role_offset = 0L, leadersPost = NULL,
                       corePost = NULL,
                       demand_anchoring = c("observed", "latent_quality"),
-                      draw_plan = NULL, price_domain = c("positive", "real"), ...) {
+                      draw_plan = NULL, price_domain = c("positive", "real"),
+                      allow_experimental = FALSE, ...) {
   native_structure <- .native_ordered_structure(fit)
   if (missing(ownerPost) && is.null(native_structure)) {
     stop("'ownerPost' must be supplied for bayes_sim().")
@@ -1377,7 +1386,8 @@ bayes_sim <- function(fit, ownerPost = NULL, n_draws = NULL, mcDelta = NULL,
     role_mapping = role_mapping, fixed_k = fixed_k,
     role_offset = role_offset, leadersPost = leadersPost,
     corePost = corePost, demand_anchoring = demand_anchoring,
-    draw_plan = draw_plan, price_domain = price_domain, ...
+    draw_plan = draw_plan, price_domain = price_domain,
+    allow_experimental = allow_experimental, ...
   )
   result@call <- match.call()
   result

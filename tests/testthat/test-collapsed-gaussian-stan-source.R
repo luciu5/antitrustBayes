@@ -1,6 +1,5 @@
 test_that("collapsed Gaussian Stan paths are sparse, normalized, and scalar-accounted", {
-  root <- testthat::test_path("..", "..")
-  stan_dir <- file.path(root, "inst", "stan")
+  stan_dir <- .ab_test_path("inst", "stan")
   files <- file.path(stan_dir, c(
     "logit_supply.stan", "ces_supply.stan",
     "logit_stackelberg.stan", "ces_stackelberg.stan"
@@ -44,8 +43,8 @@ test_that("collapsed Gaussian Stan paths are sparse, normalized, and scalar-acco
 })
 
 test_that("production source keeps the common share score outside ordered-k mixtures", {
-  root <- testthat::test_path("..", "..")
-  src <- paste(readLines(file.path(root, "inst", "stan", "logit_stackelberg.stan"),
+  stan_dir <- .ab_test_path("inst", "stan")
+  src <- paste(readLines(file.path(stan_dir, "logit_stackelberg.stan"),
                          warn = FALSE), collapse = "\n")
   share_pos <- regexpr("collapsed_share_ll = centered_gaussian_from_stats", src,
                        fixed = TRUE)[[1L]]

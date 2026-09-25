@@ -143,7 +143,8 @@
   )
 }
 
-## rstan drops singleton vector dimensions during extraction.  Normalize the
+## Posterior extraction can represent singleton vectors without an array
+## dimension. Normalize the
 ## few generated-quantity slices used by the native bridge while rejecting an
 ## absent or malformed estimated-fit quantity instead of silently reverting to
 ## a prior-only role draw.
@@ -292,6 +293,7 @@
 #' @param insideSize Bayesian inside quantity convention.
 #' @param priceOutside Outside-good price override.
 #' @param labels Product labels override.
+#' @param allow_experimental Explicitly allow exploratory Pathfinder draws.
 #' @param ... Passed to \code{coordination::stackelberg()}.
 #' @return A native \code{coordination::StackelbergLogit} or
 #'   \code{coordination::StackelbergCES} object.
@@ -305,8 +307,10 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                                     fixed_k = NULL, role_offset = 0L,
                                     insideSize = NULL, priceOutside = NULL,
                                     labels = NULL,
-                                    price_domain = c("positive", "real"), ...) {
+                                    price_domain = c("positive", "real"),
+                                    allow_experimental = FALSE, ...) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.")
+  .cmdstan_require_policy_inference(fit, allow_experimental)
   price_domain <- .validate_simulation_price_domain(fit, price_domain)
   .require_real_rate_coordination(price_domain)
   structure_name <- .stack_bridge_or(fit@metadata$structure,
@@ -330,7 +334,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
 
 ## Internal draw-aware reconstruction.  Simulation passes its already
 ## extracted draw arrays here so each draw is indexed without a second full
-## rstan::extract() call.  The public wrapper above remains responsible for
+## posterior extraction. The public wrapper above remains responsible for
 ## validating selectors and performing one extraction when needed.
 .stack_bridge_model_draw <- function(fit, unit, draw,
                                      role_mapping, fixed_k, role_offset,
@@ -446,6 +450,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
 #' @param insideSize Bayesian inside quantity convention.
 #' @param priceOutside Outside-good price override.
 #' @param labels Product labels override.
+#' @param allow_experimental Explicitly allow exploratory Pathfinder draws.
 #' @param ... Passed to \code{coordination::core_fringe()}.
 #' @return A native \code{coordination::CoreFringeLogit} or
 #'   \code{coordination::CoreFringeCES} object.
@@ -455,8 +460,10 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                                     fixed_k = NULL, role_offset = 0L,
                                     insideSize = NULL, priceOutside = NULL,
                                     labels = NULL,
-                                    price_domain = c("positive", "real"), ...) {
+                                    price_domain = c("positive", "real"),
+                                    allow_experimental = FALSE, ...) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.")
+  .cmdstan_require_policy_inference(fit, allow_experimental)
   price_domain <- .validate_simulation_price_domain(fit, price_domain)
   .require_real_rate_coordination(price_domain)
   structure_name <- .stack_bridge_or(
@@ -619,8 +626,8 @@ bayes_cutoff_summary <- function(fit, level = 0.95) {
   )
   estimated <- !methods::is(fit, "BayesSpecifiedFit")
 
-  ## Extract each vector-valued generated quantity once.  rstan drops the
-  ## matrix dimension when a vector has length one, so restore it here.
+  ## Extract each vector-valued generated quantity once. Restore a missing
+  ## matrix dimension when a vector has length one.
   draws <- NULL
   ndraw <- NULL
   if (estimated) {

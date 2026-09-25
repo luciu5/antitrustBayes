@@ -1,5 +1,5 @@
 ## Independent public-API regression fixture.  The posterior object is a
-## deliberately small estimated-fit shell; rstan::extract is mocked so this
+## deliberately small estimated-fit shell; the CmdStanR draw adapter is mocked so this
 ## checks the public draw-plan/simulation path without running Stan.
 
 library(antitrustBayes)
@@ -66,8 +66,8 @@ test_that("public input Logit keeps nonzero quality fixed through a value shock"
   )
 
   testthat::with_mocked_bindings(
-    extract = function(object, ...) draws,
-    .package = "rstan",
+    .cmdstan_extract = function(fit, variables = NULL, ...) draws,
+    .package = "antitrustBayes",
     {
       for (supply_model in c(1L, 3L)) {
       fit <- .nonzero_input_fit(supply_model)

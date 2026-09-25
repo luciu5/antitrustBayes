@@ -72,706 +72,207 @@ validate_comparison_contract <- function(fits) {
   "ces_stackelberg", "ces_supply", "logit_stackelberg", "logit_supply"
 )
 
-## These are the only source migrations for which an old saved posterior may
-## be evaluated by a current package.  Keep this allow-list in the package so
-## bridge behavior does not depend on an operator-maintained /tmp file.
-.bayes_bridge_approved_hashes <- list(
-  original = c(
-    ces_stackelberg =
-      "6e10cbea685736fabb13f325eaf5295a61ee19cfe33218af326c912b6b9d64d5",
-    ces_supply =
-      "44b9dd3944ee777c7ea6fc3f988da980dd12cba3bc0e3d030909f0f287b0e266",
-    logit_stackelberg =
-      "d224c0343a93762225f0fcdc2135dddc059dcd7b09020fe4c6763505ab093a22",
-    logit_supply =
-      "66103237317f96d4f14ba38ce9426f2c5991bba7fbcd6b437234242fb07ee7ce"
-  ),
-  rotation = c(
-    ces_stackelberg =
-      "d14c59ad142aa441ed51c0c9364f2602866f1de398f83746611fa87c73db1800",
-    ces_supply =
-      "b87f921d5f781245b57e7db90d12f30c315c188e37e6f3ff17e9bffd02065cf9",
-    logit_stackelberg =
-      "6b1c2ca570bcb62a6b3765979e9af873aac531960382568680306e1654e4c521",
-    logit_supply =
-      "1c759485e68a549fbe754623a4c615a3c36afed577c8861a8632819c02fc5313"
-  ),
-  helmert = c(
-    ces_stackelberg =
-      "5906d0e9f7a00c6ec29da47cb9e870bddb65f8750f53855286b068aa24de73e6",
-    ces_supply =
-      "e4a759841324154c27bdfc2508cf0babae3a0daaba0c942aefc1289deaae3592",
-    logit_stackelberg =
-      "4e91beeba1f0155781d72a824bda92f9e1ad51b901d583f9700056b2bb3bcc76",
-    logit_supply =
-      "59cdf553449bfe192aa8e13398fd54bcaf9b3e991289e2e9fd2afc0e93994ff3"
-  ),
-  joint = c(
-    ces_stackelberg =
-      "aa271037512b2498142aba358aabeed0efdf1138e064fefbab7d46b7aa4c2630",
-    ces_supply =
-      "22bb34c068e7f8170521dfae3a82aa8f0bf1b3525b24cae8225202bd48b7b4ba",
-    logit_stackelberg =
-      "5419e6ac433fdf4c0c4f09cbcefd8fcb3a3c5dfebcddb88bf432f591fdad996e",
-    logit_supply =
-      "af9e00bbbe87c5e37fa0724f7dce7ff5886ba837c1ccffd06b2477ead9a0fcbe"
-  ),
-  scale = c(
-    ces_stackelberg =
-      "181493cd7cb2e279f6083df15c39bfbe1f4980d3bd5b0e578cd4d084ab5f3fee",
-    ces_supply =
-      "04f2ed9f0c4240741ee5db52514015dbb875305f6c4ee8f2eab9a4ee7a0a7cc7",
-    logit_stackelberg =
-      "7b11b839425f3ced97dcdcba557a6dd6fbcbc5309c2da0b6845502e942491cbc",
-    logit_supply =
-      "ec359f2992625e384fb2071268c537c0dcfc7c9242257501dfd180718cf05a82"
-  ),
-  margin_first = c(
-    ces_stackelberg =
-      "5fa76ab5b181ddfc2c8a5c184c146ada989023667426d8e7ac8d47893e3c76e8",
-    ces_supply =
-      "0fb87698b9674b019cca333e7e82ea1da265a73d4cad4b81caf0c0281faa8dad",
-    logit_stackelberg =
-      "9abe4d66a2f4d154b322338bba691303a3c483df44a8593d4948ce758b617355",
-    logit_supply =
-      "f6bffa9ce0282dc08b12871a549c3ad3d14cc8e458f3c5c3308bd404a358374e"
-  ),
-  intercept_collapse = c(
-    ces_stackelberg =
-      "89700d43789a4c4109633858f551dc537fd20f7c7a74e50bb107b0c4b7cd9716",
-    ces_supply =
-      "4eaf21ee78113b8d934a7c1bd123be22dee01e1a5594aa7da9e863a196d22821",
-    logit_stackelberg =
-      "371dd99d72684f7e8f5ead2b51a8bfc505a9e3b5df6c0623d288e386bf7f5074",
-    logit_supply =
-      "cb8ba797461801cfba6bbe4e6b2e9d76c554d75de48030f0801160f8a16507fe"
-  )
-)
-
-.bayes_bridge_preserve_rng <- function(expr) {
-  had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
-  old_seed <- if (had_seed) get(".Random.seed", envir = .GlobalEnv) else NULL
-  on.exit({
-    if (had_seed) {
-      assign(".Random.seed", old_seed, envir = .GlobalEnv)
-    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
-      rm(".Random.seed", envir = .GlobalEnv)
-    }
-  }, add = TRUE)
-  force(expr)
+.bayes_stan_source_text <- function(code) {
+  if (!is.character(code) || !length(code) || anyNA(code) ||
+      !nzchar(paste(code, collapse = ""))) {
+    stop("Stan source code is unavailable.", call. = FALSE)
+  }
+  code <- paste(code, collapse = "\n")
+  lines <- strsplit(code, "\r?\n", perl = TRUE)[[1L]]
+  paste0(paste(lines, collapse = "\n"), "\n")
 }
 
-.bayes_bridge_read_hashes <- function(value) {
-  ## Kept as a small validator for diagnostics.  Runtime restoration uses the
-  ## package-owned allow-list above and never reads an operator-maintained file.
-  if (!is.character(value) || is.null(names(value)) ||
-      length(value) != length(.bayes_bridge_kernel_names) ||
-      anyDuplicated(names(value)) ||
-      !setequal(names(value), .bayes_bridge_kernel_names) ||
-      any(!grepl("^[0-9a-f]{64}$", unname(value)))) {
-    return(NULL)
+.bayes_cmdstan_source_contract <- function(metadata, source_code,
+                                           require_hmc = TRUE) {
+  if (!is.list(metadata)) {
+    stop("Fit provenance metadata is unavailable.", call. = FALSE)
   }
-  value[.bayes_bridge_kernel_names]
-}
-
-.bayes_bridge_is_approved_migration <- function(saved_hash, current_hash,
-                                                kernel, original, rotation,
-                                                helmert = NULL, joint = NULL,
-                                                scale = NULL,
-                                                margin_first = NULL,
-                                                intercept_collapse = NULL) {
-  !is.null(.bayes_bridge_migration_geometry(
-    saved_hash, current_hash, kernel, original, rotation, helmert, joint,
-    scale, margin_first, intercept_collapse
-  ))
-}
-
-.bayes_bridge_migration_geometry <- function(saved_hash, current_hash,
-                                              kernel, original, rotation,
-                                              helmert = NULL, joint = NULL,
-                                              scale = NULL,
-                                              margin_first = NULL,
-                                              intercept_collapse = NULL) {
-  valid <- is.character(saved_hash) && length(saved_hash) == 1L &&
-    is.character(current_hash) && length(current_hash) == 1L &&
-    is.character(kernel) && length(kernel) == 1L &&
-    kernel %in% .bayes_bridge_kernel_names &&
-    is.character(original) && is.character(rotation) &&
-    kernel %in% names(original) && kernel %in% names(rotation)
-  if (!valid || identical(saved_hash, current_hash)) return(NULL)
-  old_to_rotation <- identical(unname(original[[kernel]]), saved_hash) &&
-    identical(unname(rotation[[kernel]]), current_hash)
-  new_helmert <- is.character(helmert) && kernel %in% names(helmert) &&
-    identical(unname(helmert[[kernel]]), current_hash)
-  if (old_to_rotation || (new_helmert &&
-      identical(unname(original[[kernel]]), saved_hash))) return("legacy")
-  if (new_helmert && identical(unname(rotation[[kernel]]), saved_hash)) {
-    return("preserve")
-  }
-  new_joint <- is.character(joint) && kernel %in% names(joint) &&
-    identical(unname(joint[[kernel]]), current_hash)
-  if (new_joint && identical(unname(original[[kernel]]), saved_hash)) {
-    return("legacy")
-  }
-  if (new_joint &&
-      (identical(unname(rotation[[kernel]]), saved_hash) ||
-       (is.character(helmert) && kernel %in% names(helmert) &&
-        identical(unname(helmert[[kernel]]), saved_hash)))) {
-    return("preserve")
-  }
-  new_scale <- is.character(scale) && kernel %in% names(scale) &&
-    identical(unname(scale[[kernel]]), current_hash)
-  if (new_scale && identical(unname(original[[kernel]]), saved_hash)) {
-    return("legacy")
-  }
-  if (new_scale &&
-      (identical(unname(rotation[[kernel]]), saved_hash) ||
-       (is.character(helmert) && kernel %in% names(helmert) &&
-        identical(unname(helmert[[kernel]]), saved_hash)) ||
-       (is.character(joint) && kernel %in% names(joint) &&
-        identical(unname(joint[[kernel]]), saved_hash)))) {
-    return("preserve")
-  }
-  new_margin_first <- is.character(margin_first) &&
-    kernel %in% names(margin_first) &&
-    identical(unname(margin_first[[kernel]]), current_hash)
-  if (new_margin_first && identical(unname(original[[kernel]]), saved_hash)) {
-    return("legacy")
-  }
-  if (new_margin_first &&
-      (identical(unname(rotation[[kernel]]), saved_hash) ||
-       (is.character(helmert) && kernel %in% names(helmert) &&
-        identical(unname(helmert[[kernel]]), saved_hash)) ||
-       (is.character(joint) && kernel %in% names(joint) &&
-        identical(unname(joint[[kernel]]), saved_hash)) ||
-       (is.character(scale) && kernel %in% names(scale) &&
-        identical(unname(scale[[kernel]]), saved_hash)))) {
-    return("preserve")
-  }
-  new_intercept_collapse <- is.character(intercept_collapse) &&
-    kernel %in% names(intercept_collapse) &&
-    identical(unname(intercept_collapse[[kernel]]), current_hash)
-  if (new_intercept_collapse &&
-      identical(unname(original[[kernel]]), saved_hash)) {
-    return("legacy")
-  }
-  if (new_intercept_collapse &&
-      (identical(unname(rotation[[kernel]]), saved_hash) ||
-       (is.character(helmert) && kernel %in% names(helmert) &&
-        identical(unname(helmert[[kernel]]), saved_hash)) ||
-       (is.character(joint) && kernel %in% names(joint) &&
-        identical(unname(joint[[kernel]]), saved_hash)) ||
-       (is.character(scale) && kernel %in% names(scale) &&
-        identical(unname(scale[[kernel]]), saved_hash)) ||
-       (is.character(margin_first) && kernel %in% names(margin_first) &&
-        identical(unname(margin_first[[kernel]]), saved_hash)))) {
-    return("preserve")
-  }
-  NULL
-}
-
-.bayes_bridge_migration_scale_policy <- function(saved_hash, current_hash,
-                                                  kernel, scale,
-                                                  margin_first,
-                                                  intercept_collapse = NULL) {
-  current_supports_scale_flag <-
-    (is.character(margin_first) && kernel %in% names(margin_first) &&
-     identical(unname(margin_first[[kernel]]), current_hash)) ||
-    (is.character(intercept_collapse) &&
-     kernel %in% names(intercept_collapse) &&
-     identical(unname(intercept_collapse[[kernel]]), current_hash))
-  saved_has_scale_flag <-
-    (is.character(scale) && kernel %in% names(scale) &&
-     identical(unname(scale[[kernel]]), saved_hash)) ||
-    (is.character(margin_first) && kernel %in% names(margin_first) &&
-     identical(unname(margin_first[[kernel]]), saved_hash))
-  if (current_supports_scale_flag && saved_has_scale_flag) "preserve" else "legacy"
-}
-
-.bayes_bridge_code_contract <- function(stanfit) {
-  if (!methods::is(stanfit, "stanfit")) {
-    stop("Bridge context restoration requires a stanfit object.", call. = FALSE)
-  }
-  kernel <- as.character(stanfit@model_name)
-  if (length(kernel) != 1L || !kernel %in% .bayes_bridge_kernel_names) {
-    stop("Saved Stan model name is not a supported antitrustBayes kernel: ",
-         kernel, call. = FALSE)
-  }
-  saved_code <- tryCatch(stanfit@stanmodel@model_code,
-                          error = function(e) NULL)
-  if (!is.character(saved_code) || length(saved_code) != 1L ||
-      !nzchar(saved_code)) {
-    stop("Saved stanfit has no recoverable Stan model code.", call. = FALSE)
-  }
-  models <- tryCatch(get("stanmodels", envir = asNamespace("antitrustBayes")),
-                     error = function(e) NULL)
-  current <- if (is.null(models)) NULL else models[[kernel]]
-  if (is.null(current) || !methods::is(current, "stanmodel")) {
-    stop("Installed antitrustBayes package has no matching kernel ", kernel,
-         ".", call. = FALSE)
-  }
-  if (!identical(as.character(current@model_name), kernel)) {
-    stop("Installed kernel name does not match the saved Stan model name.",
+  if (!identical(metadata$backend, "cmdstanr")) {
+    stop("Evidence requires a fit produced by the CmdStanR backend.",
          call. = FALSE)
   }
-  saved_hash <- digest::digest(saved_code, algo = "sha256", serialize = FALSE)
-  current_hash <- digest::digest(current@model_code, algo = "sha256",
-                                 serialize = FALSE)
-  same_code <- identical(saved_hash, current_hash)
-  migration <- FALSE
-  migration_geometry <- NULL
-  migration_scale_policy <- NULL
-  if (!same_code) {
-    original <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$original)
-    rotation <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$rotation)
-    helmert <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$helmert)
-    joint <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$joint)
-    scale <- .bayes_bridge_read_hashes(.bayes_bridge_approved_hashes$scale)
-    margin_first <- .bayes_bridge_read_hashes(
-      .bayes_bridge_approved_hashes$margin_first
-    )
-    intercept_collapse <- .bayes_bridge_read_hashes(
-      .bayes_bridge_approved_hashes$intercept_collapse
-    )
-    migration_geometry <- .bayes_bridge_migration_geometry(
-      saved_hash, current_hash, kernel, original, rotation, helmert, joint,
-      scale, margin_first, intercept_collapse
-    )
-    migration <- !is.null(migration_geometry)
-    if (!migration) {
-      stop("Saved and installed Stan code hashes differ for ", kernel,
-           "; no approved saved-to-current kernel pair matches.", call. = FALSE)
-    }
-    migration_scale_policy <- .bayes_bridge_migration_scale_policy(
-      saved_hash, current_hash, kernel, scale, margin_first,
-      intercept_collapse
-    )
-  }
-  list(kernel = kernel, current_model = current, saved_hash = saved_hash,
-       current_hash = current_hash, same_code = same_code,
-       migration = migration, migration_geometry = migration_geometry,
-       migration_scale_policy = migration_scale_policy)
-}
-
-.bayes_bridge_canonicalize_data <- function(data) {
-  ## Old serialized fits can contain an optional field twice (a NULL entry
-  ## followed by its actual value).  Remove only absent NULL entries; every
-  ## remaining duplicate must agree before the private context is built.
-  nms <- names(data)
-  if (length(nms) && anyDuplicated(nms)) {
-    duplicate_names <- unique(nms[duplicated(nms)])
-    agree <- function(values, name) {
-      values <- values[!vapply(values, is.null, logical(1))]
-      if (!length(values)) return(NULL)
-      reference <- values[[1L]]
-      same <- vapply(values[-1L], function(value) {
-        if (is.numeric(reference) && is.numeric(value) &&
-            length(reference) == length(value)) {
-          if (!length(reference)) return(TRUE)
-          delta <- abs(as.numeric(value) - as.numeric(reference))
-          tol <- 1e-12 + 128 * .Machine$double.eps *
-            pmax(1, abs(as.numeric(reference)), abs(as.numeric(value)))
-          all(is.finite(delta)) && all(delta <= tol)
-        } else {
-          identical(value, reference)
-        }
-      }, logical(1))
-      if (length(same) && !all(same)) {
-        stop("Private bridge data has conflicting duplicate field '", name,
-             "'.", call. = FALSE)
-      }
-      reference
-    }
-    for (name in duplicate_names) {
-      value <- agree(data[which(nms == name)], name)
-      data <- data[nms != name]
-      if (!is.null(value)) data[[name]] <- value
-      nms <- names(data)
-    }
-  }
-  data
-}
-
-.bayes_bridge_private_data <- function(fit, contract) {
-  data <- .bayes_bridge_canonicalize_data(fit@stan_data)
-  if (isTRUE(contract$migration)) {
-    ## Approved saved sources predate intercept collapse and therefore have
-    ## sampled-intercept coordinates. Do not interpret a reduced-dimension
-    ## posterior as a source for a sampled-intercept bridge migration.
-    if (!"market_intercept_parameterization" %in% names(data)) {
-      data$market_intercept_parameterization <- 1L
-    }
-    intercept_flag <- data$market_intercept_parameterization
-    if (!is.numeric(intercept_flag) || length(intercept_flag) != 1L ||
-        !is.finite(intercept_flag) || intercept_flag != 1L) {
-      stop("Approved saved-source bridge migrations require the sampled ",
-           "market-intercept data code 1; cross-dimensional bridge ",
-           "equivalence is not supported.", call. = FALSE)
-    }
-    ## Kernels predating the exact share/quality scale rotation implicitly use
-    ## its legacy coordinates. Inject only that target-preserving data flag;
-    ## never reinterpret a saved fit as total/fraction coordinates.
-    scale_policy <- contract$migration_scale_policy %||% "legacy"
-    if (identical(scale_policy, "legacy") &&
-        !"quality_scale_parameterization" %in% names(data)) {
-      data$quality_scale_parameterization <- 1L
-    }
-    if (identical(scale_policy, "preserve") &&
-        !"quality_scale_parameterization" %in% names(data)) {
-      stop("Approved scale-coordinate migration is missing its saved ",
-           "quality_scale_parameterization flag.", call. = FALSE)
-    }
-    scale_flag <- data$quality_scale_parameterization
-    if (!is.numeric(scale_flag) || length(scale_flag) != 1L ||
-        !is.finite(scale_flag) ||
-        (identical(scale_policy, "legacy") && scale_flag != 1L) ||
-        (identical(scale_policy, "preserve") && !scale_flag %in% c(1L, 2L))) {
-      stop("Approved migration has an invalid quality_scale_parameterization ",
-           "flag for its coordinate policy.", call. = FALSE)
-    }
-    if (identical(contract$migration_geometry, "legacy")) {
-      flag <- data$market_s0_parameterization
-      if ("market_s0_parameterization" %in% names(data) &&
-          (!is.numeric(flag) || length(flag) != 1L || !is.finite(flag) ||
-           flag != 1)) {
-        stop("Approved original-kernel migration requires a legacy private data flag of 1.",
-             call. = FALSE)
-      }
-      ## Only a pre-rotation source has this implicit legacy coordinate system.
-      data$market_s0_parameterization <- 1L
-    } else if (identical(contract$migration_geometry, "preserve")) {
-      flag <- data$market_s0_parameterization
-      if (!is.numeric(flag) || length(flag) != 1L || !is.finite(flag) ||
-          !flag %in% c(1, 2, 3)) {
-        stop("Approved performance migration requires its saved private data flag of 1, 2, or 3.",
-             call. = FALSE)
-      }
-    } else {
-      stop("Approved bridge migration has no validated coordinate policy.",
-           call. = FALSE)
-    }
-  }
-  data
-}
-
-.bayes_bridge_is_zero_width <- function(dims) {
-  is.numeric(dims) && length(dims) == 1L &&
-    isTRUE(as.numeric(dims) == 0)
-}
-
-.bayes_bridge_dim_width <- function(dims) {
-  if (!is.numeric(dims) || any(!is.finite(dims)) || any(dims < 0) ||
-      any(dims != as.integer(dims))) {
-    stop("Stan parameter dimensions must be finite non-negative integers.",
+  inference <- metadata$inference
+  if (length(inference) != 1L || is.na(inference) ||
+      !inference %in% c("hmc", "pathfinder")) {
+    stop("Fit provenance does not identify a supported inference method.",
          call. = FALSE)
   }
-  if (!length(dims)) return(1)
-  prod(as.numeric(dims))
-}
-
-.bayes_bridge_raw_parameter_names <- function(stanfit) {
-  ## model_pars is the canonical order saved by rstan, but it also contains
-  ## transformed parameters, generated quantities, and lp__.  The latter are
-  ## not initialization fields and must not participate in the bridge schema
-  ## contract.  When the model code is available, use its parameters block to
-  ## select the raw subset while retaining model_pars' order.  Small test
-  ## doubles may not carry a stanmodel slot; their model_pars is already the
-  ## raw subset, so retain that explicit schema as a conservative fallback.
-  model_pars <- stanfit@model_pars
-  if (!is.character(model_pars) || !length(model_pars) ||
-      anyDuplicated(model_pars)) {
-    stop("Stan fit has no unique raw parameter schema.", call. = FALSE)
-  }
-
-  code <- NULL
-  if ("stanmodel" %in% methods::slotNames(stanfit)) {
-    code <- tryCatch(stanfit@stanmodel@model_code,
-                     error = function(e) NULL)
-  }
-  if (is.null(code) && "stan_code" %in% methods::slotNames(stanfit)) {
-    code <- tryCatch(stanfit@stan_code, error = function(e) NULL)
-  }
-  declared <- character(0L)
-  if (is.character(code) && length(code) == 1L && nzchar(code)) {
-    lines <- strsplit(code, "\\n", fixed = FALSE)[[1L]]
-    parameter_start <- grep("^\\s*parameters\\s*\\{", lines,
-                            perl = TRUE)
-    transformed_start <- grep("^\\s*transformed[[:space:]]+parameters\\s*\\{",
-                              lines, perl = TRUE)
-    parameter_start <- parameter_start[1L]
-    transformed_start <- transformed_start[transformed_start > parameter_start][1L]
-    if (is.finite(parameter_start) && is.finite(transformed_start) &&
-        transformed_start > parameter_start + 1L) {
-      block <- paste(lines[(parameter_start + 1L):(transformed_start - 1L)],
-                     collapse = "\n")
-      block <- gsub("(?m)//.*$", "", block, perl = TRUE)
-      statements <- strsplit(block, ";", fixed = TRUE)[[1L]]
-      declared <- vapply(statements, function(statement) {
-        statement <- gsub("\\s+", " ", trimws(statement), perl = TRUE)
-        if (!nzchar(statement)) return(NA_character_)
-        token <- regmatches(statement,
-                            regexpr("[A-Za-z][A-Za-z0-9_]*$", statement,
-                                    perl = TRUE))
-        if (!length(token)) NA_character_ else token
-      }, character(1L))
-      declared <- unique(declared[!is.na(declared)])
-    }
-  }
-
-  if (length(declared)) {
-    raw_names <- model_pars[model_pars %in% declared]
-    if (!length(raw_names)) {
-      stop("Stan model code has no raw parameters in model_pars.",
-           call. = FALSE)
-    }
-    return(raw_names)
-  }
-
-  ## Explicit mock objects used by package tests have no model code.  Keep
-  ## their declared model_pars contract, while excluding lp__ if supplied.
-  raw_names <- model_pars[model_pars != "lp__"]
-  if (!length(raw_names)) {
-    stop("Stan fit has no raw parameter declarations.", call. = FALSE)
-  }
-  raw_names
-}
-
-.bayes_bridge_positive_init_schema <- function(stanfit) {
-  if (!length(stanfit@inits) || !is.list(stanfit@inits[[1L]]) ||
-      is.null(names(stanfit@inits[[1L]]))) {
-    stop("Stan fit has no named initialization schema.", call. = FALSE)
-  }
-  raw_names <- .bayes_bridge_raw_parameter_names(stanfit)
-  init_names <- names(stanfit@inits[[1L]])
-  dims <- stanfit@par_dims
-  if (is.null(names(dims)) || any(!raw_names %in% names(dims))) {
-    stop("Stan raw parameter schema contains an undeclared parameter.",
+  if (isTRUE(require_hmc) && !identical(inference, "hmc")) {
+    stop("LOO and bridge evidence require HMC posterior draws.",
          call. = FALSE)
   }
-  widths <- vapply(raw_names, function(name) {
-    .bayes_bridge_dim_width(dims[[name]])
-  }, numeric(1))
-  positive <- raw_names[widths > 0]
-  if (any(!positive %in% init_names)) {
-    stop("Stan initialization is missing a declared raw parameter.",
+  kernel <- metadata$stan_kernel
+  if (length(kernel) != 1L || is.na(kernel) ||
+      !kernel %in% .bayes_bridge_kernel_names) {
+    stop("Fit provenance does not identify a supported Stan kernel.",
          call. = FALSE)
+  }
+  saved_hash <- metadata$stan_source_hash
+  if (!is.character(saved_hash) || length(saved_hash) != 1L ||
+      !grepl("^[0-9a-f]{64}$", saved_hash)) {
+    stop("Fit provenance has no valid Stan source SHA-256 hash.",
+         call. = FALSE)
+  }
+  source_file <- tryCatch(.cmdstan_kernel_file(kernel), error = function(e) {
+    stop("Cannot locate the current Stan source for ", kernel, ": ",
+         conditionMessage(e), call. = FALSE)
+  })
+  current_hash <- digest::digest(file = source_file, algo = "sha256")
+  if (!identical(saved_hash, current_hash)) {
+    stop("Saved and installed Stan source hashes differ for ", kernel,
+         "; evidence is unavailable for this fit.", call. = FALSE)
+  }
+  current_code <- paste0(paste(readLines(source_file, warn = FALSE),
+                               collapse = "\n"), "\n")
+  fit_code <- .bayes_stan_source_text(source_code)
+  current_code <- .bayes_stan_source_text(current_code)
+  code_hash <- digest::digest(fit_code, algo = "sha256", serialize = FALSE)
+  current_code_hash <- digest::digest(current_code, algo = "sha256",
+                                      serialize = FALSE)
+  if (!identical(code_hash, current_code_hash)) {
+    stop("Saved CmdStan fit source does not match the current kernel source; ",
+         "evidence is unavailable for this fit.", call. = FALSE)
   }
   list(
-    names = positive,
-    dims = lapply(dims[positive], function(value) as.integer(value))
+    kernel = kernel,
+    inference = inference,
+    source_file = source_file,
+    saved_hash = saved_hash,
+    current_hash = current_hash,
+    code_hash = code_hash
   )
 }
 
-.bayes_bridge_assert_positive_schema <- function(saved_stanfit, context) {
-  saved <- .bayes_bridge_positive_init_schema(saved_stanfit)
-  current <- .bayes_bridge_positive_init_schema(context)
-  if (!identical(saved$names, current$names) ||
-      !identical(saved$dims, current$dims)) {
-    stop("Saved and restored Stan contexts have different nonzero parameter ",
-         "names or dimensions.", call. = FALSE)
+.bayes_cmdstan_evidence_contract <- function(fit, require_hmc = TRUE) {
+  stanfit <- fit@stanfit
+  if (!inherits(stanfit, "CmdStanMCMC")) {
+    stop("Evidence requires a CmdStanR CmdStanMCMC fit.", call. = FALSE)
   }
-  invisible(TRUE)
-}
-
-.bayes_bridge_clone_sample_view <- function(saved_stanfit, context) {
-  if (!methods::is(saved_stanfit, "stanfit") ||
-      !methods::is(context, "stanfit")) {
-    stop("Bridge sample schema adaptation requires stanfit objects.",
-         call. = FALSE)
-  }
-  .bayes_bridge_assert_positive_schema(saved_stanfit, context)
-  candidates <- intersect(c("c_s0", "c_s0_raw"), context@sim$pars_oi)
-  if (!length(candidates)) {
-    return(list(stanfit = saved_stanfit, added = character(0L)))
-  }
-  missing <- setdiff(candidates, saved_stanfit@sim$pars_oi)
-  if (!length(missing)) {
-    return(list(stanfit = saved_stanfit, added = character(0L)))
-  }
-  missing_dims <- context@par_dims[missing]
-  if (any(!vapply(missing_dims, .bayes_bridge_is_zero_width, logical(1)))) {
-    stop("Current bridge context adds a nonzero c_s0 field absent from the ",
-         "saved posterior.", call. = FALSE)
-  }
-  if (any(missing %in% names(saved_stanfit@par_dims))) {
-    stop("Saved bridge schema contains an unexpected c_s0 field.",
-         call. = FALSE)
-  }
-
-  ## S4 assignment creates a private copy under R's copy-on-write rules.  The
-  ## empty fields add no draw columns or flat names, but let bridgesampling's
-  ## skeleton include the current model's declared zero-width parameters.
-  private <- saved_stanfit
-  private@par_dims <- c(
-    saved_stanfit@par_dims,
-    setNames(lapply(missing, function(name) context@par_dims[[name]]), missing)
-  )
-  private@sim$pars_oi <- c(saved_stanfit@sim$pars_oi, missing)
-  private@sim$dims_oi <- c(
-    saved_stanfit@sim$dims_oi,
-    setNames(lapply(missing, function(name) {
-      value <- context@sim$dims_oi[[name]]
-      if (is.null(value)) value <- context@par_dims[[name]]
-      value
-    }), missing)
-  )
-  for (chain in seq_along(private@sim$samples)) {
-    for (name in missing) private@sim$samples[[chain]][[name]] <- numeric(0L)
-  }
-
-  before <- rstan::extract(saved_stanfit, permuted = FALSE, inc_warmup = FALSE)
-  after <- rstan::extract(private, permuted = FALSE, inc_warmup = FALSE)
-  if (!identical(before, after)) {
-    stop("Private zero-width bridge adapter changed posterior sample values.",
-         call. = FALSE)
-  }
-  list(stanfit = private, added = missing)
-}
-
-.bayes_bridge_probe_live <- function(stanfit) {
-  tryCatch({
-    n_upars <- as.integer(rstan::get_num_upars(stanfit))
-    if (length(n_upars) != 1L || is.na(n_upars) || n_upars < 0L) {
-      stop("invalid unconstrained parameter count")
-    }
-    if (!length(stanfit@inits)) stop("saved stanfit has no initialization")
-    upars <- rstan::unconstrain_pars(stanfit, stanfit@inits[[1L]])
-    if (!is.numeric(upars) || length(upars) != n_upars) {
-      stop("saved initialization has an incompatible unconstrained schema")
-    }
-    stanfit
-  }, error = function(e) NULL)
-}
-
-.bayes_bridge_fresh_context <- function(fit, contract) {
-  rstan::sampling(
-    object = contract$current_model,
-    data = .bayes_bridge_private_data(fit, contract),
-    chains = 1L,
-    iter = 1L,
-    warmup = 0L,
-    algorithm = "Fixed_param",
-    init = 0,
-    seed = 1L,
-    refresh = 0L,
-    cores = 1L
+  source_code <- tryCatch(stanfit$code(), error = function(e) NULL)
+  .bayes_cmdstan_source_contract(
+    fit@metadata, source_code, require_hmc = require_hmc
   )
 }
 
-.bayes_bridge_theta_at <- function(stanfit, chain, iteration) {
-  pars <- stanfit@sim$pars_oi
-  flat_names <- unlist(lapply(pars, function(par) {
-    stanfit@sim$fnames_oi[
-      stanfit@sim$fnames_oi == par |
-        startsWith(stanfit@sim$fnames_oi, paste0(par, "["))
-    ]
-  }), use.names = FALSE)
-  samples <- stanfit@sim$samples[[chain]]
-  if (!length(flat_names) || !all(flat_names %in% names(samples))) {
-    stop("Saved stanfit samples do not match their declared parameter schema.",
+.bayes_bridge_restore_context <- function(fit, contract = NULL) {
+  if (is.null(contract)) contract <- .bayes_cmdstan_evidence_contract(fit)
+  fields <- fit@metadata$stan_data_fields
+  if (is.null(fields)) {
+    fields <- names(.cmdstan_model_for_kernel(contract$kernel)$variables()$data)
+  }
+  if (!is.character(fields) || !length(fields) || anyNA(fields) ||
+      anyDuplicated(fields) || !all(fields %in% names(fit@stan_data))) {
+    stop("Saved fit has no valid Stan data field contract for bridge sampling.",
          call. = FALSE)
   }
-  values <- vapply(flat_names, function(name) {
-    as.numeric(samples[[name]][[iteration]])
-  }, numeric(1))
-  skeleton <- bridgesampling:::.create_skeleton(
-    pars, stanfit@par_dims[pars]
+  stan_data <- fit@stan_data[fields]
+  saved_data_hash <- fit@metadata$stan_data_hash
+  if (!is.null(saved_data_hash) &&
+      !identical(saved_data_hash,
+                 digest::digest(stan_data, algo = "sha256"))) {
+    stop("Saved Stan data differ from the data used for fitting; bridge evidence is unavailable.",
+         call. = FALSE)
+  }
+  data_file <- tempfile("antitrustBayes-bridge-data-", fileext = ".json")
+  tryCatch(cmdstanr::write_stan_json(stan_data, file = data_file),
+           error = function(e) {
+             unlink(data_file)
+             stop("Cannot reconstruct CmdStan bridge data: ",
+                  conditionMessage(e), call. = FALSE)
+           })
+  ## CmdStanR's saved fit still points at its original temporary JSON. Use an
+  ## independent copy so bridge evaluation cannot mutate the user's fit.
+  samples <- unserialize(serialize(fit@stanfit, NULL))
+  samples$runset$args$data_file <- data_file
+  list(
+    samples = samples,
+    source = "cmdstanr_saved_fit_reconstructed_data",
+    kernel = contract$kernel,
+    saved_hash = contract$saved_hash,
+    current_hash = contract$current_hash,
+    migration = FALSE,
+    cleanup = function() unlink(data_file)
   )
-  bridgesampling:::.rstan_relist(values, skeleton)
 }
 
-.bayes_bridge_saved_rows <- function(stanfit, n_rows = 5L) {
-  chains <- stanfit@sim$samples
-  if (!length(chains)) stop("Saved stanfit has no posterior chains.", call. = FALSE)
-  rows <- lapply(seq_along(chains), function(chain) {
-    lp <- chains[[chain]][["lp__"]]
-    if (is.null(lp) || !length(lp)) {
-      stop("Saved stanfit chain ", chain, " has no lp__ draws.", call. = FALSE)
-    }
-    n <- length(lp)
-    warmup <- if (length(stanfit@sim$warmup2) >= chain) {
-      as.integer(stanfit@sim$warmup2[[chain]])
-    } else 0L
-    ## Depending on the rstan serialization path, samples can contain either
-    ## post-warmup draws or all iterations.  Trim an all-iteration chain using
-    ## its per-chain warmup count; when samples are already post-warmup (the
-    ## usual path, n <= warmup2), retain all saved posterior rows.
-    post_start <- if (is.finite(warmup) && warmup >= 0L && n > warmup) {
-      warmup + 1L
-    } else 1L
-    post_idx <- seq.int(post_start, n)
-    idx <- unique(as.integer(round(seq(post_idx[1L], post_idx[length(post_idx)],
-      length.out = min(as.integer(n_rows), length(post_idx))))))
-    data.frame(chain = chain, iteration = idx, stringsAsFactors = FALSE)
-  })
-  do.call(rbind, rows)
-}
-
-.bayes_bridge_validate_target <- function(saved_stanfit, context) {
-  n_upars <- as.integer(rstan::get_num_upars(context))
-  if (length(n_upars) != 1L || is.na(n_upars) || n_upars < 0L) {
-    stop("Restored context has an invalid unconstrained parameter count.",
+.bayes_cmdstan_log_lik_array <- function(stanfit, parameter_name,
+                                         expected_units = NULL) {
+  if (!inherits(stanfit, "CmdStanMCMC")) {
+    stop("Predictive scoring requires a CmdStanR CmdStanMCMC fit.",
          call. = FALSE)
   }
-  rows <- .bayes_bridge_saved_rows(saved_stanfit, n_rows = 5L)
-  checks <- lapply(seq_len(nrow(rows)), function(i) {
-    chain <- rows$chain[[i]]
-    iteration <- rows$iteration[[i]]
-    theta <- tryCatch(
-      .bayes_bridge_theta_at(saved_stanfit, chain, iteration),
-      error = function(e) stop("Cannot reconstruct saved draw at chain ", chain,
-                               ", iteration ", iteration, ": ",
-                               conditionMessage(e), call. = FALSE)
-    )
-    upars <- tryCatch(
-      rstan::unconstrain_pars(context, theta),
-      error = function(e) stop("Restored context rejects saved schema at chain ",
-                               chain, ", iteration ", iteration, ": ",
-                               conditionMessage(e), call. = FALSE)
-    )
-    if (!is.numeric(upars) || length(upars) != n_upars) {
-      stop("Restored context has a nonzero parameter schema mismatch at chain ",
-           chain, ", iteration ", iteration, call. = FALSE)
+  if (!is.character(parameter_name) || length(parameter_name) != 1L ||
+      is.na(parameter_name) || !nzchar(parameter_name)) {
+    stop("A single log-likelihood variable name is required.",
+         call. = FALSE)
+  }
+  draws <- tryCatch(
+    stanfit$draws(variables = parameter_name, format = "draws_array"),
+    error = function(e) stop("Cannot read generated quantity '",
+                             parameter_name, "': ", conditionMessage(e),
+                             call. = FALSE)
+  )
+  log_lik <- as.array(draws)
+  if (length(dim(log_lik)) != 3L || any(dim(log_lik) < 1L) ||
+      !is.numeric(log_lik)) {
+    stop("Generated quantity '", parameter_name,
+         "' did not produce an iteration-by-chain-by-unit array.",
+         call. = FALSE)
+  }
+  variables <- dimnames(log_lik)[[3L]]
+  if (is.null(variables) || length(variables) != dim(log_lik)[[3L]]) {
+    stop("Generated quantity '", parameter_name,
+         "' has no complete unit names.", call. = FALSE)
+  }
+  if (length(variables) == 1L && identical(variables, parameter_name)) {
+    unit_index <- 1L
+  } else {
+    prefix <- paste0(parameter_name, "[")
+    indexed <- startsWith(variables, prefix) & endsWith(variables, "]")
+    indexes <- rep(NA_integer_, length(variables))
+    indexes[indexed] <- suppressWarnings(as.integer(sub(
+      "\\]$", "", substring(variables[indexed], nchar(prefix) + 1L),
+      perl = TRUE
+    )))
+    unit_index <- indexes
+    if (anyNA(unit_index) || anyDuplicated(unit_index) ||
+        !identical(sort(unit_index), seq_along(unit_index))) {
+      stop("Generated quantity '", parameter_name,
+           "' has missing, duplicated, or noncontiguous unit indices.",
+           call. = FALSE)
     }
-    restored <- tryCatch(
-      rstan::log_prob(context, upars, adjust_transform = TRUE, gradient = FALSE),
-      error = function(e) stop("Restored log target failed at chain ", chain,
-                               ", iteration ", iteration, ": ",
-                               conditionMessage(e), call. = FALSE)
-    )
-    saved <- as.numeric(saved_stanfit@sim$samples[[chain]][["lp__"]][[iteration]])
-    tolerance <- 1e-7 + 128 * .Machine$double.eps * max(1, abs(saved))
-    if (!is.finite(saved) || !is.finite(restored) ||
-        abs(restored - saved) > tolerance) {
-      stop("Restored normalized log target differs from saved lp__ at chain ",
-           chain, ", iteration ", iteration, " (difference = ",
-           format(abs(restored - saved), digits = 16), ", tolerance = ",
-           format(tolerance, digits = 16), ").", call. = FALSE)
-    }
-    data.frame(chain = chain, iteration = iteration, saved_lp = saved,
-               restored_lp = restored, abs_difference = abs(restored - saved),
-               tolerance = tolerance, stringsAsFactors = FALSE)
-  })
-  do.call(rbind, checks)
+    order_units <- order(unit_index)
+    log_lik <- log_lik[, , order_units, drop = FALSE]
+    unit_index <- unit_index[order_units]
+  }
+  if (!is.null(expected_units) &&
+      (length(expected_units) != 1L || !is.finite(expected_units) ||
+       expected_units < 1L || expected_units != as.integer(expected_units) ||
+       dim(log_lik)[[3L]] != as.integer(expected_units))) {
+    stop("Generated quantity '", parameter_name,
+         "' does not match the expected predictive-unit count.",
+         call. = FALSE)
+  }
+  if (any(!is.finite(log_lik))) {
+    stop("Generated quantity '", parameter_name,
+         "' contains non-finite values.", call. = FALSE)
+  }
+  array(as.numeric(log_lik), dim = dim(log_lik),
+        dimnames = dimnames(log_lik))
 }
 
-.bayes_bridge_restore_context <- function(fit) {
-  .bayes_bridge_preserve_rng({
-    st <- fit@stanfit
-    contract <- .bayes_bridge_code_contract(st)
-    context <- if (!isTRUE(contract$migration)) .bayes_bridge_probe_live(st) else NULL
-    context_source <- if (!is.null(context)) "saved_live_stanfit" else
-      "fresh_fixed_param_context"
-    if (is.null(context)) context <- .bayes_bridge_fresh_context(fit, contract)
-    sample_view <- .bayes_bridge_clone_sample_view(st, context)
-    target_check <- .bayes_bridge_validate_target(sample_view$stanfit, context)
-    list(stanfit_model = context, samples = sample_view$stanfit,
-         zero_width_fields_added = sample_view$added,
-         kernel = contract$kernel,
-         saved_hash = contract$saved_hash, current_hash = contract$current_hash,
-         migration = contract$migration, source = context_source,
-         target_check = target_check)
-  })
+.bayes_cmdstan_log_lik_units <- function(fit, parameter_name) {
+  field <- switch(parameter_name,
+    log_lik = "N",
+    log_lik_period = "N_market_year",
+    log_lik_market = "N_market",
+    log_lik_cluster = "N_cluster",
+    NULL
+  )
+  if (is.null(field)) return(NULL)
+  value <- fit@stan_data[[field]]
+  if (is.numeric(value) && length(value) == 1L && is.finite(value) &&
+      value >= 1L && value == as.integer(value)) as.integer(value) else NULL
 }
 
 #' Compare Bayesian Models or Exact Ordered-k Restrictions
@@ -977,35 +478,74 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
     cluster = "log_lik_cluster"
   )
   loo_available <- !collapsed_quality
+  loo_failure <- NULL
 
   for (i in seq_along(fits)) {
     fit <- fits[[i]]
+    evidence_contract <- NULL
+    contract_error <- NULL
+    if (loo_available || bridge) {
+      evidence_contract <- tryCatch(
+        .bayes_cmdstan_evidence_contract(fit),
+        error = function(e) {
+          contract_error <<- conditionMessage(e)
+          NULL
+        }
+      )
+    }
 
     if (loo_available) {
-      log_lik <- loo::extract_log_lik(fit@stanfit, parameter_name = parameter_name,
-                                       merge_chains = FALSE)
-      n_units <- dim(log_lik)[3L]
-      if (is.null(n_units)) n_units <- 1L
-      if (n_units < 2L) {
+      loo_error <- contract_error
+      loo_result <- if (!is.null(loo_error)) NULL else tryCatch({
+        log_lik <- .bayes_cmdstan_log_lik_array(
+          fit@stanfit, parameter_name,
+          expected_units = .bayes_cmdstan_log_lik_units(fit, parameter_name)
+        )
+        n_units <- dim(log_lik)[[3L]]
+        if (n_units < 2L) {
+          stop("at least two ", loo_unit,
+               " units are required for LOO/WAIC", call. = FALSE)
+        }
+        r_eff <- loo::relative_eff(exp(sweep(
+          log_lik, 3L, apply(log_lik, 3L, max), FUN = "-"
+        )))
+        list(
+          loo = loo::loo(log_lik, r_eff = r_eff),
+          waic = loo::waic(log_lik)
+        )
+      }, error = function(e) {
+        loo_error <<- conditionMessage(e)
+        NULL
+      })
+      if (is.null(loo_result)) {
         loo_available <- FALSE
+        loo_failure <- paste0("model ", nms[i], ": ", loo_error)
+        warning("Predictive comparison failed for ", loo_failure,
+                "; all LOO/WAIC summaries are marked NA.", call. = FALSE)
       } else {
-        r_eff <- loo::relative_eff(exp(log_lik))
-        loo_list[[i]]  <- loo::loo(log_lik, r_eff = r_eff)
-        waic_list[[i]] <- loo::waic(log_lik)
+        loo_list[[i]] <- loo_result$loo
+        waic_list[[i]] <- loo_result$waic
       }
     }
 
     # Bridge sampling for marginal likelihood
     if (bridge) {
-      bridge_context <- tryCatch(
-        .bayes_bridge_restore_context(fit),
+      bridge_error <- contract_error
+      bridge_context <- if (is.null(bridge_error)) tryCatch(
+        .bayes_bridge_restore_context(fit, evidence_contract),
         error = function(e) {
+          bridge_error <<- conditionMessage(e)
           warning("Bridge context restoration failed for model ", nms[i],
-                  "; evidence marked incomplete: ", conditionMessage(e),
+                  "; evidence marked incomplete: ", bridge_error,
                   call. = FALSE)
           NULL
         }
-      )
+      ) else {
+        warning("Bridge context restoration failed for model ", nms[i],
+                "; evidence marked incomplete: ", bridge_error,
+                call. = FALSE)
+        NULL
+      }
       if (is.null(bridge_context)) {
         bridge_list[[i]] <- rep(list(NULL), bridge_repetitions)
         bridge_context_info[[i]] <- list(status = "incomplete")
@@ -1013,7 +553,7 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
         bridge_list[[i]] <- lapply(seq_len(bridge_repetitions), function(rep_id) {
           tryCatch(
             bridgesampling::bridge_sampler(
-              bridge_context$samples, stanfit_model = bridge_context$stanfit_model,
+              bridge_context$samples, repetitions = 1L,
               silent = TRUE, maxiter = bridge_maxiter
             ),
             error = function(e) {
@@ -1023,14 +563,20 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
             }
           )
         })
+        bridge_context$cleanup()
+        bridge_valid <- vapply(bridge_list[[i]], function(x) {
+          !is.null(x) && is.numeric(x$logml) &&
+            length(x$logml) == 1L && is.finite(x$logml)
+        }, logical(1))
         bridge_context_info[[i]] <- list(
-          status = "validated", source = bridge_context$source,
+          status = if (all(bridge_valid))
+            "validated" else "bridge_failed",
+          completed_repetitions = sum(bridge_valid),
+          source = bridge_context$source,
           kernel = bridge_context$kernel,
           saved_hash = bridge_context$saved_hash,
           current_hash = bridge_context$current_hash,
-          migration = bridge_context$migration,
-          zero_width_fields_added = bridge_context$zero_width_fields_added,
-          target_check = bridge_context$target_check
+          migration = bridge_context$migration
         )
       }
     }
@@ -1039,14 +585,40 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
   names(loo_list) <- names(waic_list) <- nms
   if (bridge) names(bridge_list) <- nms
   if (loo_available) {
-    comp <- loo::loo_compare(loo_list)
-    weights_stacking <- loo::loo_model_weights(loo_list, method = "stacking")
-  } else if (!collapsed_quality) {
-    warning("LOO/WAIC require at least two ", loo_unit,
-            " units; returning NA predictive summaries.", call. = FALSE)
+    comparison <- tryCatch({
+      if (length(loo_list) == 1L) {
+        list(compare = NULL, weights = stats::setNames(1, nms))
+      } else {
+        list(
+          compare = loo::loo_compare(loo_list),
+          weights = loo::loo_model_weights(loo_list, method = "stacking")
+        )
+      }
+    }, error = function(e) {
+      loo_failure <<- conditionMessage(e)
+      NULL
+    })
+    if (is.null(comparison)) {
+      loo_available <- FALSE
+      warning("LOO/WAIC comparison failed; all predictive summaries are ",
+              "marked NA: ", loo_failure, call. = FALSE)
+    } else {
+      comp <- comparison$compare
+      weights_stacking <- comparison$weights
+    }
+  }
+  if (!loo_available && !collapsed_quality) {
+    if (is.null(loo_failure)) {
+      warning("LOO/WAIC require at least two ", loo_unit,
+              " units; returning NA predictive summaries.", call. = FALSE)
+    }
+    loo_list <- waic_list <- rep(list(NULL), length(fits))
     comp <- NULL
     weights_stacking <- rep(NA_real_, length(fits))
+  } else if (!collapsed_quality) {
+    ## All fits support the requested predictive comparison.
   } else {
+    loo_list <- waic_list <- rep(list(NULL), length(fits))
     comp <- NULL
     weights_stacking <- rep(NA_real_, length(fits))
   }
@@ -1098,13 +670,13 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
 
     finite <- is.finite(logml)
     diff_logml <- bf_vs_best <- post_prob <- rep(NA_real_, length(logml))
-    if (any(finite)) {
-      max_logml <- max(logml[finite])
-      diff_logml[finite] <- logml[finite] - max_logml
-      bf_vs_best[finite] <- exp(diff_logml[finite])
-      unnorm <- exp(diff_logml[finite]) * prior_weights[finite]
+    if (all(finite)) {
+      max_logml <- max(logml)
+      diff_logml <- logml - max_logml
+      bf_vs_best <- exp(diff_logml)
+      unnorm <- exp(diff_logml) * prior_weights
       if (sum(unnorm) > 0) {
-        post_prob[finite] <- unnorm / sum(unnorm)
+        post_prob <- unnorm / sum(unnorm)
       }
     }
 

@@ -6,7 +6,8 @@ posterior_policy_models(
   fit, draw_plan = NULL, n_draws = NULL, seed = NULL,
   market = NULL, year = NULL,
   demand_anchoring = c("observed", "latent_quality"),
-  insideSize = NULL, priceOutside = NULL, labels = NULL
+  insideSize = NULL, priceOutside = NULL, labels = NULL,
+  allow_experimental = FALSE
 )
 }
 \arguments{
@@ -18,6 +19,7 @@ a new plan is constructed once.}
 \item{market, year}{Simulation-unit selectors. Panel fits require an explicit year selection.}
 \item{demand_anchoring}{Observed-share or conditional latent-quality anchoring.}
 \item{insideSize, priceOutside, labels}{Optional unit overrides using \code{simulate()} conventions.}
+\item{allow_experimental}{Explicitly allow exploratory Pathfinder draws.}
 }
 \value{
 A \code{bayes_policy_models} list containing \code{models} nested by unit and

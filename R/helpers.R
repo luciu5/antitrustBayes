@@ -312,7 +312,7 @@ safe_sd <- function(x, floor = 1e-8) {
       stop("Quality incidence requires every encoded market to have observations.",
            call. = FALSE)
     }
-    block_start <- cumsum(c(1L, head(block_n, -1L)))
+    block_start <- cumsum(c(1L, utils::head(block_n, -1L)))
     block_market <- seq_len(n_market)
     quality_unit <- if (n_market == 1L) {
       as.character(group_levels[pair_group])
@@ -332,11 +332,11 @@ safe_sd <- function(x, floor = 1e-8) {
     )
   }
   coord_n <- pmax(as.integer(block_n) - 1L, 0L)
-  coord_start <- cumsum(c(1L, head(coord_n, -1L)))
+    coord_start <- cumsum(c(1L, utils::head(coord_n, -1L)))
   n_coord <- sum(coord_n)
   market_obs_n <- tabulate(as.integer(market_int), nbins = n_market)
   market_obs_order <- order(as.integer(market_int), seq_len(n))
-  market_obs_start <- cumsum(c(1L, head(market_obs_n, -1L)))
+  market_obs_start <- cumsum(c(1L, utils::head(market_obs_n, -1L)))
 
   margin_idx <- as.integer(margin_idx)
   if (length(margin_idx)) {
@@ -351,7 +351,7 @@ safe_sd <- function(x, floor = 1e-8) {
     market_margin_order <- integer()
   }
   market_margin_n <- tabulate(margin_market, nbins = n_market)
-  market_margin_start <- cumsum(c(1L, head(market_margin_n, -1L)))
+  market_margin_start <- cumsum(c(1L, utils::head(market_margin_n, -1L)))
 
   list(
     quality_scope = quality_scope,
@@ -898,7 +898,7 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #'   include zero; Stackelberg supports must be positive.
 #' @param k_prior Positional probabilities corresponding to \code{k_support};
 #'   \code{NULL} gives a uniform prior.
-#' @return A list suitable for passing to \code{rstan::sampling}. The returned
+#' @return A list suitable for passing to a CmdStanR model. The returned
 #'   list has provenance attributes \code{market_year_size}, \code{N_mt}, and
 #'   \code{N_mt_by_observation}. \code{N_mt} is the positive total of the
 #'   original inside quantities in each market-year, in the input quantity
@@ -1415,7 +1415,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
 #' for the CES supply first-order conditions.
 #'
 #' @inheritParams prepare_stan_data
-#' @return A list suitable for passing to \code{rstan::sampling}. The returned
+#' @return A list suitable for passing to a CmdStanR model. The returned
 #'   list has provenance attributes \code{market_year_size}, \code{N_mt}, and
 #'   \code{N_mt_by_observation}. \code{N_mt} is the positive total of the
 #'   original inside quantities in each market-year, in the input quantity

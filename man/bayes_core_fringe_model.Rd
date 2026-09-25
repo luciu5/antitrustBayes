@@ -16,6 +16,7 @@ bayes_core_fringe_model(
   priceOutside = NULL,
   labels = NULL,
   price_domain = c("positive", "real"),
+  allow_experimental = FALSE,
   ...
 )
 }
@@ -43,6 +44,8 @@ bayes_core_fringe_model(
 Real rates are an explicit input Logit Cournot counterfactual domain
 extension and require coordination >= 0.0.0.9004. The fitted posterior,
 observed calibration prices, and role semantics are unchanged.}
+
+\item{allow_experimental}{Explicitly allow exploratory Pathfinder draws.}
 
 \item{...}{Passed to \code{coordination::core_fringe()}.}
 }

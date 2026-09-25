@@ -14,6 +14,14 @@ skip_unless_rho_stan_tests <- function() {
   }
 }
 
+rho_test_draws <- function(fit, variables = NULL) {
+  antitrustBayes:::.cmdstan_extract(fit@stanfit, variables = variables)
+}
+
+rho_test_variable_sizes <- function(fit) {
+  fit@stanfit$metadata()$stan_variable_sizes
+}
+
 # Standard bivariate Student-t log density with correlation rho and Stan-style
 # "scale" parameters s1, s2 (not SDs).
 rho_test_dbvt_joint_log <- function(x1, x2, mu1, mu2, s1, s2, rho, nu) {
@@ -102,16 +110,16 @@ test_that("fixed and estimated df fits compile and produce finite draws", {
     df = 5,
     stan_options = fast_opts
   ))
-  rho_draws <- rstan::extract(fit_fixed@stanfit, "rho")[[1]]
-  s0_draws <- rstan::extract(fit_fixed@stanfit, "s0_prob")[[1]]
-  alpha_draws <- rstan::extract(fit_fixed@stanfit, "a_market")[[1]]
+  rho_draws <- rho_test_draws(fit_fixed, "rho")$rho
+  s0_draws <- rho_test_draws(fit_fixed, "s0_prob")$s0_prob
+  alpha_draws <- rho_test_draws(fit_fixed, "a_market")$a_market
   expect_true(all(is.finite(rho_draws)))
   expect_true(all(is.finite(s0_draws)))
   expect_true(all(is.finite(alpha_draws)))
 
   # Reconstruct one generated joint log-likelihood term independently from
   # the same Logit fit used by this smoke test.
-  draws_fixed <- rstan::extract(fit_fixed@stanfit)
+  draws_fixed <- rho_test_draws(fit_fixed)
   i <- 1L
   draw_idx <- 1L
   expected_joint <- rho_test_factorized_log(
@@ -139,7 +147,7 @@ test_that("fixed and estimated df fits compile and produce finite draws", {
     df = "estimate",
     stan_options = fast_opts
   ))
-  nu_draws <- rstan::extract(fit_est@stanfit, "nu")[[1]]
+  nu_draws <- rho_test_draws(fit_est, "nu")$nu
   expect_true(all(is.finite(nu_draws)))
   expect_true(all(nu_draws > 2))
 })
@@ -158,8 +166,8 @@ test_that("rho is never instantiated when no margins are observed", {
     margin_observed = rep(FALSE, length(d$prices)),
     stan_options = fast_opts
   ))
-  expect_equal(fit@stanfit@par_dims[["rho_raw"]], 0)
-  rho_draws <- rstan::extract(fit@stanfit, "rho")[[1]]
+  expect_false("rho_raw" %in% names(rho_test_variable_sizes(fit)))
+  rho_draws <- rho_test_draws(fit, "rho")$rho
   expect_true(all(rho_draws == 0))
 })
 
@@ -178,7 +186,7 @@ test_that("log_lik matches an independent Student-t computation for share/margin
     df = 5, likelihood = "share",
     stan_options = fast_opts
   ))
-  draws <- rstan::extract(fit_share@stanfit)
+  draws <- rho_test_draws(fit_share)
   log_shareIn <- as.numeric(fit_share@stan_data$log_shareIn)
   sigma_share <- draws$sigma_share[draw_idx]
   nu <- draws$nu[draw_idx]
@@ -198,7 +206,7 @@ test_that("log_lik matches an independent Student-t computation for share/margin
     df = 5, likelihood = "margin",
     stan_options = fast_opts
   ))
-  draws_m <- rstan::extract(fit_margin@stanfit)
+  draws_m <- rho_test_draws(fit_margin)
   log_marginNormInv <- as.numeric(fit_margin@stan_data$log_marginNormInv)
   sigma_margin <- draws_m$sigma_margin[draw_idx]
   nu_m <- draws_m$nu[draw_idx]
@@ -226,12 +234,12 @@ test_that("CES rho and Student-t log_lik agree with independent calculations", {
     df = 5, use_rho = TRUE, likelihood = "joint",
     stan_options = stan_options
   ))
-  draws <- rstan::extract(fit@stanfit)
+  draws <- rho_test_draws(fit)
   draw_idx <- 1L
 
   # The active CES fit must expose finite structural quantities, including
   # the correlation used by the factored bivariate Student-t likelihood.
-  expect_equal(fit@stanfit@par_dims[["rho_raw"]], 1L)
+  expect_equal(as.integer(rho_test_variable_sizes(fit)[["rho_raw"]]), 1L)
   rho <- as.numeric(draws$rho[draw_idx])
   expect_true(is.finite(rho))
   expect_true(is.finite(as.numeric(draws$s0_prob[draw_idx, 1L])))
@@ -276,8 +284,8 @@ test_that("CES rho and Student-t log_lik agree with independent calculations", {
     df = 5, use_rho = FALSE, margin_observed = rep(FALSE, length(d$prices)),
     likelihood = "joint", stan_options = stan_options
   ))
-  expect_equal(fit_inactive@stanfit@par_dims[["rho_raw"]], 0)
-  inactive_rho <- rstan::extract(fit_inactive@stanfit, "rho")[[1]]
+  expect_false("rho_raw" %in% names(rho_test_variable_sizes(fit_inactive)))
+  inactive_rho <- rho_test_draws(fit_inactive, "rho")$rho
   expect_true(all(inactive_rho == 0))
 })
 
@@ -294,7 +302,7 @@ test_that("predicted shares distinguish conditional and unconditional identities
     df = 1e4, use_rho = FALSE,
     stan_options = fast_opts
   ))
-  draws <- rstan::extract(fit@stanfit)
+  draws <- rho_test_draws(fit)
   draw_idx <- 1L
   s0_prob <- draws$s0_prob[draw_idx, ]
   mky <- fit@stan_data$market_year_idx
@@ -377,10 +385,10 @@ test_that("share-only likelihood does not use the equilibrium-margin information
     stan_options = opts
   ))
 
-  s0_share_a <- rstan::extract(fit_share_a@stanfit, "s0_logit")[[1]]
-  s0_share_b <- rstan::extract(fit_share_b@stanfit, "s0_logit")[[1]]
-  s0_joint_a <- rstan::extract(fit_joint_a@stanfit, "s0_logit")[[1]]
-  s0_joint_b <- rstan::extract(fit_joint_b@stanfit, "s0_logit")[[1]]
+  s0_share_a <- rho_test_draws(fit_share_a, "s0_logit")$s0_logit
+  s0_share_b <- rho_test_draws(fit_share_b, "s0_logit")$s0_logit
+  s0_joint_a <- rho_test_draws(fit_joint_a, "s0_logit")$s0_logit
+  s0_joint_b <- rho_test_draws(fit_joint_b, "s0_logit")$s0_logit
 
   share_shift <- abs(mean(s0_share_a) - mean(s0_share_b))
   joint_shift <- abs(mean(s0_joint_a) - mean(s0_joint_b))

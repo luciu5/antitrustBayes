@@ -145,8 +145,7 @@ test_that("multi-market helpers expose the narrow joint orthogonal contract", {
 })
 
 test_that("all four Stan kernels retain rotation diagnostics and economic equations", {
-  root <- testthat::test_path("..", "..")
-  stan_dir <- file.path(root, "inst", "stan")
+  stan_dir <- .ab_test_path("inst", "stan")
   models <- c("logit_supply", "logit_stackelberg",
               "ces_supply", "ces_stackelberg")
 

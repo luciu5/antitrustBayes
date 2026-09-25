@@ -231,7 +231,7 @@ test_that("all four production kernels expose the collapsed-intercept contract",
   kernels <- c("logit_supply.stan", "logit_stackelberg.stan",
                "ces_supply.stan", "ces_stackelberg.stan")
   for (kernel in kernels) {
-    path <- testthat::test_path("..", "..", "inst", "stan", kernel)
+    path <- .ab_test_path("inst", "stan", kernel)
     source <- paste(readLines(path, warn = FALSE), collapse = "\n")
     expect_match(source, "market_intercept_parameterization", fixed = TRUE,
                  info = kernel)

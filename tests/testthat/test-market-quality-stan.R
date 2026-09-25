@@ -1,5 +1,5 @@
 test_that("all production Stan programs expose the scoped quality contract", {
-  stan_root <- testthat::test_path("..", "..", "inst", "stan")
+  stan_root <- .ab_test_path("inst", "stan")
   models <- c("logit_supply", "ces_supply", "logit_stackelberg",
               "ces_stackelberg")
   for (model in models) {
@@ -15,22 +15,31 @@ test_that("all production Stan programs expose the scoped quality contract", {
 })
 
 test_that("scoped quality Stan sources parse", {
-  testthat::skip_if_not_installed("rstan")
-  stan_root <- testthat::test_path("..", "..", "inst", "stan")
+  testthat::skip_if_not_installed("cmdstanr")
+  cmdstan_path <- cmdstanr::cmdstan_path()
+  testthat::skip_if(!nzchar(cmdstan_path), "CmdStan must be installed to parse Stan sources")
+  stanc <- file.path(
+    cmdstan_path, "bin",
+    if (.Platform$OS.type == "windows") "stanc.exe" else "stanc"
+  )
+  stan_root <- .ab_test_path("inst", "stan")
   models <- c("logit_supply", "ces_supply", "logit_stackelberg",
               "ces_stackelberg")
   for (model in models) {
-    expect_silent(rstan::stanc(
-      file = file.path(stan_root, paste0(model, ".stan")),
-      model_name = model,
-      allow_undefined = TRUE,
-      obfuscate_model_name = FALSE
+    source <- normalizePath(file.path(stan_root, paste0(model, ".stan")))
+    output <- suppressWarnings(system2(
+      stanc,
+      args = c("--allow-undefined", paste0("--name=", model), shQuote(source)),
+      stdout = TRUE, stderr = TRUE
     ))
+    status <- attr(output, "status")
+    expect_true(is.null(status) || identical(as.integer(status), 0L),
+                info = paste(capture.output(output), collapse = "\n"))
   }
 })
 
 test_that("market collapsed helpers use margin-first joint Gaussian conditioning", {
-  stan_root <- testthat::test_path("..", "..", "inst", "stan")
+  stan_root <- .ab_test_path("inst", "stan")
   models <- c("logit_supply", "ces_supply", "logit_stackelberg",
               "ces_stackelberg")
   for (model in models) {

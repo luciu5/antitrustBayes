@@ -205,7 +205,7 @@ test_that("antitrust's Counterfactual grammar is not copied into this namespace"
 test_that("estimated fits dispatch through the same S4 method", {
   skip_if(tolower(Sys.getenv("ANTITRUSTBAYES_RUN_STAN_TESTS")) != "true",
           "Set ANTITRUSTBAYES_RUN_STAN_TESTS=true for the opt-in Stan test")
-  skip_if_not_installed("rstan")
+  skip_if_not_installed("cmdstanr")
 
   set.seed(123)
   n <- 12

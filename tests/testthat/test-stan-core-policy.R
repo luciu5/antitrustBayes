@@ -73,11 +73,16 @@ test_that("bayes_est passes the resolved chain policy to sampling", {
   captured <- NULL
 
   testthat::with_mocked_bindings(
-    sampling = function(object, data, ...) {
-      captured <<- list(...)
-      stop("sampling interception", call. = FALSE)
+    .cmdstan_model_for_kernel = function(kernel) {
+      list(
+        variables = function() list(data = NULL),
+        sample = function(data, ...) {
+          captured <<- list(...)
+          stop("sampling interception", call. = FALSE)
+        }
+      )
     },
-    .package = "rstan",
+    .package = "antitrustBayes",
     {
       estimate <- function(stan_options) {
         bayes_est(
@@ -89,15 +94,15 @@ test_that("bayes_est passes the resolved chain policy to sampling", {
       }
       expect_error(estimate(list(chains = 2L)), "sampling interception")
       expect_identical(captured$chains, 2L)
-      expect_identical(captured$cores, 2L)
+      expect_identical(captured$parallel_chains, 2L)
 
       expect_error(estimate(list(chains = 2L, cores = 1L)),
                    "sampling interception")
-      expect_identical(captured$cores, 1L)
+      expect_identical(captured$parallel_chains, 1L)
 
       expect_error(estimate(list(chains = NULL)), "sampling interception")
       expect_identical(captured$chains, 4L)
-      expect_identical(captured$cores, 4L)
+      expect_identical(captured$parallel_chains, 4L)
     }
   )
 })

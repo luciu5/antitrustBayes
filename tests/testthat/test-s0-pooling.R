@@ -87,10 +87,13 @@ test_that("multi-market intercept hierarchies are noncentered", {
       )
     ))
 
-    expect_equal(fit@stanfit@par_dims[["b_market_raw"]], 3L)
-    draws <- rstan::extract(
+    expect_equal(
+      as.integer(fit@stanfit$metadata()$stan_variable_sizes[["b_market_raw"]]),
+      3L
+    )
+    draws <- antitrustBayes:::.cmdstan_extract(
       fit@stanfit,
-      pars = c(
+      variables = c(
         "mu_b_market_vec", "sigma_b_market_vec", "b_market_raw",
         "b_market", case$rotated_name, "mean_logit_s0_market"
       )
@@ -176,7 +179,9 @@ test_that("market-level s0 pooling yields one outside share per market (constant
   # s0_prob is a per-market-year transformed parameter; under market-level
   # pooling it must be identical across the years of a given market (the only
   # per-market-year variation, X_s0, is absent here).
-  s0_prob <- rstan::extract(fit@stanfit, "s0_prob")[[1]]  # draws x N_market_year
+  s0_prob <- antitrustBayes:::.cmdstan_extract(
+    fit@stanfit, "s0_prob"
+  )$s0_prob  # draws x N_market_year
   mky_levels <- attr(fit@stan_data, "mky_levels")
   market_of_mky <- sub("_.*$", "", mky_levels)  # mky labels are "market_year"
   post_mean <- colMeans(s0_prob)
@@ -205,8 +210,11 @@ test_that("CES market-level s0 pooling keeps quantity s0 fixed but transforms R0
     ))
     expect_s4_class(fit, "BayesLogit")
 
-    s0_prob <- rstan::extract(fit@stanfit, "s0_prob")[[1]]
-    R0_prob <- rstan::extract(fit@stanfit, "R0_prob")[[1]]
+    draws <- antitrustBayes:::.cmdstan_extract(
+      fit@stanfit, c("s0_prob", "R0_prob")
+    )
+    s0_prob <- draws$s0_prob
+    R0_prob <- draws$R0_prob
     mky_levels <- attr(fit@stan_data, "mky_levels")
     market_of_mky <- sub("_.*$", "", mky_levels)
 
@@ -255,7 +263,9 @@ test_that("market-year s0 pooling gives a distinct outside share per market-year
   expect_s4_class(fit, "BayesLogit")
   # There is a free s0 per market-year, so within a market the posterior means
   # generally differ across years (not constrained equal as in market pooling).
-  s0_prob <- rstan::extract(fit@stanfit, "s0_prob")[[1]]
+  s0_prob <- antitrustBayes:::.cmdstan_extract(
+    fit@stanfit, "s0_prob"
+  )$s0_prob
   mky_levels <- attr(fit@stan_data, "mky_levels")
   market_of_mky <- sub("_.*$", "", mky_levels)
   multi <- names(which(table(market_of_mky) > 1))

@@ -1,8 +1,8 @@
 .mic_enterprise_env <- local({
   env <- new.env(parent = globalenv())
-  sys.source(testthat::test_path("..", "..", "inst", "benchmarks",
-                                "market_intercept_enterprise",
-                                "common.R"), envir = env)
+  sys.source(.ab_test_path("inst", "benchmarks",
+                           "market_intercept_enterprise", "common.R"),
+             envir = env)
   env
 })
 
@@ -33,8 +33,7 @@ test_that("enterprise manifest is deterministic, unique, and staged", {
 })
 
 test_that("all synthetic enterprise cells satisfy the no-sampling contract", {
-  skip_if_not(file.exists(testthat::test_path("..", "..", "doc",
-                                             "market_quality_benchmark.R")),
+  skip_if_not(file.exists(.ab_test_path("doc", "market_quality_benchmark.R")),
               "source-repository DGP helpers are excluded from package builds")
   plan <- .mic_enterprise_env$mic_make_manifest()
   plan <- plan[plan$source == "synthetic", , drop = FALSE]
@@ -49,8 +48,7 @@ test_that("all synthetic enterprise cells satisfy the no-sampling contract", {
 })
 
 test_that("ordered-k support counts firms and parameterizations remain paired", {
-  skip_if_not(file.exists(testthat::test_path("..", "..", "doc",
-                                             "market_quality_benchmark.R")),
+  skip_if_not(file.exists(.ab_test_path("doc", "market_quality_benchmark.R")),
               "source-repository DGP helpers are excluded from package builds")
   plan <- .mic_enterprise_env$mic_make_manifest()
   rich <- plan[plan$source == "synthetic" & plan$model == "BS" &
@@ -70,8 +68,7 @@ test_that("ordered-k support counts firms and parameterizations remain paired", 
 })
 
 test_that("stress fixtures implement the declared statistical regimes", {
-  skip_if_not(file.exists(testthat::test_path("..", "..", "doc",
-                                             "market_quality_benchmark.R")),
+  skip_if_not(file.exists(.ab_test_path("doc", "market_quality_benchmark.R")),
               "source-repository DGP helpers are excluded from package builds")
   plan <- .mic_enterprise_env$mic_make_manifest()
   high <- plan[plan$tier == "stress" & plan$scenario == "high_rho", , drop = FALSE][1L, ]
@@ -94,8 +91,7 @@ test_that("stress fixtures implement the declared statistical regimes", {
 })
 
 test_that("synthetic market-intercept truth covers boundary and interior regimes", {
-  skip_if_not(file.exists(testthat::test_path("..", "..", "doc",
-                                             "market_quality_benchmark.R")),
+  skip_if_not(file.exists(.ab_test_path("doc", "market_quality_benchmark.R")),
               "source-repository DGP helpers are excluded from package builds")
   boundary <- .mic_enterprise_env$mic_make_synthetic(
     "B", "logit", M = 6L, T = 2L, F = 4L, seed = 1701L,
@@ -121,23 +117,20 @@ test_that("synthetic market-intercept truth covers boundary and interior regimes
 })
 
 test_that("atomic DGP conduct schedules match the public package equations", {
-  theory <- new.env(parent = globalenv())
-  sys.source(testthat::test_path("..", "..", "R", "priors.R"), envir = theory)
-  sys.source(testthat::test_path("..", "..", "R", "theory.R"), envir = theory)
   q <- c(.03, .11, .24)
   s0 <- .27
   for (model in c("B", "C", "MC", "A")) {
     supply <- .mic_enterprise_env$mic_model_contract(model)$supply
     expect_equal(
       .mic_enterprise_env$mic_conduct_schedule(q, model, "logit", s0),
-      theory$conduct_schedule(q, supply, s0 = s0, demand_model = "logit"),
+      conduct_schedule(q, supply, s0 = s0, demand_model = "logit"),
       tolerance = 1e-14
     )
     expect_equal(
       .mic_enterprise_env$mic_conduct_schedule(q, model, "ces", s0,
                                                gamma = 3.5),
-      theory$conduct_schedule(q, supply, s0 = s0,
-                              demand_model = "ces", gamma = 3.5),
+      conduct_schedule(q, supply, s0 = s0,
+                       demand_model = "ces", gamma = 3.5),
       tolerance = 1e-14
     )
   }

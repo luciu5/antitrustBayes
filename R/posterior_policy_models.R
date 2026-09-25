@@ -18,6 +18,7 @@
 #'   latent baseline may be necessary.
 #' @param insideSize,priceOutside,labels Optional simulation-unit overrides,
 #'   following the conventions of \code{simulate()}.
+#' @param allow_experimental Explicitly allow exploratory Pathfinder draws.
 #' @return A \code{bayes_policy_models} list with \code{models} nested by
 #'   unit and draw position, \code{draw_indices}, \code{units}, the reusable
 #'   \code{draw_plan}, and a \code{failures} data frame. Failed models occupy
@@ -38,9 +39,11 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
                                     seed = NULL, market = NULL, year = NULL,
                                     demand_anchoring = c("observed", "latent_quality"),
                                     insideSize = NULL, priceOutside = NULL,
-                                    labels = NULL) {
+                                    labels = NULL,
+                                    allow_experimental = FALSE) {
   if (!methods::is(fit, "BayesFit"))
     stop("'fit' must be a BayesFit object.", call. = FALSE)
+  .cmdstan_require_policy_inference(fit, allow_experimental)
   demand_anchoring <- match.arg(demand_anchoring)
   specified <- methods::is(fit, "BayesSpecifiedFit")
   auction_logit <- identical(as.character(fit@demand_model), "logit") &&
@@ -62,7 +65,7 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
   legacy_plan <- is.list(draw_plan) && is.list(draw_plan$fit_signature) &&
     (is.null(draw_plan$fit_signature$fit_signature_version) ||
      identical(as.integer(draw_plan$fit_signature$fit_signature_version), 1L))
-  draws <- if (specified) NULL else if (legacy_plan) rstan::extract(fit@stanfit)
+  draws <- if (specified) NULL else if (legacy_plan) .cmdstan_extract(fit@stanfit)
     else .posterior_extract(fit, "policy_plan")
   plan <- if (is.null(draw_plan))
     .lq_make_policy_plan(fit, draws, n_draws = n_draws,
@@ -113,7 +116,8 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
       result <- tryCatch({
         params <- if (specified) fit@params else
           .estimated_draw_params(fit, draws, draw, unit)
-        k <- if (is.null(native_structure)) NULL else plan$k_cache[[pos]][[uid]]
+        k <- if (is.null(native_structure)) NULL else
+          .lq_plan_k_for_unit(plan, pos, unit)
         if (!is.null(native_structure)) {
           if (length(k) != 1L || !is.finite(k))
             stop("The draw plan has no role realization for this unit.")

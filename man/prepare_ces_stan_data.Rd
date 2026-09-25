@@ -155,10 +155,11 @@ the original ownership/ranking \code{group} field. \code{"global"}
 retains the historical pooled scope.}
 }
 \value{
-A list suitable for passing to \code{rstan::sampling}. Provenance attributes
-\code{market_year_size}, \code{N_mt}, and \code{N_mt_by_observation} retain
-the positive totals of original inside quantities in input units; these are
-not likelihood inputs.
+A list suitable for passing to a CmdStanR model. The returned
+list has provenance attributes \code{market_year_size}, \code{N_mt}, and
+\code{N_mt_by_observation}. \code{N_mt} is the positive total of the
+original inside quantities in each market-year, in the input quantity
+units; it is not a likelihood input.
 }
 \description{
 Transforms user-supplied vectors into the list expected by the CES Stan

@@ -1,5 +1,5 @@
 ## Unit coverage for the posterior draw contract.  These tests use a small
-## estimated-fit shell and mock only rstan::extract; no Stan sampling occurs.
+## estimated-fit shell and mock only the CmdStanR draw adapter; no Stan sampling occurs.
 
 .selective_fit <- function(quality = "sampled", structure = "simultaneous") {
   data <- data.frame(
@@ -53,11 +53,11 @@ test_that("policy plans use one selected union and normalize s0 aliases", {
   n_extract <- 0L
   requested <- NULL
   testthat::with_mocked_bindings(
-    extract = function(object, pars = NULL, ...) {
+    .cmdstan_extract = function(fit, variables = NULL, ...) {
       n_extract <<- n_extract + 1L
-      requested <<- pars
+      requested <<- variables
       draws
-    }, .package = "rstan", {
+    }, .package = "antitrustBayes", {
       plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 7L)
     }
   )
@@ -75,8 +75,8 @@ test_that("missing active quality fields fail before a plan is constructed", {
   draws <- .selective_draws("s0")
   draws$b_quality_all <- NULL
   testthat::with_mocked_bindings(
-    extract = function(object, pars = NULL, ...) draws,
-    .package = "rstan", {
+    .cmdstan_extract = function(fit, variables = NULL, ...) draws,
+    .package = "antitrustBayes", {
       expect_error(posterior_policy_draws(fit, n_draws = 2L),
                    "missing required field")
     }
@@ -95,10 +95,10 @@ test_that("one-group sampled quality retains the zero-centered fallback", {
   draws$b_quality_all <- NULL
   requested <- NULL
   testthat::with_mocked_bindings(
-    extract = function(object, pars = NULL, ...) {
-      requested <<- pars
+    .cmdstan_extract = function(fit, variables = NULL, ...) {
+      requested <<- variables
       draws
-    }, .package = "rstan", {
+    }, .package = "antitrustBayes", {
       plan <- posterior_policy_draws(fit, n_draws = 2L)
     }
   )
@@ -125,11 +125,11 @@ test_that("active rho quality conditioning extracts its union once", {
   n_extract <- 0L
   requested <- NULL
   testthat::with_mocked_bindings(
-    extract = function(object, pars = NULL, ...) {
+    .cmdstan_extract = function(fit, variables = NULL, ...) {
       n_extract <<- n_extract + 1L
-      requested <<- pars
+      requested <<- variables
       draws
-    }, .package = "rstan", {
+    }, .package = "antitrustBayes", {
       got <- posterior_quality(fit, seed = 9L)
     }
   )
@@ -140,8 +140,8 @@ test_that("active rho quality conditioning extracts its union once", {
   bad <- draws
   bad$pred_marginNormInv <- NULL
   testthat::with_mocked_bindings(
-    extract = function(object, pars = NULL, ...) bad,
-    .package = "rstan", {
+    .cmdstan_extract = function(fit, variables = NULL, ...) bad,
+    .package = "antitrustBayes", {
       expect_error(posterior_quality(fit, seed = 9L), "missing required field")
     }
   )
@@ -180,8 +180,8 @@ test_that("s0 logit aliases become probabilities without changing native probabi
                       byrow = TRUE)
   raw <- list(a_market = matrix(c(.8, .9), nrow = 2L), s0 = raw_logit)
   testthat::with_mocked_bindings(
-    extract = function(object, pars = NULL, ...) raw,
-    .package = "rstan", {
+    .cmdstan_extract = function(fit, variables = NULL, ...) raw,
+    .package = "antitrustBayes", {
       got <- antitrustBayes:::.posterior_extract(fit, "simulation")
     }
   )
@@ -194,8 +194,8 @@ test_that("s0 logit aliases become probabilities without changing native probabi
                      s0_prob = raw_matrix_prob,
                      s0 = raw_logit)
   testthat::with_mocked_bindings(
-    extract = function(object, pars = NULL, ...) raw_native,
-    .package = "rstan", {
+    .cmdstan_extract = function(fit, variables = NULL, ...) raw_native,
+    .package = "antitrustBayes", {
       got_native <- antitrustBayes:::.posterior_extract(fit, "simulation")
     }
   )
@@ -205,11 +205,11 @@ test_that("s0 logit aliases become probabilities without changing native probabi
                                            model_pars = c("a_market", "s0_prob"))
   requested <- NULL
   testthat::with_mocked_bindings(
-    extract = function(object, pars = NULL, ...) {
-      requested <<- pars
+    .cmdstan_extract = function(fit, variables = NULL, ...) {
+      requested <<- variables
       list(a_market = matrix(c(.8, .9), nrow = 2L), s0_logit = raw_logit)
     },
-    .package = "rstan", {
+    .package = "antitrustBayes", {
       got_logit <- antitrustBayes:::.posterior_extract(fit_logit, "simulation")
     }
   )
@@ -222,8 +222,8 @@ test_that("required NULL fields fail while absent known optional fields are skip
   bad <- .selective_draws("s0_prob")
   bad$a_market <- NULL
   testthat::with_mocked_bindings(
-    extract = function(object, pars = NULL, ...) bad,
-    .package = "rstan", {
+    .cmdstan_extract = function(fit, variables = NULL, ...) bad,
+    .package = "antitrustBayes", {
       expect_error(antitrustBayes:::.posterior_extract(fit, "simulation"),
                    "missing required field")
     }

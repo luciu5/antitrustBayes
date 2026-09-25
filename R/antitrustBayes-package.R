@@ -21,18 +21,12 @@
 #' @keywords internal
 #'
 #' @import methods
-#' @import Rcpp
-#' @importFrom rstan sampling extract
-#' @importFrom rstan summary
-#' @importFrom rstantools rstan_config
-#' @importFrom RcppParallel RcppParallelLibs
 #' @importFrom bridgesampling bridge_sampler
 #' @importFrom digest digest
-#' @importFrom loo loo waic loo_compare loo_model_weights extract_log_lik relative_eff
+#' @importFrom loo loo waic loo_compare loo_model_weights relative_eff
 #' @importFrom antitrust calcMC calcMargins calcPrices calcShares ownerToMatrix elast diversion CV HypoMonTest
 #' @importClassesFrom antitrust AntitrustFit StructuralFit Logit CES
 #' @importMethodsFrom antitrust simulate
 #' @importFrom stats plogis quantile sd weighted.mean
 #' @importFrom utils capture.output
-#' @useDynLib antitrustBayes, .registration = TRUE
 "_PACKAGE"

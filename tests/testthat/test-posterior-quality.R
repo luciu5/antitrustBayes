@@ -193,7 +193,7 @@ test_that("Gaussian rho quality recovery matches original joint conditioning", {
   expect_identical(share_only$metadata$conditioning, "observed log shares only")
 })
 
-test_that("scalar rstan arrays are accepted without changing draw alignment", {
+test_that("scalar vector arrays are accepted without changing draw alignment", {
   fit <- posterior_quality_fixture(c(1L, 2L), c(.2, .3))
   plain <- posterior_quality_draws_fixture(rbind(c(.1, .2), c(.2, .3)), c(.5, .6), c(.4, .4))
   arrays <- plain

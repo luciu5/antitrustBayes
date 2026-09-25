@@ -84,9 +84,9 @@ small relative to the total post-warmup draws (4000):
 
 ```{r diagnostics}
 sapply(fits, function(f) {
-  sp <- rstan::get_sampler_params(f@stanfit, inc_warmup = FALSE)
-  c(divergences   = sum(sapply(sp, function(x) sum(x[, "divergent__"]))),
-    max_treedepth = sum(sapply(sp, function(x) sum(x[, "treedepth__"] >= 15))))
+  sp <- f@stanfit$sampler_diagnostics(format = "draws_array")
+  c(divergences   = sum(sp[, , "divergent__"]),
+    max_treedepth = sum(sp[, , "treedepth__"] >= 15))
 })
 ```
 

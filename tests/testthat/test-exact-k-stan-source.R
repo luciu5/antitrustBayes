@@ -1,12 +1,6 @@
 test_that("exact ordered-k Stan sources use one market mixture", {
-  root <- testthat::test_path("..", "..")
   stan_names <- c("logit_stackelberg.stan", "ces_stackelberg.stan")
-  source_files <- file.path(root, "inst", "stan", stan_names)
-  files <- if (all(file.exists(source_files))) {
-    source_files
-  } else {
-    system.file("stan", stan_names, package = "antitrustBayes")
-  }
+  files <- file.path(.ab_test_path("inst", "stan"), stan_names)
   expect_true(all(nzchar(files) & file.exists(files)))
   code <- lapply(files, function(path) paste(readLines(path, warn = FALSE),
                                              collapse = "\n"))

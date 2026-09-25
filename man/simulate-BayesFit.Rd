@@ -26,6 +26,7 @@
   demand_anchoring = c("observed", "latent_quality"),
   draw_plan = NULL,
   price_domain = c("positive", "real"),
+  allow_experimental = FALSE,
   ...
 )
 
@@ -49,6 +50,7 @@ bayes_sim(
   demand_anchoring = c("observed", "latent_quality"),
   draw_plan = NULL,
   price_domain = c("positive", "real"),
+  allow_experimental = FALSE,
   ...
 )
 }
@@ -126,6 +128,9 @@ fringe or Stackelberg models, using coordination >= 0.0.0.9004. It is an
 explicit domain extension, not a rate-floor model, and leaves the fitted
 posterior unchanged. Unsupported combinations are rejected. Percentage
 changes from zero baseline rates are undefined; use level-rate changes.}
+
+\item{allow_experimental}{Explicitly allow exploratory Pathfinder draws
+for policy simulation.}
 
 \item{...}{Additional arguments passed to \code{antitrust::simulate()}.}
 }

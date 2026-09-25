@@ -252,7 +252,6 @@ test_that("ordered-k reconstruction preserves the stored market ranking", {
 })
 
 test_that("estimated Stack bridge fails closed when component GQ is absent", {
-  skip_if_not_installed("rstan")
   fake <- methods::new(
     "BayesLogit", data = data.frame(), supply_model = 1L,
     demand_model = "logit", market_side = "input", call = quote(fake()),

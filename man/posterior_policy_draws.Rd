@@ -10,7 +10,8 @@ posterior_policy_draws(
   seed = NULL,
   role_mapping = c("mixture", "map", "threshold"),
   fixed_k = NULL,
-  role_offset = 0L
+  role_offset = 0L,
+  allow_experimental = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,10 @@ ordered-k fits store the selected role state in the plan.}
 simulation unit. When supplied, every selected draw uses this count.}
 
 \item{role_offset}{Integer adjacent-partition sensitivity offset.}
+
+\item{allow_experimental}{Explicitly allow exploratory Pathfinder draws
+for policy work. Their approximation diagnostics remain attached to the
+originating fit and do not certify posterior accuracy.}
 }
 \value{
 A reusable object of class \code{bayes_policy_draw_plan}.

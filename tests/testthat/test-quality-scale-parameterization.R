@@ -72,8 +72,8 @@ test_that("total/fraction map and Jacobian recover historical scales", {
 })
 
 test_that("all Stan kernels retain normalized legacy and total/fraction paths", {
-  root <- testthat::test_path("..", "..")
-  files <- file.path(root, "inst", "stan", c(
+  stan_dir <- .ab_test_path("inst", "stan")
+  files <- file.path(stan_dir, c(
     "logit_supply.stan", "ces_supply.stan",
     "logit_stackelberg.stan", "ces_stackelberg.stan"
   ))

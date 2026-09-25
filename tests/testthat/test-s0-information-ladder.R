@@ -81,8 +81,8 @@ test_that("Logit and CES preparation retain pooling and X_s0 parity", {
 })
 
 test_that("single-market market pooling uses a direct prior source", {
-  root <- testthat::test_path("..", "..")
-  files <- file.path(root, "inst", "stan", c(
+  stan_dir <- .ab_test_path("inst", "stan")
+  files <- file.path(stan_dir, c(
     "logit_supply.stan", "logit_stackelberg.stan",
     "ces_supply.stan", "ces_stackelberg.stan"
   ))
@@ -117,11 +117,14 @@ test_that("automatic one-market panels share one direct outside share", {
     expect_equal(fit@metadata$s0_pooling_requested, "auto")
     expect_equal(fit@metadata$s0_pooling_resolved, "market")
     expect_equal(attr(fit@stan_data, "s0_pooling_resolved"), "market")
-    expect_equal(prod(fit@stanfit@par_dims$mu_s0_pool_vec), 1L)
-    expect_equal(prod(fit@stanfit@par_dims$sigma_s0_pool_vec), 0L)
-    expect_equal(prod(fit@stanfit@par_dims$s0_market_raw), 0L)
-    expect_equal(prod(fit@stanfit@par_dims$eta_s0_market), 0L)
-    outside <- rstan::extract(fit@stanfit, "s0_prob")$s0_prob
+    sizes <- fit@stanfit$metadata()$stan_variable_sizes
+    expect_equal(as.integer(sizes[["mu_s0_pool_vec"]]), 1L)
+    expect_false("sigma_s0_pool_vec" %in% names(sizes))
+    expect_false("s0_market_raw" %in% names(sizes))
+    expect_false("eta_s0_market" %in% names(sizes))
+    outside <- antitrustBayes:::.cmdstan_extract(
+      fit@stanfit, "s0_prob"
+    )$s0_prob
     expect_equal(outside[1, 1], outside[1, 2], tolerance = 1e-12)
   }
 })

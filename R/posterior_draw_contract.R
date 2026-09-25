@@ -1,5 +1,5 @@
 ## Central contract for extracting posterior quantities used by policy code.
-## Keeping this in one place makes the amount of data pulled from rstan
+## Keeping this in one place makes the amount of data pulled from CmdStanR
 ## explicit, and gives callers a common missing-field/alias failure.
 
 .posterior_fit_draw_names <- function(fit) {
@@ -7,6 +7,9 @@
     return(character())
   }
   st <- fit@stanfit
+  if (inherits(st, "CmdStanFit")) {
+    return(unique(as.character(st$metadata()$stan_variables)))
+  }
   slots <- methods::slotNames(st)
   ## `model_pars` describes everything compiled into the Stan model. The
   ## retained `sim$pars_oi` list is authoritative for a serialized fit:
@@ -73,7 +76,8 @@
 .posterior_contract <- function(fit,
                                 purpose = c("simulation", "policy_plan",
                                             "native_model", "posterior_quality",
-                                            "cutoff_summary", "posterior_k"),
+                                            "cutoff_summary", "posterior_k",
+                                            "posterior_predictive"),
                                 conditioning = "auto") {
   purpose <- match.arg(purpose)
   if (methods::is(fit, "BayesSpecifiedFit")) {
@@ -94,14 +98,15 @@
   }
   required <- character()
   optional <- character()
-  if (purpose %in% c("simulation", "policy_plan", "native_model")) {
+  if (purpose %in% c("simulation", "policy_plan", "native_model",
+                     "posterior_predictive")) {
     required <- c(required, "a_market", "s0_prob")
     if (structure %in% c("fringe", "stackelberg") &&
         identical(partition, "cutoff")) required <- c(required, "cutoff_share")
     if (native) required <- c(required, "posterior_component_prob")
     if (length(fit@supply_model) == 1L && as.integer(fit@supply_model) == 5L)
       required <- c(required, "bargaining_power")
-    if (purpose == "policy_plan") {
+    if (purpose %in% c("policy_plan", "posterior_predictive")) {
       if (quality == "sampled") {
         required <- c(required, "share_mean")
         ## One global group is deterministically centered at zero and the
@@ -142,6 +147,22 @@
             isTRUE(fit@stan_data$use_market_resid_scale == 1L))
           required <- c(required, "sigma_margin_market")
       }
+    }
+  }
+  if (purpose == "posterior_predictive") {
+    required <- c(required, "sigma_share", "sigma_margin")
+    required <- c(required, if (intercept_collapsed)
+      "share_mean_integrated" else "share_mean")
+    if (!native) required <- c(required, "pred_marginNormInv")
+    if (.posterior_contract_rho_active(fit)) required <- c(required, "rho")
+    if (isTRUE(fit@stan_data$use_market_resid_scale == 1L)) {
+      required <- c(required, "sigma_share_market", "sigma_margin_market")
+    }
+    if (identical(fit@metadata$share_likelihood, "student_t") ||
+        identical(fit@metadata$margin_likelihood, "student_t") ||
+        isTRUE(fit@stan_data$share_likelihood == 1L) ||
+        isTRUE(fit@stan_data$margin_likelihood == 1L)) {
+      required <- c(required, "nu")
     }
   }
   if (purpose == "posterior_quality") {
@@ -299,10 +320,7 @@
 .posterior_extract <- function(fit, purpose = "simulation", conditioning = "auto") {
   if (methods::is(fit, "BayesSpecifiedFit")) return(NULL)
   contract <- .posterior_contract(fit, purpose, conditioning)
-  ## A NULL Stan slot is only useful for test doubles, where rstan::extract is
-  ## mocked.  A real object still fails in rstan itself; returned fields are
-  ## validated below in either case.
-  raw <- rstan::extract(fit@stanfit, pars = contract$actual)
+  raw <- .cmdstan_extract(fit@stanfit, variables = contract$actual)
   .posterior_normalize_draw_names(raw, contract)
 }
 

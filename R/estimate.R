@@ -30,85 +30,11 @@
   min(resolved_chains, option_cores)
 }
 
-## Check the existence contract for a fit returned by rstan::sampling.  This
-## intentionally says nothing about sampler quality (divergences, R-hat, or
-## elapsed time); those are diagnostics for callers after a real fit exists.
-.assert_stan_sampling_contract <- function(stanfit, requested_chains) {
-  sampler_hint <- "Check sampler messages and initialization settings."
-  fail <- function(detail) {
-    stop(
-      paste("rstan::sampling returned an unusable stanfit:", detail,
-            sampler_hint),
-      call. = FALSE
-    )
-  }
-
-  if (!methods::is(stanfit, "stanfit")) {
-    fail("expected a normal stanfit object with sampling mode 0.")
-  }
-  if (length(stanfit@mode) != 1L || !is.numeric(stanfit@mode) ||
-      !is.finite(stanfit@mode) || stanfit@mode != 0L) {
-    fail("the fit is not a normal sampling result (mode must be 0).")
-  }
-
-  valid_count <- function(x, n = NULL) {
-    is.numeric(x) && (is.null(n) || length(x) == n) &&
-      all(is.finite(x)) && all(x >= 0) && all(x == floor(x))
-  }
-  if (!valid_count(requested_chains) || length(requested_chains) != 1L ||
-      requested_chains < 1 || requested_chains > .Machine$integer.max) {
-    fail("the requested chain count is invalid.")
-  }
-  n_chains <- as.integer(requested_chains)
-
-  sim <- tryCatch(stanfit@sim, error = function(e) NULL)
-  if (!is.list(sim)) fail("the fit has no usable sampling metadata.")
-  if (!valid_count(sim$chains) || length(sim$chains) != 1L ||
-      sim$chains != n_chains) {
-    fail(paste0("the returned chain count does not match requested chains (",
-                n_chains, ")."))
-  }
-  n_save <- sim$n_save
-  warmup2 <- sim$warmup2
-  if (!valid_count(n_save, n_chains) ||
-      !valid_count(warmup2, n_chains)) {
-    fail("per-chain n_save and warmup2 counts are missing or invalid.")
-  }
-  n_post <- n_save - warmup2
-  if (any(n_post <= 0)) {
-    fail("each chain must contain at least one post-warmup draw.")
-  }
-
-  samples <- sim$samples
-  if (!is.list(samples) || length(samples) != n_chains) {
-    fail("saved samples are missing for one or more chains.")
-  }
-  ## rstan stores each chain as a named list of flattened parameter vectors,
-  ## not as the matrices returned by get_sampler_params()/as.matrix().
-  sample_rows <- vapply(samples, function(chain) {
-    if (!is.list(chain) || length(chain) == 0L ||
-        is.null(names(chain)) || anyNA(names(chain)) ||
-        any(!nzchar(names(chain))) || anyDuplicated(names(chain))) {
-      return(NA_real_)
-    }
-    lengths <- vapply(chain, function(draws) {
-      if (!is.numeric(draws) || !is.null(dim(draws))) return(NA_real_)
-      as.numeric(length(draws))
-    }, numeric(1))
-    if (any(!is.finite(lengths)) || length(unique(lengths)) != 1L) {
-      return(NA_real_)
-    }
-    lengths[[1L]]
-  }, numeric(1))
-  if (any(!is.finite(sample_rows)) || any(sample_rows != n_save) ||
-      any(sample_rows <= 0)) {
-    fail("saved samples are empty or do not match per-chain n_save counts.")
-  }
-  if (!all(vapply(samples, function(chain)
-    identical(names(chain), names(samples[[1L]])), logical(1)))) {
-    fail("saved parameter names differ between chains.")
-  }
-  invisible(stanfit)
+## This verifies that a CmdStan process yielded usable draws.  Convergence
+## diagnostics are evaluated separately and never inferred from this check.
+.assert_stan_sampling_contract <- function(stanfit, requested_chains,
+                                           inference = "hmc") {
+  .cmdstan_assert_fit(stanfit, inference, requested_chains)
 }
 
 #' Bayesian Estimation of Demand and Supply
@@ -285,11 +211,17 @@
 #' @param model_prior Optional scalar recording the prespecified prior
 #'   probability assigned to this conduct model. It is provenance metadata;
 #'   posterior model odds are computed by \code{bayes_compare}.
-#' @param stan_options Named list of arguments passed to
-#'   \code{\link[rstan]{sampling}} (e.g., \code{chains}, \code{iter},
-#'   \code{warmup}, \code{cores}). If \code{cores} is omitted or
+#' @param stan_options Named HMC options translated to CmdStanR sampling
+#'   arguments (e.g., \code{chains}, total \code{iter}, \code{warmup},
+#'   \code{cores}, and \code{control}). If \code{cores} is omitted or
 #'   \code{NULL}, the default is \code{min(chains, getOption("mc.cores", 1L))};
 #'   an explicit \code{cores} value is validated and used unchanged.
+#' @param inference \code{"hmc"} (default) for CmdStanR sampling, or
+#'   \code{"pathfinder"} for exploratory approximate draws. Pathfinder
+#'   diagnostics do not establish HMC convergence or valid model evidence.
+#' @param pathfinder_options Named CmdStanR Pathfinder options such as
+#'   \code{num_paths}, \code{draws}, and \code{seed}. Used only with
+#'   \code{inference = "pathfinder"}.
 #' @param margin_observed Optional logical vector (length \code{N}, one per
 #'   row) indicating which observations have a usable margin. \code{NA} is
 #'   treated as \code{FALSE}. Rows with \code{margin_observed == FALSE} are
@@ -439,6 +371,8 @@ bayes_est <- function(prices, quantities, margins,
                       loo_cluster = NULL,
                       model_prior = NA_real_,
                       stan_options = list(),
+                      inference = c("hmc", "pathfinder"),
+                      pathfinder_options = list(),
                       margin_observed = NULL,
                       outside_price = 1,
                       structure = NULL,
@@ -449,6 +383,19 @@ bayes_est <- function(prices, quantities, margins,
                       k_scope = "market",
                       ...) {
   cl <- match.call()
+  inference <- match.arg(inference)
+  if (!is.list(stan_options) || !is.list(pathfinder_options)) {
+    stop("'stan_options' and 'pathfinder_options' must be named lists.",
+         call. = FALSE)
+  }
+  if (identical(inference, "pathfinder") && length(stan_options)) {
+    stop("'stan_options' apply to HMC; use 'pathfinder_options' for Pathfinder.",
+         call. = FALSE)
+  }
+  if (identical(inference, "hmc") && length(pathfinder_options)) {
+    stop("'pathfinder_options' require inference = 'pathfinder'.",
+         call. = FALSE)
+  }
   s0_pooling_supplied <- !missing(s0_pooling)
   legacy_s0_supplied <- !missing(use_s0_market_pool) ||
     !missing(use_s0_market_year_pool)
@@ -717,7 +664,7 @@ bayes_est <- function(prices, quantities, margins,
 
   threads_per_chain <- default_stan$threads_per_chain
   if (is.null(threads_per_chain)) {
-    threads_per_chain <- getOption("rstan.threads_per_chain", 1L)
+    threads_per_chain <- getOption("antitrustBayes.threads_per_chain", 1L)
   }
   target_chunks <- max(1L, as.integer(default_stan$chains) * as.integer(threads_per_chain))
   grainsize <- if (!is.null(default_stan$grainsize)) {
@@ -725,7 +672,7 @@ bayes_est <- function(prices, quantities, margins,
   } else {
     max(1L, ceiling(length(prices) / target_chunks))
   }
-  default_stan$threads_per_chain <- NULL
+  default_stan$threads_per_chain <- threads_per_chain
   default_stan$grainsize <- NULL
 
   # Prepare Stan data based on demand model
@@ -773,11 +720,11 @@ bayes_est <- function(prices, quantities, margins,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope
     )
-    stan_mod <- stanmodels[[if (structure == "stackelberg" ||
-                                (exact_structure && structure == "fringe" &&
-                                 partition_prior == "ordered_k")) {
+    stan_kernel <- if (structure == "stackelberg" ||
+                       (exact_structure && structure == "fringe" &&
+                        partition_prior == "ordered_k")) {
       "logit_stackelberg"
-    } else "logit_supply"]]
+    } else "logit_supply"
     price_sd_val <- stan_data$price_sd
   } else {
     stan_data <- prepare_ces_stan_data(
@@ -823,11 +770,11 @@ bayes_est <- function(prices, quantities, margins,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope
     )
-    stan_mod <- stanmodels[[if (structure == "stackelberg" ||
-                                (exact_structure && structure == "fringe" &&
-                                 partition_prior == "ordered_k")) {
+    stan_kernel <- if (structure == "stackelberg" ||
+                       (exact_structure && structure == "fringe" &&
+                        partition_prior == "ordered_k")) {
       "ces_stackelberg"
-    } else "ces_supply"]]
+    } else "ces_supply"
     price_sd_val <- stan_data$log_price_sd
   }
 
@@ -880,17 +827,58 @@ bayes_est <- function(prices, quantities, margins,
   df$market_year <- market_year_size$market_year_labels[df$market_year_idx]
   df$N_mt <- market_year_size$N_mt[df$market_year_idx]
 
-  # Run sampling
-  stanfit <- do.call(rstan::sampling, c(
-    list(object = stan_mod, data = stan_data),
-    default_stan
-  ))
+  # Compile the unchanged kernel once per source/CmdStan version, then infer.
+  stan_mod <- .cmdstan_model_for_kernel(stan_kernel)
+  stan_data_names <- names(stan_mod$variables()$data)
+  missing_stan_data <- setdiff(stan_data_names, names(stan_data))
+  if (length(missing_stan_data)) {
+    stop("Prepared data are missing Stan field(s): ",
+         paste(missing_stan_data, collapse = ", "), ".", call. = FALSE)
+  }
+  cmdstan_data <- stan_data[stan_data_names]
+  if (identical(inference, "hmc")) {
+    stanfit <- do.call(stan_mod$sample, c(
+      list(data = cmdstan_data), .cmdstan_sample_options(default_stan)
+    ))
+  } else {
+    stanfit <- do.call(stan_mod$pathfinder, c(
+      list(data = cmdstan_data),
+      .cmdstan_pathfinder_options(pathfinder_options)
+    ))
+  }
   .assert_stan_sampling_contract(
     stanfit,
-    requested_chains = default_stan$chains
+    requested_chains = default_stan$chains,
+    inference = inference
   )
+  ## CmdStanR reads CSV lazily. Materialize all retained draws before returning
+  ## the fit so ordinary saveRDS() works after temporary CSV files disappear.
+  invisible(stanfit$draws())
 
   metadata <- package_provenance(df, prior_manifest, model_prior)
+  metadata$backend <- "cmdstanr"
+  metadata$inference <- inference
+  metadata$stan_kernel <- stan_kernel
+  metadata$stan_source_hash <- digest::digest(
+    file = .cmdstan_kernel_file(stan_kernel), algo = "sha256"
+  )
+  metadata$stan_data_fields <- stan_data_names
+  metadata$stan_data_hash <- digest::digest(cmdstan_data, algo = "sha256")
+  metadata$cmdstan_version <- as.character(cmdstanr::cmdstan_version())
+  metadata$pathfinder_pareto_k <- if (identical(inference, "pathfinder"))
+    .cmdstan_pathfinder_pareto_k(stanfit) else NA_real_
+  metadata$inference_status <- if (identical(inference, "hmc")) "hmc_unreviewed" else
+    if (is.finite(metadata$pathfinder_pareto_k) &&
+        metadata$pathfinder_pareto_k < 0.7) "exploratory_diagnostic_pass" else
+          "exploratory_diagnostic_failed_or_unknown"
+  if (identical(inference, "pathfinder") &&
+      !identical(metadata$inference_status, "exploratory_diagnostic_pass")) {
+    warning("Pathfinder draws are exploratory; Pareto k is ",
+            if (is.finite(metadata$pathfinder_pareto_k))
+              format(metadata$pathfinder_pareto_k) else "unknown",
+            ". Do not treat these as validated posterior draws.",
+            call. = FALSE)
+  }
   metadata$stan_chains <- as.integer(default_stan$chains)
   metadata$stan_cores <- as.integer(default_stan$cores)
   metadata$likelihood <- likelihood

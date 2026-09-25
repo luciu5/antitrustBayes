@@ -15,7 +15,7 @@ the posterior because it has no likelihood draws.}
 
 \item{draws}{Optional generated-quantity draw list. This is primarily for
 testing and serialized-fit recovery; when \code{NULL}, draws are obtained
-from \code{rstan::extract}.}
+from the package's posterior draw extraction contract.}
 }
 \value{
 A data frame with one row per market and supported k. Columns are

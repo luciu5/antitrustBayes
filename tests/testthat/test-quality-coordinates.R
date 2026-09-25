@@ -41,14 +41,7 @@ test_that("centered quality basis is orthonormal and zero-sum", {
 })
 
 test_that("all Stan graphs use the centered quality coordinate contract", {
-  package_root <- normalizePath(file.path(testthat::test_path(), "..", ".."),
-                                mustWork = TRUE)
-  source_stan_root <- file.path(package_root, "inst", "stan")
-  stan_root <- if (dir.exists(source_stan_root)) {
-    source_stan_root
-  } else {
-    system.file("stan", package = "antitrustBayes", mustWork = TRUE)
-  }
+  stan_root <- .ab_test_path("inst", "stan")
   files <- file.path(stan_root, c(
     "logit_supply.stan", "ces_supply.stan",
     "logit_stackelberg.stan", "ces_stackelberg.stan"

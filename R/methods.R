@@ -126,7 +126,7 @@ setGeneric("wtp_convert", function(object, to_gamma = TRUE)
 setMethod("wtp_convert", "BayesLogit", function(object, to_gamma = TRUE) {
   p_bar <- mean(object@data$prices)
   mu_log_a_draws <- as.vector(
-    rstan::extract(object@stanfit, "mu_log_a")[[1]]
+    .cmdstan_extract(object@stanfit, "mu_log_a")[[1]]
   )
 
   if (to_gamma) {
@@ -178,17 +178,16 @@ setMethod("show", "BayesLogit", function(object) {
   cat(" ", price_label, "(scaling):", round(object@price_sd, 4), "\n")
 
   # Basic MCMC diagnostics
-  fit_summary <- rstan::summary(object@stanfit,
-    pars = c(
-      "mu_log_a", "sigma_share",
-      "sigma_margin"
-    )
-  )$summary
+  fit_summary <- object@stanfit$summary(
+    variables = c("mu_log_a", "sigma_share", "sigma_margin")
+  )
   cat("\nKey parameter estimates:\n")
-  print(round(fit_summary[, c(
-    "mean", "sd", "2.5%", "97.5%", "Rhat",
-    "n_eff"
-  )], 3))
+  print(fit_summary[, c("variable", "mean", "sd", "q5", "q95",
+                         "rhat", "ess_bulk")])
+  if (identical(object@metadata$inference, "pathfinder")) {
+    cat("  Inference: exploratory Pathfinder (Pareto k = ",
+        format(object@metadata$pathfinder_pareto_k), ")\n", sep = "")
+  }
 
   # For CES fits, show equivalent logit alpha
   if (demand_label == "CES") {
@@ -206,8 +205,8 @@ setMethod("show", "BayesLogit", function(object) {
 #' @param object A \code{BayesLogit} object.
 #' @exportMethod summary
 setMethod("summary", "BayesLogit", function(object) {
-  s <- rstan::summary(object@stanfit)$summary
-  print(round(s, 3))
+  s <- object@stanfit$summary()
+  print(s)
   invisible(s)
 })
 
