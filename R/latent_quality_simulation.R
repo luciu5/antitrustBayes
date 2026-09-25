@@ -110,7 +110,7 @@
 }
 
 .lq_subset_draws <- function(draws, indices, n_total) {
-  ## rstan returns vectors, matrices, and higher-dimensional arrays with the
+  ## The package draw contract uses vectors, matrices, and higher-dimensional arrays with the
   ## draw dimension first. Subsetting only that dimension avoids constructing
   ## conditional quality draws for every available posterior row when a plan
   ## requests a small reusable subset.
@@ -134,31 +134,32 @@
 ## role draws must agree across all years in a market; a period-scoped state
 ## therefore fails explicitly instead of silently selecting one year.
 .lq_market_quality_k_cache <- function(fit, incidence, k_cache) {
-  if (is.null(k_cache) || !identical(as.character(incidence$quality_scope), "market"))
+  if (is.null(k_cache))
     return(k_cache)
+  scope <- as.character(incidence$quality_scope)
+  if (!scope %in% c("market", "global")) return(k_cache)
   setup <- .lq_all_units(fit)
   info_market <- vapply(setup$info, function(z) as.integer(z$market_index), integer(1))
-  n_market <- max(as.integer(incidence$quality_lookup$market_index))
+  n_market <- as.integer(fit@stan_data$N_market %||% max(info_market))
+  ## Global collapsed quality can use the exact-k/rho joint conditional only
+  ## for one market. It still needs the same market-level role state when that
+  ## market contains several years.
+  if (scope == "global" && n_market != 1L) return(k_cache)
   if (length(info_market) != length(setup$info) || anyNA(info_market) ||
       any(info_market < 1L | info_market > n_market)) {
     stop("The exact-k quality cache cannot map simulation units to markets.", call. = FALSE)
   }
-  unit_ids <- vapply(setup$info, function(z) as.character(z$unit_id), character(1))
-  out <- lapply(k_cache, function(z) {
-    if (is.null(z) || is.null(names(z)))
-      stop("The exact-k quality cache must be named by simulation unit.", call. = FALSE)
-    z <- stats::setNames(as.numeric(z), names(z))
-    if (any(!is.finite(z)) || any(z != floor(z)))
-      stop("The exact-k quality cache contains malformed states.", call. = FALSE)
+  out <- lapply(seq_along(k_cache), function(draw_pos) {
     vals <- numeric(n_market)
     for (m in seq_len(n_market)) {
-      ids <- unit_ids[info_market == m]
-      hit <- ids[ids %in% names(z)]
-      if (!length(hit))
+      unit_pos <- which(info_market == m)
+      if (!length(unit_pos))
         stop("The exact-k quality cache is missing market ", m, ".", call. = FALSE)
-      vv <- as.numeric(z[hit])
+      vv <- vapply(unit_pos, function(pos) {
+        .lq_plan_k_for_unit(list(k_cache = k_cache), draw_pos, setup$info[[pos]])
+      }, integer(1))
       if (any(vv != vv[[1L]]))
-        stop("Market-scoped quality requires one exact-k state across all years in market ", m, ".", call. = FALSE)
+        stop("Exact-k quality conditioning requires one exact-k state across all years in market ", m, ".", call. = FALSE)
       vals[[m]] <- vv[[1L]]
     }
     vals
@@ -291,6 +292,28 @@
                  role_offset = role_offset)
 }
 
+## A single-year plan uses market IDs as unit keys; a caller that explicitly
+## selects that year uses market_year IDs. Preserve the same realized k.
+.lq_plan_k_for_unit <- function(plan, draw_pos, unit) {
+  state <- plan$k_cache[[draw_pos]]
+  if (is.null(state) || is.null(names(state))) {
+    stop("The exact-k draw plan has no named role state.", call. = FALSE)
+  }
+  key <- if (unit$unit_id %in% names(state)) unit$unit_id else
+    if (unit$market_id %in% names(state)) unit$market_id else NA_character_
+  if (is.na(key)) {
+    stop("The exact-k draw plan has no role state for simulation unit ",
+         unit$unit_id, ".", call. = FALSE)
+  }
+  value <- state[[key]]
+  if (length(value) != 1L || is.na(value) || !is.finite(value) ||
+      value < 0L || value != as.integer(value)) {
+    stop("The exact-k draw plan has an invalid role state for simulation unit ",
+         unit$unit_id, ".", call. = FALSE)
+  }
+  as.integer(value)
+}
+
 .lq_validate_role_plan_args <- function(fit, role_mapping, fixed_k,
                                         role_offset) {
   role_mapping <- match.arg(role_mapping, c("mixture", "map", "threshold"))
@@ -346,7 +369,7 @@
   version <- as.integer(version)
   if (version == 1L && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
     if (is.null(fit@stanfit)) stop("Cannot validate a legacy plan without its Stan fit.", call. = FALSE)
-    draws <- rstan::extract(fit@stanfit)
+    draws <- .cmdstan_extract(fit@stanfit)
   }
   if (version %in% c(2L, 3L) && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
     draws <- .posterior_extract(fit, "policy_plan")
@@ -410,8 +433,8 @@
   digest::digest(plan[keys], algo = "xxhash64", serialize = TRUE)
 }
 
-#' Internal draw-plan constructor.  `draws` is the policy-plan contract union;
-#' the public wrapper below performs one selected extraction and delegates here.
+## Internal draw-plan constructor. `draws` is the policy-plan contract union;
+## the public wrapper below performs one selected extraction and delegates here.
 .lq_make_policy_plan <- function(fit, draws, n_draws = NULL, seed = NULL,
                                 role_mapping = c("mixture", "map", "threshold"),
                                 fixed_k = NULL, role_offset = 0L) {
@@ -485,6 +508,9 @@
 #' @param fixed_k Optional exact leader/core count, scalar or named by
 #'   simulation unit. When supplied, every selected draw uses this count.
 #' @param role_offset Integer adjacent-partition sensitivity offset.
+#' @param allow_experimental Explicitly allow exploratory Pathfinder draws
+#'   for policy work. Their approximation diagnostics remain attached to the
+#'   originating fit and do not certify posterior accuracy.
 #' @return A reusable object of class \code{bayes_policy_draw_plan}.
 #' @details New plans bind a version-3 canonical, name-ordered economic draw
 #' fingerprint, including reconstructed market-intercept states when those
@@ -496,8 +522,10 @@
 #' @export
 posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
                                    role_mapping = c("mixture", "map", "threshold"),
-                                   fixed_k = NULL, role_offset = 0L) {
+                                   fixed_k = NULL, role_offset = 0L,
+                                   allow_experimental = FALSE) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.", call. = FALSE)
+  .cmdstan_require_policy_inference(fit, allow_experimental)
   draws <- if (methods::is(fit, "BayesSpecifiedFit")) NULL else
     .posterior_extract(fit, "policy_plan")
   .lq_make_policy_plan(fit, draws, n_draws = n_draws, seed = seed,
@@ -521,7 +549,7 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
   if (signature_version == 1L && !methods::is(fit, "BayesSpecifiedFit")) {
     ## Explicit compatibility path: v1 hashes the old unrestricted extract.
     if (is.null(fit@stanfit)) stop("Cannot validate a legacy plan without its Stan fit.", call. = FALSE)
-    draws <- rstan::extract(fit@stanfit)
+    draws <- .cmdstan_extract(fit@stanfit)
   } else if (!methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
     draws <- .posterior_extract(fit, "policy_plan")
   }

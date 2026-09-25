@@ -128,7 +128,7 @@
       stop("Posterior draws field '", name,
            "' must contain complete draws by observations.", call. = FALSE)
     }
-    ## A scalar generated vector is returned by rstan::extract as a vector;
+    ## A scalar generated vector can be represented as a plain vector;
     ## with one observation its length is therefore the number of draws.
     n_draw <- length(x) / n_obs
     return(matrix(as.numeric(x), nrow = n_draw, ncol = n_obs, byrow = TRUE))
@@ -211,7 +211,7 @@
   if (length(blocks) != incidence$N_quality_block || length(starts) != length(blocks) ||
       any(blocks < 1L) || any(starts < 1L) ||
       any(starts + blocks - 1L > n_quality) ||
-      !identical(starts, cumsum(c(1L, head(blocks, -1L)))))
+      !identical(starts, cumsum(c(1L, utils::head(blocks, -1L)))))
     stop("Collapsed quality fit has malformed centering blocks.", call. = FALSE)
   lookup <- incidence$quality_lookup
   if (!is.data.frame(lookup) || nrow(lookup) != n_quality ||
@@ -544,7 +544,10 @@
 ## the existing Stan Stackelberg kernels and use one firm statistic per firm-
 ## market-year, so multiproduct firms are never counted once per product.
 .stack_pure_foc_margin_prediction <- function(fit, parsed, draws,
-                                              draw_indices, realized_k) {
+                                              draw_indices, realized_k,
+                                              realized_k_scope = c("market",
+                                                                   "market_year")) {
+  realized_k_scope <- match.arg(realized_k_scope)
   d <- fit@stan_data
   needed <- c("firm_mky_start", "firm_mky_n",
               "firm_mky_rank", "obs_to_firm_mky", "market_year_idx",
@@ -558,6 +561,22 @@
   n_market <- max(as.integer(d$market))
   n_mky <- max(as.integer(d$market_year_idx))
   n <- length(parsed$y)
+  mky_market <- as.integer(d$mky_to_market)
+  if (length(mky_market) != n_mky || anyNA(mky_market) ||
+      any(mky_market < 1L | mky_market > n_market))
+    stop("Exact ordered-k market-year map is malformed.", call. = FALSE)
+  expected_k <- if (realized_k_scope == "market") n_market else n_mky
+  if (!is.matrix(realized_k) || nrow(realized_k) != length(draw_indices) ||
+      ncol(realized_k) != expected_k || anyNA(realized_k) ||
+      any(realized_k < 0L) || any(realized_k != floor(realized_k))) {
+    stop("Exact ordered-k states do not match the selected scope.",
+         call. = FALSE)
+  }
+  k_market_year <- if (realized_k_scope == "market") {
+    realized_k[, mky_market, drop = FALSE]
+  } else {
+    realized_k
+  }
   amat <- .posterior_quality_matrix(draws$a_market, n_market, "a_market")
   smat <- .posterior_quality_matrix(draws$s0_prob, n_mky, "s0_prob")
   if (nrow(amat) != parsed$n_draw || nrow(smat) != parsed$n_draw)
@@ -577,10 +596,10 @@
   pred <- matrix(NA_real_, nrow = length(draw_indices), ncol = n)
   for (rr in seq_along(draw_indices)) {
     draw <- as.integer(draw_indices[[rr]])
-    k_by_market <- realized_k[rr, ]
+    k_by_market_year <- k_market_year[rr, ]
     response <- numeric(n_mky)
     if (identical(structure_name, "stackelberg")) for (mky in seq_len(n_mky)) {
-      m <- mky_market[[mky]]; k <- k_by_market[[m]]
+      m <- mky_market[[mky]]; k <- k_by_market_year[[mky]]
       st <- firm_start[[mky]]; nf <- firm_n[[mky]]
       ff <- seq.int(st, length.out = nf)
       if (identical(as.character(fit@demand_model), "ces")) {
@@ -611,7 +630,7 @@
     }
     for (i in seq_len(n)) {
       m <- as.integer(d$market[[i]]); mky <- as.integer(d$market_year_idx[[i]])
-      k <- as.integer(k_by_market[[m]]); me <- obs_firm[[i]]
+      k <- as.integer(k_by_market_year[[mky]]); me <- obs_firm[[i]]
       rank <- firm_rank[[me]]
       if (identical(as.character(fit@demand_model), "ces")) {
         s0 <- smat[draw, mky]
