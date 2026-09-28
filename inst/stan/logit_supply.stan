@@ -450,10 +450,9 @@ parameters {
   vector[use_cutoff == 1 ? 1 : 0] mu_b_fringe_vec;
   vector[(is_cournot == 1 && pool_alpha_by_market == 0) ? 0 : 1] mu_log_a_free;
   vector<lower=0>[pool_alpha_by_market == 1 ? 1 : 0] sigma_log_a_vec;
-  vector[(is_cournot == 0 && pool_alpha_by_market == 1 && use_centered_alpha == 0) ? N_market : 0] r_market_a_raw;
-  vector[(is_cournot == 0 && pool_alpha_by_market == 1 && use_centered_alpha == 1) ? N_market : 0] log_a_market_pool;
+  vector[(pool_alpha_by_market == 1 && use_centered_alpha == 0) ? N_market : 0] r_market_a_raw;
+  vector[(pool_alpha_by_market == 1 && use_centered_alpha == 1) ? N_market : 0] log_a_market_pool;
   vector[(is_cournot == 1 && pool_alpha_by_market == 0) ? 1 : 0] log_kappa_vec;
-  vector[(is_cournot == 1 && pool_alpha_by_market == 1) ? N_market : 0] log_kappa_market;
   vector[(use_s0_market_year_pool == 1 || use_s0_market_pool == 1 ||
           market_s0_coordinate_active == 1) ? 0 : N_market_year] s0_logit;
   vector[(use_s0_market_year_pool == 1 || use_s0_market_pool == 1) ? 1 : 0] mu_s0_pool_vec;
@@ -660,9 +659,10 @@ transformed parameters {
     mu_log_a = log_kappa_vec[1] - log_s0_ref_global;
     a_market = rep_vector(exp(mu_log_a), N_market);
   } else {
-    log_a_market_derived = log_kappa_market - mean_log_s0_market;
-    a_market = exp(log_a_market_derived);
     mu_log_a = mu_log_a_free[1];
+    if (use_centered_alpha == 1) log_a_market_derived = log_a_market_pool;
+    else log_a_market_derived = mu_log_a + sigma_log_a * r_market_a_raw;
+    a_market = exp(log_a_market_derived);
   }
   alpha_structural_market = a_market / price_sd;
   if (quality_parameterization == 1) for (block in 1:N_quality_block) {
@@ -710,12 +710,9 @@ model {
     target += normal_lpdf(mu_log_a_free[1] | prior_alpha_mean, prior_alpha_sd);
   }
   if (pool_alpha_by_market == 1) target += normal_lpdf(sigma_log_a_vec | 0, prior_sigma_alpha) - num_elements(sigma_log_a_vec) * normal_lccdf(0 | 0, prior_sigma_alpha);
-  if (is_cournot == 0 && pool_alpha_by_market == 1) {
+  if (pool_alpha_by_market == 1) {
     if (use_centered_alpha == 1) target += normal_lpdf(log_a_market_pool | mu_log_a, sigma_log_a);
     else target += std_normal_lpdf(r_market_a_raw);
-  }
-  if (is_cournot == 1 && pool_alpha_by_market == 1) {
-    target += normal_lpdf(log_a_market_derived | mu_log_a, sigma_log_a);
   }
   if (is_single_market == 0) {
     target += normal_lpdf(mu_b_market_vec | 0, 1);

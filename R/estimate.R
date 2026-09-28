@@ -170,7 +170,8 @@
 #'   noncentered market-level \code{s0} hierarchy with multiple markets.
 #' @param use_centered_alpha Logical. If \code{TRUE}, use the centered
 #'   parameterization for the selected market-level price-effect pool (Logit
-#'   price coefficients or CES structural elasticities). Default \code{FALSE}.
+#'   price coefficients or CES structural elasticities). Applies to every
+#'   pooled conduct model, including Cournot. Default \code{FALSE}.
 #' @param use_centered_s0_pool Logical. If \code{TRUE}, use the centered
 #'   parameterization for either outside-share pooling mode. Default \code{FALSE}.
 #' @param use_hmt Logical. If \code{TRUE}, apply a soft Hypothetical

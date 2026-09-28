@@ -213,7 +213,20 @@ test_that("all four Stan kernels retain rotation diagnostics and economic equati
   expect_match(logit_code,
                "mu_log_a = log_kappa_vec[1] - log_s0_ref_global",
                fixed = TRUE)
-  expect_match(logit_code, "log_kappa_market", fixed = TRUE)
+  expect_no_match(logit_code, "log_kappa_market", fixed = TRUE)
+  expect_match(logit_code,
+               "log_a_market_derived = mu_log_a + sigma_log_a * r_market_a_raw",
+               fixed = TRUE)
+
+  stackelberg_code <- paste(
+    readLines(file.path(stan_dir, "logit_stackelberg.stan")), collapse = "\n"
+  )
+  expect_match(stackelberg_code, "log_kappa_vec", fixed = TRUE)
+  expect_no_match(stackelberg_code, "log_kappa_market", fixed = TRUE)
+  expect_match(stackelberg_code,
+               "log_a_market_derived = mu_log_a + sigma_log_a * r_market_a_raw",
+               fixed = TRUE)
+
   ces_code <- paste(readLines(file.path(stan_dir, "ces_supply.stan")),
                     collapse = "\n")
   expect_match(ces_code, "ces_inv_margin", fixed = TRUE)
