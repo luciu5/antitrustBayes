@@ -12,6 +12,7 @@ bayes_compare(
   bridge = TRUE,
   bridge_maxiter = 5000L,
   bridge_repetitions = 3L,
+  bridge_method = c("normal", "warp3"),
   loo_unit = c("cluster", "period", "market", "observation"),
   prior_weights = NULL,
   universe = NULL
@@ -42,6 +43,13 @@ Default 5000.}
 
 \item{bridge_repetitions}{Number of independently initialized bridge runs
 per model. The reported log marginal likelihood is their median.}
+
+\item{bridge_method}{Bridge-sampling estimator passed to
+\code{\link[bridgesampling]{bridge_sampler}}: \code{"normal"} (default)
+or \code{"warp3"}. \code{"warp3"} symmetrizes the posterior before
+fitting the proposal and can reduce across-repetition log marginal
+likelihood variance for skewed posteriors, at roughly double the
+per-repetition cost.}
 
 \item{loo_unit}{Natural predictive unit: observation, period, market, or
 cluster. Cluster uses the identifiers supplied to \code{bayes_est}.}

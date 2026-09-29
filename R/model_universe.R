@@ -823,7 +823,7 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
 }
 
 .bayes_compare_universe <- function(args, universe, bridge, bridge_maxiter,
-                                    bridge_repetitions, loo_unit) {
+                                    bridge_repetitions, bridge_method, loo_unit) {
   descriptor <- .mu_validate_descriptor(universe)
   if (!isTRUE(bridge)) {
     stop("Model-universe comparison requires bridge = TRUE so every retained ",
@@ -838,7 +838,8 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   ordinary_args <- c(fits, list(
     restrictions = NULL, reference = NULL, restriction_draws = NULL,
     bridge = bridge, bridge_maxiter = bridge_maxiter,
-    bridge_repetitions = bridge_repetitions, loo_unit = loo_unit,
+    bridge_repetitions = bridge_repetitions, bridge_method = bridge_method,
+    loo_unit = loo_unit,
     prior_weights = NULL, universe = NULL
   ))
   source_evidence <- do.call(bayes_compare, ordinary_args)

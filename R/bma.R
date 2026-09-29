@@ -301,6 +301,12 @@ validate_comparison_contract <- function(fits) {
 #'   Default 5000.
 #' @param bridge_repetitions Number of independently initialized bridge runs
 #'   per model. The reported log marginal likelihood is their median.
+#' @param bridge_method Bridge-sampling estimator passed to
+#'   \code{\link[bridgesampling]{bridge_sampler}}: \code{"normal"} (default)
+#'   or \code{"warp3"}. \code{"warp3"} symmetrizes the posterior before
+#'   fitting the proposal and can reduce across-repetition log marginal
+#'   likelihood variance for skewed posteriors, at roughly double the
+#'   per-repetition cost.
 #' @param loo_unit Natural predictive unit: observation, period, market, or
 #'   cluster. Cluster uses the identifiers supplied to \code{bayes_est}.
 #' @param prior_weights Optional numeric vector of prior model probabilities.
@@ -364,8 +370,10 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
                           restriction_draws = NULL,
                           bridge = TRUE, bridge_maxiter = 5000L,
                           bridge_repetitions = 3L,
+                          bridge_method = c("normal", "warp3"),
                           loo_unit = c("cluster", "period", "market", "observation"),
                           prior_weights = NULL, universe = NULL) {
+  bridge_method <- match.arg(bridge_method)
   args <- list(...)
   if (!is.null(universe)) {
     # Accept a named collection as well as named fits in ... for this route.
@@ -384,7 +392,8 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
     return(.bayes_compare_universe(
       args, universe = universe, bridge = bridge,
       bridge_maxiter = bridge_maxiter,
-      bridge_repetitions = bridge_repetitions, loo_unit = loo_unit
+      bridge_repetitions = bridge_repetitions, bridge_method = bridge_method,
+      loo_unit = loo_unit
     ))
   }
   if (!is.null(restrictions)) {
@@ -553,7 +562,7 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
         bridge_list[[i]] <- lapply(seq_len(bridge_repetitions), function(rep_id) {
           tryCatch(
             bridgesampling::bridge_sampler(
-              bridge_context$samples, repetitions = 1L,
+              bridge_context$samples, repetitions = 1L, method = bridge_method,
               silent = TRUE, maxiter = bridge_maxiter
             ),
             error = function(e) {
