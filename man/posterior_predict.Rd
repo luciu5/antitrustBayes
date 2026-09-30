@@ -2,14 +2,15 @@
 % Please edit documentation in R/posterior_predictive.R
 \name{posterior_predict}
 \alias{posterior_predict}
-\title{Draw replicated likelihood outcomes from a fitted Bayesian model}
+\title{Draw posterior likelihood outcomes from a fitted Bayesian model}
 \usage{
 posterior_predict(
   fit,
   draw_plan = NULL,
   n_draws = NULL,
   seed = NULL,
-  allow_experimental = FALSE
+  allow_experimental = FALSE,
+  share_conditioning = c("replicate", "observed")
 )
 }
 \arguments{
@@ -28,20 +29,28 @@ and, when creating a new plan, draw selection and latent-state
 reconstruction. The prior R random state is restored after a seeded call.}
 
 \item{allow_experimental}{Explicitly allow exploratory Pathfinder draws.}
+
+\item{share_conditioning}{\code{"replicate"} (default) draws new log-share
+outcomes. \code{"observed"} fixes log shares at their observed values and
+draws margins conditional on their residuals. The latter requires the
+joint likelihood (\code{likelihood_mode = 1}).}
 }
 \value{
-A \code{posterior_predictive} list containing observed and
-replicated \code{log_shareIn} and \code{log_marginNormInv} matrices,
+A \code{posterior_predictive} list containing observed outcomes and
+draw-aligned \code{log_shareIn} and \code{log_marginNormInv} matrices,
 original posterior draw indices, the state plan, and provenance metadata.
 The observation-level \code{margin_observed} mask distinguishes observed
 margins from generated imputations. Replicated share entries are
 \code{NA} when the fitted likelihood omitted the share equation.
+With \code{share_conditioning = "observed"}, the share matrix repeats the
+observed log shares for each draw; \code{metadata$share_conditioning} is
+\code{"observed"} and \code{metadata$share_replicated} is \code{FALSE}.
 }
 \description{
-Draw replicated likelihood outcomes from a fitted Bayesian model
+Draw posterior likelihood outcomes from a fitted Bayesian model
 }
 \details{
-Each row of the replicated matrices is generated from one posterior
+Each row of the outcome matrices corresponds to one posterior
 draw. Shared observed predictors remain fixed. Gaussian and Student-t
 residual laws follow the Stan likelihood exactly, including the joint
 Gaussian or Student-t rho conditional for margins. Collapsed quality and
@@ -49,6 +58,12 @@ market-intercept states are reconstructed with the same helpers used by
 \code{posterior_policy_draws()}; exact role models reuse the plan's sampled
 component state and calculate its state-specific FOC margin mean. The
 returned object contains data and metadata only; it does not create plots.
+The raw \code{log_shareIn} values are likelihood outcomes. The
+\code{share_rep_normalized} matrix is a derived within-market-year softmax;
+it is not a likelihood variable. Prediction samples residual outcomes at
+the fitted latent states and does not solve a new structural equilibrium.
+Normalizing shares therefore does not force the raw log shares to match
+the observed values in \code{"replicate"} mode.
 }
 \seealso{
 \code{posterior_policy_draws()}, \code{posterior_quality()}

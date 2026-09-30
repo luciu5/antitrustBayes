@@ -1,4 +1,4 @@
-#' Draw replicated likelihood outcomes from a fitted Bayesian model
+#' Draw posterior likelihood outcomes from a fitted Bayesian model
 #'
 #' @param fit An estimated \code{BayesFit} returned by \code{bayes_est()}.
 #' @param draw_plan Optional reusable state plan returned by
@@ -11,15 +11,22 @@
 #'   and, when creating a new plan, draw selection and latent-state
 #'   reconstruction. The prior R random state is restored after a seeded call.
 #' @param allow_experimental Explicitly allow exploratory Pathfinder draws.
+#' @param share_conditioning \code{"replicate"} (default) draws new log-share
+#'   outcomes. \code{"observed"} fixes log shares at their observed values and
+#'   draws margins conditional on their residuals. The latter requires the
+#'   joint likelihood (\code{likelihood_mode = 1}).
 #'
-#' @return A \code{posterior_predictive} list containing observed and
-#'   replicated \code{log_shareIn} and \code{log_marginNormInv} matrices,
+#' @return A \code{posterior_predictive} list containing observed outcomes and
+#'   draw-aligned \code{log_shareIn} and \code{log_marginNormInv} matrices,
 #'   original posterior draw indices, the state plan, and provenance metadata.
 #'   The observation-level \code{margin_observed} mask distinguishes observed
 #'   margins from generated imputations. Replicated share entries are
 #'   \code{NA} when the fitted likelihood omitted the share equation.
+#'   With \code{share_conditioning = "observed"}, the share matrix repeats the
+#'   observed log shares for each draw; \code{metadata$share_conditioning} is
+#'   \code{"observed"} and \code{metadata$share_replicated} is \code{FALSE}.
 #'
-#' @details Each row of the replicated matrices is generated from one posterior
+#' @details Each row of the outcome matrices corresponds to one posterior
 #'   draw. Shared observed predictors remain fixed. Gaussian and Student-t
 #'   residual laws follow the Stan likelihood exactly, including the joint
 #'   Gaussian or Student-t rho conditional for margins. Collapsed quality and
@@ -27,17 +34,30 @@
 #'   \code{posterior_policy_draws()}; exact role models reuse the plan's sampled
 #'   component state and calculate its state-specific FOC margin mean. The
 #'   returned object contains data and metadata only; it does not create plots.
+#'   The raw \code{log_shareIn} values are likelihood outcomes. The
+#'   \code{share_rep_normalized} matrix is a derived within-market-year softmax;
+#'   it is not a likelihood variable. Prediction samples residual outcomes at
+#'   the fitted latent states and does not solve a new structural equilibrium.
+#'   Normalizing shares therefore does not force the raw log shares to match
+#'   the observed values in \code{"replicate"} mode.
 #'
 #' @seealso \code{posterior_policy_draws()}, \code{posterior_quality()}
 #' @export
 posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
-                              seed = NULL, allow_experimental = FALSE) {
+                              seed = NULL, allow_experimental = FALSE,
+                              share_conditioning = c("replicate", "observed")) {
+  share_conditioning <- match.arg(share_conditioning)
   if (!methods::is(fit, "BayesFit") || methods::is(fit, "BayesSpecifiedFit")) {
     stop("'fit' must be an estimated BayesFit object.", call. = FALSE)
   }
   if (length(allow_experimental) != 1L || is.na(allow_experimental) ||
       !is.logical(allow_experimental)) {
     stop("'allow_experimental' must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (share_conditioning == "observed" &&
+      .posterior_predict_mask_and_mode(fit)$likelihood_mode != 1L) {
+    stop("'share_conditioning = \"observed\"' requires the joint likelihood (likelihood_mode = 1).",
+         call. = FALSE)
   }
   .cmdstan_require_policy_inference(fit, allow_experimental)
   if (!is.null(seed)) seed <- .lq_validate_seed(seed)
@@ -54,7 +74,8 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
   } else {
     .lq_validate_plan(prediction_fit, draw_plan, n_draws = n_draws, draws = draws)
   }
-  .posterior_predict_from_draws(prediction_fit, draws, plan, seed = seed)
+  .posterior_predict_from_draws(prediction_fit, draws, plan, seed = seed,
+                                share_conditioning = share_conditioning)
 }
 
 .posterior_predict_isolated_fit <- function(fit) {
@@ -342,7 +363,21 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
                                               share_family, margin_family,
                                               nu, rho, rho_active,
                                               likelihood_mode, margin_mask,
-                                              seed = NULL) {
+                                              seed = NULL,
+                                              share_conditioning = c("replicate", "observed"),
+                                              observed_share = NULL) {
+  share_conditioning <- match.arg(share_conditioning)
+  if (share_conditioning == "observed") {
+    if (likelihood_mode != 1L) {
+      stop("'share_conditioning = \"observed\"' requires the joint likelihood (likelihood_mode = 1).",
+           call. = FALSE)
+    }
+    if (!is.numeric(observed_share) || length(observed_share) != ncol(share_mean) ||
+        any(!is.finite(observed_share))) {
+      stop("Conditional prediction requires finite observed log shares for every observation.",
+           call. = FALSE)
+    }
+  }
   n_draw <- nrow(share_mean)
   n_obs <- ncol(share_mean)
   share_rep <- matrix(NA_real_, nrow = n_draw, ncol = n_obs)
@@ -352,13 +387,19 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
       nu_r <- if (length(nu) == 1L) nu[[1L]] else nu[[r]]
       rho_r <- if (length(rho) == 1L) rho[[1L]] else rho[[r]]
       if (likelihood_mode != 3L) {
-        share_error <- if (identical(share_family, "gaussian")) {
+        share_error <- if (share_conditioning == "observed") {
+          observed_share - share_mean[r, ]
+        } else if (identical(share_family, "gaussian")) {
           stats::rnorm(n_obs, sd = share_scale[r, ])
         } else {
           stats::rt(n_obs, df = nu_r) * share_scale[r, ] *
             sqrt((nu_r - 2) / nu_r)
         }
-        share_rep[r, ] <- share_mean[r, ] + share_error
+        share_rep[r, ] <- if (share_conditioning == "observed") {
+          observed_share
+        } else {
+          share_mean[r, ] + share_error
+        }
       }
       margin_predict_mask <- if (likelihood_mode != 2L) {
         rep.int(TRUE, n_obs)
@@ -402,10 +443,16 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
   .posterior_quality_with_seed(seed, calculate)
 }
 
-.posterior_predict_from_draws <- function(fit, draws, plan, seed = NULL) {
+.posterior_predict_from_draws <- function(fit, draws, plan, seed = NULL,
+                                          share_conditioning = c("replicate", "observed")) {
+  share_conditioning <- match.arg(share_conditioning)
   if (!is.list(draws)) stop("Posterior extraction did not return a draw list.",
                             call. = FALSE)
   data_info <- .posterior_predict_mask_and_mode(fit)
+  if (share_conditioning == "observed" && data_info$likelihood_mode != 1L) {
+    stop("'share_conditioning = \"observed\"' requires the joint likelihood (likelihood_mode = 1).",
+         call. = FALSE)
+  }
   share_family <- .posterior_predict_code_name(
     fit, "share_likelihood", c("gaussian", "student_t"),
     c(`1` = "student_t", `2` = "gaussian")
@@ -451,7 +498,11 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
     means$share_mean, means$margin_mean,
     scales$share, scales$margin,
     share_family, margin_family, nu, rho, rho_active,
-    data_info$likelihood_mode, data_info$margin_mask, seed = replicate_seed
+    data_info$likelihood_mode, data_info$margin_mask, seed = replicate_seed,
+    share_conditioning = share_conditioning,
+    observed_share = if (share_conditioning == "observed") {
+      data_info$observed_share
+    } else NULL
   )
   rownames(replicated$log_shareIn) <-
     rownames(replicated$log_marginNormInv) <- as.character(means$draw_indices)
@@ -494,18 +545,7 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
       stringsAsFactors = FALSE
     )
   )
-  structure(list(
-    observed = list(
-      log_shareIn = data_info$observed_share,
-      log_marginNormInv = data_info$observed_margin,
-      margin_observed = data_info$margin_mask
-    ),
-    replicated = c(replicated, list(share_rep_normalized = share_normalized)),
-    observation_ids = observation_ids,
-    draws = long,
-    draw_indices = means$draw_indices,
-    draw_plan = plan,
-    metadata = list(
+  metadata <- list(
       source = "posterior_predictive_from_fitted_Stan_likelihood",
       demand_model = as.character(fit@demand_model),
       supply_model = as.integer(fit@supply_model),
@@ -537,5 +577,23 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
       share_rep_normalized_definition = "softmax of replicated log_shareIn within market-year; derived view, not a Stan likelihood variable",
       seed = if (is.null(seed)) NULL else as.integer(seed)
     )
+  if (share_conditioning == "observed") {
+    metadata$share_conditioning <- "observed"
+    metadata$share_replicated <- FALSE
+    metadata$share_rep_normalized_definition <-
+      "softmax of fixed observed log_shareIn within market-year; derived view, not a Stan likelihood variable"
+  }
+  structure(list(
+    observed = list(
+      log_shareIn = data_info$observed_share,
+      log_marginNormInv = data_info$observed_margin,
+      margin_observed = data_info$margin_mask
+    ),
+    replicated = c(replicated, list(share_rep_normalized = share_normalized)),
+    observation_ids = observation_ids,
+    draws = long,
+    draw_indices = means$draw_indices,
+    draw_plan = plan,
+    metadata = metadata
   ), class = c("posterior_predictive", "list"))
 }

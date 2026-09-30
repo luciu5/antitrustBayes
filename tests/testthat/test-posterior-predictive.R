@@ -54,6 +54,164 @@ test_that("Student-t rho replication matches the conditional t law", {
   expect_equal(as.numeric(actual$log_marginNormInv), expected_margin)
 })
 
+test_that("observed shares condition Gaussian margins at rho zero and nonzero", {
+  residual <- .ppc_ns(".posterior_predict_residual_draws")
+  share_mean <- matrix(c(-1, -.8, -.6), nrow = 1L)
+  margin_mean <- matrix(c(-2, -1.8, -1.6), nrow = 1L)
+  share_scale <- matrix(c(.2, .3, .4), nrow = 1L)
+  margin_scale <- matrix(c(.5, .6, .7), nrow = 1L)
+  observed <- c(-.9, -.95, -.45)
+  mask <- c(TRUE, FALSE, TRUE)
+  for (rho in c(0, .45)) {
+    set.seed(951L)
+    before <- .Random.seed
+    actual <- residual(
+      share_mean, margin_mean, share_scale, margin_scale,
+      "gaussian", "gaussian", nu = 5, rho = rho, rho_active = TRUE,
+      likelihood_mode = 1L, margin_mask = mask, seed = 72L,
+      share_conditioning = "observed", observed_share = observed
+    )
+    expect_identical(.Random.seed, before)
+    set.seed(72L)
+    expected <- stats::rnorm(
+      length(observed),
+      mean = as.numeric(margin_mean) + rho *
+        as.numeric(margin_scale / share_scale) *
+        (observed - as.numeric(share_mean)),
+      sd = as.numeric(margin_scale) * sqrt(1 - rho^2)
+    )
+    expect_equal(as.numeric(actual$log_shareIn), observed)
+    expect_equal(as.numeric(actual$log_marginNormInv), expected)
+    expect_true(is.finite(actual$log_marginNormInv[1L, 2L]))
+  }
+})
+
+test_that("observed shares condition Student-t margins including rho zero", {
+  residual <- .ppc_ns(".posterior_predict_residual_draws")
+  share_mean <- matrix(c(-1, -.8), nrow = 1L)
+  margin_mean <- matrix(c(-2, -1.8), nrow = 1L)
+  share_scale <- matrix(c(.2, .3), nrow = 1L)
+  margin_scale <- matrix(c(.5, .6), nrow = 1L)
+  observed <- c(-.85, -1.05)
+  nu <- 7
+  for (rho in c(0, -.35)) {
+    actual <- residual(
+      share_mean, margin_mean, share_scale, margin_scale,
+      "student_t", "student_t", nu = nu, rho = rho,
+      rho_active = TRUE, likelihood_mode = 1L,
+      margin_mask = c(TRUE, FALSE), seed = 712L,
+      share_conditioning = "observed", observed_share = observed
+    )
+    error <- observed - as.numeric(share_mean)
+    expected_mean <- as.numeric(margin_mean) + rho *
+      as.numeric(margin_scale / share_scale) * error
+    expected_scale <- as.numeric(margin_scale) * sqrt(1 - rho^2) *
+      sqrt((nu - 2 + (error / as.numeric(share_scale))^2) / (nu + 1))
+    set.seed(712L)
+    expected <- expected_mean + stats::rt(2L, df = nu + 1) * expected_scale
+    expect_equal(as.numeric(actual$log_shareIn), observed)
+    expect_equal(as.numeric(actual$log_marginNormInv), expected)
+  }
+  inactive <- residual(
+    share_mean, margin_mean, share_scale, margin_scale,
+    "student_t", "student_t", nu = nu, rho = 0,
+    rho_active = FALSE, likelihood_mode = 1L,
+    margin_mask = c(TRUE, FALSE), seed = 712L,
+    share_conditioning = "observed", observed_share = observed
+  )
+  set.seed(712L)
+  independent <- as.numeric(margin_mean) + stats::rt(2L, df = nu) *
+    as.numeric(margin_scale) * sqrt((nu - 2) / nu)
+  expect_equal(as.numeric(inactive$log_marginNormInv), independent)
+})
+
+test_that("default residual replication is unchanged and holdout mask is not conditioning data", {
+  residual <- .ppc_ns(".posterior_predict_residual_draws")
+  args <- list(
+    share_mean = matrix(c(-1, -.8), nrow = 1L),
+    margin_mean = matrix(c(-2, -1.8), nrow = 1L),
+    share_scale = matrix(.2, nrow = 1L, ncol = 2L),
+    margin_scale = matrix(.5, nrow = 1L, ncol = 2L),
+    share_family = "gaussian", margin_family = "gaussian",
+    nu = 5, rho = .3, rho_active = TRUE, likelihood_mode = 1L,
+    margin_mask = c(TRUE, FALSE), seed = 141L
+  )
+  expect_identical(do.call(residual, args), do.call(residual, c(args,
+    list(share_conditioning = "replicate"))))
+  conditional <- c(args, list(share_conditioning = "observed",
+                              observed_share = c(-.9, -.75)))
+  hidden <- do.call(residual, conditional)
+  conditional$margin_mask <- c(TRUE, TRUE)
+  expect_identical(do.call(residual, conditional), hidden)
+  conditional$likelihood_mode <- 2L
+  expect_error(do.call(residual, conditional), "requires the joint likelihood")
+})
+
+test_that("conditional prediction marks fixed shares and never reads held-out margins", {
+  prices <- c(1.1, 1.2, 1.3, 1.4)
+  quantities <- c(40, 30, 35, 25)
+  margins <- c(.3, NA_real_, .25, .4)
+  mask <- c(TRUE, FALSE, TRUE, TRUE)
+  stan_data <- prepare_stan_data(
+    prices, quantities, margins, rep("m1", 4L),
+    rep(c("y1", "y2"), each = 2L), rep(c("a", "b"), 2L),
+    supply_model = 1L, use_rho = TRUE, margin_observed = mask,
+    likelihood_mode = 1L, quality_parameterization = "sampled"
+  )
+  fit <- methods::new(
+    "BayesLogit", spec = NULL, model = NULL, parameters = list(),
+    observed = list(), diagnostics = list(), stanfit = NULL,
+    data = data.frame(prices = prices, quantities = quantities, margins = margins,
+      market = rep("m1", 4L), year = rep(c("y1", "y2"), each = 2L),
+      group = rep(c("a", "b"), 2L)),
+    stan_data = stan_data, supply_model = 1L, demand_model = "logit",
+    market_side = "input", price_sd = 1, call = quote(identity()),
+    metadata = list(
+      quality_parameterization = "sampled", quality_scope = "market",
+      share_likelihood = "gaussian", margin_likelihood = "gaussian",
+      likelihood_mode = 1L, use_rho = TRUE,
+      market_intercept_parameterization = "sampled",
+      market_intercept_parameterization_effective = "sampled",
+      structure = "simultaneous", partition_prior = "cutoff",
+      posterior_draws = 2L
+    )
+  )
+  draws <- list(
+    share_mean = matrix(rep(c(-1, -.8, -.9, -.7), 2L), nrow = 2L,
+                        byrow = TRUE),
+    pred_marginNormInv = matrix(c(2, 2.1, 2.2, 2.3,
+                                  2.4, 2.5, 2.6, 2.7), nrow = 2L,
+                                byrow = TRUE),
+    sigma_share = c(.2, .25), sigma_margin = c(.3, .35), rho = c(.4, -.2)
+  )
+  plan <- list(draw_indices = 1:2,
+               fit_signature = list(latent_state_fingerprint = "fixture"))
+  predict_from_draws <- .ppc_ns(".posterior_predict_from_draws")
+  actual <- predict_from_draws(fit, draws, plan, seed = 92L,
+                               share_conditioning = "observed")
+  expect_identical(actual$metadata$share_conditioning, "observed")
+  expect_identical(actual$metadata$share_replicated, FALSE)
+  expect_equal(actual$replicated$log_shareIn,
+    matrix(rep(stan_data$log_shareIn, each = 2L), nrow = 2L,
+           dimnames = dimnames(actual$replicated$log_shareIn)))
+  expect_identical(unname(actual$replicated$log_shareIn[1L, ]),
+                   as.numeric(stan_data$log_shareIn))
+  expect_identical(actual$observed$margin_observed, mask)
+  expect_true(all(is.finite(actual$replicated$log_marginNormInv)))
+  altered <- fit
+  altered@stan_data$log_marginNormInv[2L] <- 1e6
+  hidden <- predict_from_draws(altered, draws, plan, seed = 92L,
+                               share_conditioning = "observed")
+  expect_identical(hidden$replicated, actual$replicated)
+  default <- predict_from_draws(fit, draws, plan, seed = 92L)
+  explicit <- predict_from_draws(fit, draws, plan, seed = 92L,
+                                 share_conditioning = "replicate")
+  expect_identical(default, explicit)
+  fit@stan_data$likelihood_mode <- 2L
+  expect_error(predict_from_draws(fit, draws, plan, seed = 92L,
+    share_conditioning = "observed"), "requires the joint likelihood")
+})
+
 test_that("predictive masks keep off-likelihood outcomes NA and impute hidden margins", {
   share_mean <- matrix(c(-1, -.7, -.2), nrow = 1L)
   margin_mean <- matrix(c(-2, -1.5, -1), nrow = 1L)
@@ -162,6 +320,8 @@ test_that("collapsed quality prediction reuses plan state without changing the f
                  rep(1, 2L), tolerance = 1e-12)
   }
   expect_identical(fit, before)
+  expect_error(posterior_predict(fit, share_conditioning = "observed"),
+               "requires the joint likelihood")
 })
 
 test_that("posterior prediction does not mutate a CmdStanR fit's lazy draw cache", {
