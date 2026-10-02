@@ -122,3 +122,28 @@ small known-truth examples first. Deep-test distinct economic models, and
 smoke mechanically similar variants. Label migration checks with an expiry
 condition. Put costly recovery and Monte Carlo validation in a scheduled or
 release tier with explicit acceptance criteria, not in routine `testthat`.
+
+## Follow-up: current-backend recovery validation
+
+The executable `doc/validation/known_truth_recovery.R` now supplies one
+independent known-truth Logit Bertrand recovery gate on the current CmdStanR
+backend. It checks price-effect and outside-share recovery, margin-noise
+scale, chain diagnostics, and structural draw identities. The first
+recovery-only run passed: alpha truth 2.5 versus posterior median 2.471
+(95% interval 2.412–2.521), all six true outside shares inside their 95%
+intervals, minimum key bulk ESS 303, maximum key R-hat 1.015, and zero
+divergences.
+It lives outside routine `testthat` because the two-chain HMC fit takes
+about 46 seconds after compilation. See `doc/validation/README.md`.
+
+The full validation also runs a second, independent one-market Bertrand
+design and compares it with Cournot using the current CmdStanR bridge path.
+The completed full gate passed. It gave log marginal likelihoods 135.627
+versus 82.129, with bridge repetition SDs 0.023 and 0.003 log units and
+posterior probability essentially one for true Bertrand conduct. The script
+requires stable bridge estimates, current-source identity, sound HMC
+diagnostics, and a Bayes factor of at
+least 10. A less-identified multi-market pilot did **not** meet that evidence
+standard, so broad conduct identification remains unproven. The archived
+124-task runner still needs a reviewed CmdStanR port for broader statistical
+recovery and model-comparison claims.
