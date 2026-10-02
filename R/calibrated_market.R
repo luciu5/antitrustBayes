@@ -81,7 +81,7 @@
   meanval <- if (identical(conduct$antitrust_conduct, "auction2nd")) {
     geometry$b
   } else {
-    geometry$b + alpha
+    geometry$b + alpha * geometry$prices
   }
   antitrust::specify(
     demand = "logit", conduct = conduct$antitrust_conduct,
@@ -93,201 +93,117 @@
   )
 }
 
-.bayes_calibrated_public_margin <- function(conduct, geometry, alpha,
-                                            inside_size, price_start) {
-  fit <- .bayes_calibrated_specify(
-    conduct, geometry, alpha, inside_size, price_start
-  )
-  margins <- as.numeric(antitrust::calcMargins(
-    fit@model, preMerger = TRUE, level = FALSE
-  ))
-  margins[[geometry$anchor_index]]
-}
-
-.bayes_calibrated_root_alpha <- function(conduct, geometry, target_margin,
-                                         initial_alpha, inside_size,
-                                         price_start) {
-  if (!is.finite(initial_alpha) || initial_alpha <= 0) {
-    initial_alpha <- 1 / target_margin
-  }
-  objective <- function(log_alpha) {
-    alpha <- exp(log_alpha)
-    .bayes_calibrated_public_margin(
-      conduct, geometry, alpha, inside_size, price_start
-    ) - target_margin
-  }
-  center <- log(initial_alpha)
-  f_center <- objective(center)
-  if (is.finite(f_center) && abs(f_center) <= 1e-11) {
-    return(exp(center))
-  }
-  lower <- upper <- center
-  f_lower <- f_upper <- f_center
-  for (i in seq_len(80L)) {
-    if (is.finite(f_lower) && is.finite(f_upper) &&
-        sign(f_lower) != sign(f_upper)) break
-    if (!is.finite(f_lower) || f_lower < 0) {
-      lower <- lower - log(2)
-      f_lower <- tryCatch(objective(lower), error = function(e) NA_real_)
-    }
-    if (!is.finite(f_upper) || f_upper > 0) {
-      upper <- upper + log(2)
-      f_upper <- tryCatch(objective(upper), error = function(e) NA_real_)
-    }
-  }
-  if (!is.finite(f_lower) || !is.finite(f_upper) ||
-      sign(f_lower) == sign(f_upper)) {
-    stop("Could not bracket positive alpha for the requested public-model margin.",
-         call. = FALSE)
-  }
-  root <- stats::uniroot(
-    objective, interval = sort(c(lower, upper)), tol = 1e-11
-  )$root
-  alpha <- exp(root)
-  residual <- objective(root)
-  if (!is.finite(alpha) || alpha <= 0 || !is.finite(residual) ||
-      abs(residual) > 1e-8) {
-    stop("Public-model alpha solve did not reproduce the anchor margin.",
-         call. = FALSE)
-  }
-  alpha
-}
-
-.bayes_calibrated_model <- function(conduct, geometry, mode, anchor_margin,
-                                    alpha, k, inside_size, price_tolerance) {
+.bayes_calibrated_public_model <- function(conduct, geometry, alpha, k,
+                                           inside_size, price_start) {
   J <- length(geometry$prices)
   margins_observed <- rep(NA_real_, J)
-  anchor_index <- geometry$anchor_index
-  if (identical(mode, "calibrated")) {
-    margins_observed[[anchor_index]] <- anchor_margin
-  }
-  price_start <- unname(geometry$prices * 1.13 + 0.037)
-  names(price_start) <- geometry$labels
-
   if (identical(conduct$route, "core_fringe")) {
     model <- coordination::core_fringe(
-      prices = unname(geometry$prices),
-      shares = unname(geometry$shares),
-      margins = margins_observed,
-      ownerPre = geometry$group,
+      prices = unname(geometry$prices), shares = unname(geometry$shares),
+      margins = margins_observed, ownerPre = geometry$group,
       corePre = if (k == 0L) character() else
         geometry$group[geometry$ranking[seq_len(k)]],
       demand = "logit", conduct = conduct$antitrust_conduct,
       output = TRUE, insideSize = inside_size, normIndex = NA_real_,
       priceOutside = 0, priceStart = price_start, labels = geometry$labels,
-      alpha = if (identical(mode, "parameter")) alpha else NULL,
-      control.equ = list(implicitCheck = FALSE)
+      alpha = alpha, control.equ = list(implicitCheck = FALSE)
     )
     fitted_alpha <- as.numeric(model@diagnostics$alpha)
-    calibration_source <- if (identical(mode, "calibrated")) {
-      "coordination::core_fringe observed-margin calibration"
-    } else "coordination::core_fringe fixed alpha"
   } else if (identical(conduct$route, "stackelberg")) {
     model <- coordination::stackelberg(
-      prices = unname(geometry$prices),
-      shares = unname(geometry$shares),
-      margins = margins_observed,
-      ownerPre = geometry$group,
+      prices = unname(geometry$prices), shares = unname(geometry$shares),
+      margins = margins_observed, ownerPre = geometry$group,
       leadersPre = geometry$group[geometry$ranking[seq_len(k)]],
       demand = "logit", conduct = conduct$antitrust_conduct,
       output = TRUE, insideSize = inside_size, normIndex = NA_real_,
       priceOutside = 0, priceStart = price_start, labels = geometry$labels,
-      alpha = if (identical(mode, "parameter")) alpha else NULL,
-      control.equ = list(implicitCheck = FALSE)
+      alpha = alpha, control.equ = list(implicitCheck = FALSE)
     )
     fitted_alpha <- as.numeric(model@diagnostics$alpha)
-    calibration_source <- if (identical(mode, "calibrated")) {
-      "coordination::stackelberg observed-margin calibration"
-    } else "coordination::stackelberg fixed alpha"
-  } else if (identical(mode, "calibrated")) {
-    fit <- antitrust::calibrate(
-      demand = "logit", conduct = conduct$antitrust_conduct,
-      prices = unname(geometry$prices), shares = unname(geometry$shares),
-      margins = margins_observed, ownerPre = geometry$group,
-      output = TRUE, insideSize = inside_size, labels = geometry$labels
-    )
-    model <- fit@model
-    candidates <- list(fit@parameters$alpha, model@slopes$alpha)
-    valid <- vapply(candidates, function(x) {
-      is.numeric(x) && length(x) == 1L && is.finite(x) && x != 0
-    }, logical(1))
-    if (!any(valid)) {
-      stop("antitrust::calibrate did not return a usable Logit alpha.",
-           call. = FALSE)
-    }
-    initial_alpha <- abs(as.numeric(candidates[[which(valid)[[1L]]]]))
-    ## Keep antitrust::calibrate as the public initializer, but solve the
-    ## one-margin target against antitrust::specify/calcMargins so optimizer
-    ## stopping conventions cannot leave the observed margin off-target.
-    fitted_alpha <- .bayes_calibrated_root_alpha(
-      conduct, geometry, anchor_margin, initial_alpha,
-      inside_size, price_start
-    )
-    fit <- .bayes_calibrated_specify(
-      conduct, geometry, fitted_alpha, inside_size, price_start
-    )
-    model <- fit@model
-    calibration_source <- paste(
-      "antitrust::calibrate initializer plus public antitrust::specify/calcMargins alpha root"
-    )
   } else {
-    ## antitrust Logit uses a negative price slope in output markets. Auction
-    ## Logit keeps supplied shares fixed while solving, so its mean values are
-    ## represented directly by log share odds.
-    fit <- .bayes_calibrated_specify(
+    source_fit <- .bayes_calibrated_specify(
       conduct, geometry, alpha, inside_size, price_start
     )
-    model <- fit@model
+    model <- source_fit@model
     fitted_alpha <- alpha
-    calibration_source <- "antitrust::specify fixed alpha"
   }
-
   if (length(fitted_alpha) != 1L || !is.finite(fitted_alpha) ||
-      fitted_alpha <= 0) {
-    stop("Public model did not return a positive Logit price coefficient.",
+      abs(fitted_alpha - alpha) > 1e-8 * max(1, alpha)) {
+    stop("Public model did not retain the supplied Logit alpha.", call. = FALSE)
+  }
+  list(model = model, source_fit = if (identical(conduct$route, "antitrust"))
+    source_fit else NULL)
+}
+
+.bayes_calibrated_unit_markup <- function(conduct, geometry, k, inside_size) {
+  ## Logit dollar markups depend on shares and alpha, not on the price level.
+  ## Use public FOCs at alpha = 1 to obtain the conduct-specific coefficient.
+  ## The probe's implied costs are never used as market primitives.
+  probe <- geometry
+  probe$prices <- stats::setNames(rep(100, length(geometry$prices)),
+                                  geometry$labels)
+  constructed <- .bayes_calibrated_public_model(
+    conduct, probe, alpha = 1, k = k, inside_size = inside_size,
+    price_start = unname(probe$prices * 1.13 + 0.037)
+  )
+  markup <- as.numeric(antitrust::calcMargins(
+    constructed$model, preMerger = TRUE, level = TRUE
+  ))
+  if (length(markup) != length(geometry$prices) ||
+      any(!is.finite(markup)) || any(markup <= 0)) {
+    stop("Public conduct model returned invalid structural markups.",
          call. = FALSE)
   }
+  stats::setNames(markup, geometry$labels)
+}
+
+.bayes_calibrated_model <- function(conduct, geometry, alpha, costs, k,
+                                    inside_size, price_tolerance,
+                                    anchor_margin = NULL) {
+  J <- length(geometry$prices)
+  price_start <- unname(geometry$prices * 1.13 + 0.037)
+  names(price_start) <- geometry$labels
+  constructed <- .bayes_calibrated_public_model(
+    conduct, geometry, alpha, k, inside_size, price_start
+  )
+  model <- constructed$model
   fitted_margins <- tryCatch(
     as.numeric(antitrust::calcMargins(model, preMerger = TRUE, level = FALSE)),
     error = function(e) stop("Could not recover public-model margins: ",
                              conditionMessage(e), call. = FALSE)
   )
-  costs <- tryCatch(
+  recovered_costs <- tryCatch(
     as.numeric(antitrust::calcMC(model, preMerger = TRUE)),
     error = function(e) stop("Could not recover public-model costs: ",
                              conditionMessage(e), call. = FALSE)
   )
   if (length(fitted_margins) != J || any(!is.finite(fitted_margins)) ||
-      any(fitted_margins <= 0)) {
+      any(fitted_margins <= 0 | fitted_margins >= 1)) {
     stop("Public model returned invalid full-market margins.", call. = FALSE)
   }
-  if (length(costs) != J || any(!is.finite(costs))) {
+  if (length(recovered_costs) != J || any(!is.finite(recovered_costs))) {
     stop("Public model returned invalid marginal costs.", call. = FALSE)
   }
-  if (any(!is.finite(costs)) || any(costs <= 0)) {
-    stop("Public model implied non-positive physical marginal costs.",
-         call. = FALSE)
+  cost_error <- max(abs(recovered_costs - costs) / pmax(1, abs(costs)))
+  if (!is.finite(cost_error) || cost_error > price_tolerance) {
+    stop("Public model did not recover the supplied physical costs (error = ",
+         format(cost_error, digits = 6), ").", call. = FALSE)
   }
-  if (identical(mode, "calibrated") &&
-      !isTRUE(all.equal(fitted_margins[[anchor_index]], anchor_margin,
+  if (!is.null(anchor_margin) &&
+      !isTRUE(all.equal(fitted_margins[[geometry$anchor_index]], anchor_margin,
                         tolerance = 1e-7))) {
-    stop("Public model did not reproduce the supplied anchor margin (got ",
-         format(fitted_margins[[anchor_index]], digits = 10),
-         ", expected ", format(anchor_margin, digits = 10), ").",
+    stop("Public model did not reproduce the supplied anchor margin.",
          call. = FALSE)
   }
 
-  ## Re-solve from a perturbed start. This catches stale stored equilibria and
-  ## confirms the generated costs support the generated price vector.
   check_model <- model
   if (!("priceStart" %in% methods::slotNames(check_model))) {
     stop("Public model does not expose a perturbed priceStart slot.",
          call. = FALSE)
   }
   check_model@priceStart <- price_start
-  used_start <- as.numeric(check_model@priceStart)
-  if (length(used_start) != J ||
-      !isTRUE(all.equal(used_start, unname(price_start), tolerance = 0))) {
+  if (!isTRUE(all.equal(as.numeric(check_model@priceStart),
+                        unname(price_start), tolerance = 0))) {
     stop("Public model did not retain the requested perturbed price start.",
          call. = FALSE)
   }
@@ -296,7 +212,8 @@
     error = function(e) stop("Fresh equilibrium solve failed: ",
                              conditionMessage(e), call. = FALSE)
   )
-  if (length(equilibrium_prices) != J || any(!is.finite(equilibrium_prices))) {
+  if (length(equilibrium_prices) != J ||
+      any(!is.finite(equilibrium_prices) | equilibrium_prices <= 0)) {
     stop("Fresh equilibrium solve returned invalid prices.", call. = FALSE)
   }
   max_relative_error <- max(abs(equilibrium_prices - geometry$prices) /
@@ -305,17 +222,10 @@
     stop("Fresh equilibrium solve does not reproduce the market prices (relative error = ",
          format(max_relative_error, digits = 6), ").", call. = FALSE)
   }
-  solved_geometry <- geometry
-  solved_geometry$prices <- stats::setNames(equilibrium_prices, geometry$labels)
-  demand_check <- .bayes_calibrated_specify(
-    conduct, solved_geometry, fitted_alpha, inside_size,
-    unname(equilibrium_prices * 1.13 + 0.037)
-  )
+  check_model@pricePre <- equilibrium_prices
   public_shares <- tryCatch(
-    as.numeric(antitrust::calcShares(
-      demand_check@model, preMerger = TRUE
-    )),
-    error = function(e) stop("Could not recompute public-model shares at the solved prices: ",
+    as.numeric(antitrust::calcShares(check_model, preMerger = TRUE)),
+    error = function(e) stop("Could not recompute public-model shares at solved prices: ",
                              conditionMessage(e), call. = FALSE)
   )
   if (length(public_shares) != J || any(!is.finite(public_shares))) {
@@ -340,52 +250,48 @@
   }
   foc_residual <- NA_real_
   if (identical(conduct$route, "core_fringe")) {
-    foc <- coordination::core_fringe_residuals(model, preMerger = TRUE)
-    foc_residual <- as.numeric(foc$max)
+    foc_residual <- as.numeric(coordination::core_fringe_residuals(
+      model, preMerger = TRUE
+    )$max)
   } else if (identical(conduct$route, "stackelberg")) {
-    foc <- coordination::stackelberg_residuals(model, preMerger = TRUE)
-    foc_residual <- as.numeric(foc$max)
+    foc_residual <- as.numeric(coordination::stackelberg_residuals(
+      model, preMerger = TRUE
+    )$max)
   }
-  foc_available <- identical(conduct$route, "core_fringe") ||
-    identical(conduct$route, "stackelberg")
-  if (foc_available && !is.finite(foc_residual)) {
-    stop("Coordination baseline FOC residual was not available from its public API.",
-         call. = FALSE)
-  }
-  if (foc_available && foc_residual > 1e-6) {
+  foc_available <- conduct$route %in% c("core_fringe", "stackelberg")
+  if (foc_available && (!is.finite(foc_residual) || foc_residual > 1e-6)) {
     stop("Public model baseline FOC residual exceeds tolerance.",
          call. = FALSE)
   }
-
   gates <- list(
     positive_costs = all(is.finite(costs) & costs > 0),
-    anchor_margin = if (identical(mode, "calibrated")) {
-      isTRUE(all.equal(fitted_margins[[anchor_index]], anchor_margin,
-                       tolerance = 1e-7))
-    } else TRUE,
+    primitive_costs = cost_error <= price_tolerance,
+    anchor_margin = if (is.null(anchor_margin)) TRUE else
+      isTRUE(all.equal(fitted_margins[[geometry$anchor_index]], anchor_margin,
+                       tolerance = 1e-7)),
     perturbed_price_solve = max_relative_error <= price_tolerance,
     solved_share_reproduction = share_error <= price_tolerance,
     baseline_foc = if (foc_available) foc_residual <= 1e-6 else NA
   )
   known_gates <- !vapply(gates, is.na, logical(1))
-  overall_passed <- if (all(known_gates)) {
-    all(unlist(gates, use.names = FALSE))
-  } else NA
-
+  overall_passed <- all(unlist(gates[known_gates], use.names = FALSE))
   list(
-    alpha = fitted_alpha,
+    alpha = alpha,
     margins = stats::setNames(fitted_margins, geometry$labels),
-    costs = stats::setNames(costs, geometry$labels),
+    costs = stats::setNames(as.numeric(costs), geometry$labels),
     model = model,
-    calibration_source = calibration_source,
+    source_fit = constructed$source_fit,
+    calibration_source = "cost primitives and public conduct FOCs",
     equilibrium = list(
       prices = stats::setNames(equilibrium_prices, geometry$labels),
       shares = stats::setNames(public_shares, geometry$labels),
       max_relative_error = max_relative_error,
       max_share_error = share_error,
+      max_cost_error = cost_error,
       max_foc_residual = foc_residual,
       gates = gates,
-      foc_status = if (foc_available) "checked" else "not exposed by public antitrust API",
+      foc_status = if (foc_available) "checked" else
+        "not exposed by public antitrust API",
       used_perturbed_start = TRUE,
       tolerance = price_tolerance,
       passed = overall_passed,
@@ -430,9 +336,10 @@
 
 #' Generate a calibrated one-market output-Logit design
 #'
-#' Draws one conduct-independent Logit share geometry, fixes every inside
-#' product's price at exactly one, and either calibrates the structural price
-#' coefficient from one observed margin or supplies a known coefficient. The
+#' Draws one conduct-independent Logit share geometry and physical cost vector,
+#' then sets each price to its physical cost plus the structural markup implied
+#' by the supplied conduct. It either calibrates the structural price
+#' coefficient from one observed margin or uses a supplied coefficient. The
 #' conditional inside shares are drawn from a `J`-dimensional Dirichlet with
 #' the required concentration parameter. Their geometric mean sets the
 #' outside share through `plogis(mean(log(r)))`; centered log shares are kept
@@ -470,15 +377,21 @@
 #'   margin, or `"parameter"`, which uses the supplied `alpha`.
 #' @param alpha Positive absolute Logit price coefficient required in
 #'   parameter mode.
+#' @param costs Optional explicit positive physical marginal costs, one per
+#'   product. If omitted, costs are drawn independently of conduct.
+#' @param cost_rule Draw `"uniform"` costs from `cost_range`, or use the common
+#'   `cost_level`. Ignored when `costs` is supplied.
+#' @param cost_level Positive common cost for `cost_rule = "common"`.
+#' @param cost_range Positive increasing endpoints for uniform cost draws.
 #' @param dirichlet_alpha Deprecated alias for `dirichlet_concentration`.
 #' @param inside_size Positive total inside quantity used to form estimation
 #'   quantities.
 #' @param equilibrium_tolerance Maximum relative error allowed when checking
 #'   the public-model equilibrium from a perturbed price start.
-#' @return A list of class `bayes_calibrated_market` with the draw design,
-#'   full truth data, estimation inputs and margin mask, and a public-model
-#'   equilibrium solve from a perturbed starting price vector for the same
-#'   generated baseline.
+#' @return A list of class `bayes_calibrated_market` with primitive costs,
+#'   full structural truth, estimation inputs and margin mask, and a public-model
+#'   equilibrium solve from a perturbed starting price vector. Auction truth
+#'   includes `auction_value`, its cost-based latent valuation.
 #' @export
 bayes_calibrated_market <- function(
     conduct = c("MC", "B", "C", "A", "BF", "CF", "BS", "CS"),
@@ -486,8 +399,11 @@ bayes_calibrated_market <- function(
     margin_range = NULL, seed = NULL, k = NULL,
     mode = c("calibrated", "parameter"), alpha = NULL,
     dirichlet_alpha = NULL,
-    inside_size = 10000, equilibrium_tolerance = 2e-6) {
+    inside_size = 10000, equilibrium_tolerance = 2e-6,
+    costs = NULL, cost_rule = c("uniform", "common"),
+    cost_level = 1, cost_range = c(0.7, 1.3)) {
   mode <- match.arg(mode)
+  cost_rule <- match.arg(cost_rule)
   conduct <- match.arg(conduct)
   conducts <- .bayes_calibrated_conducts()
   if (!is.character(conduct) || length(conduct) != 1L || is.na(conduct)) {
@@ -524,6 +440,22 @@ bayes_calibrated_market <- function(
   if (!is.numeric(inside_size) || length(inside_size) != 1L ||
       !is.finite(inside_size) || inside_size <= 0) {
     stop("'inside_size' must be a positive finite scalar.", call. = FALSE)
+  }
+  if (!is.null(costs) && (!is.numeric(costs) || length(costs) != J ||
+                          any(!is.finite(costs)) || any(costs <= 0))) {
+    stop("'costs' must be a positive finite vector of length J.", call. = FALSE)
+  }
+  if (is.null(costs) && identical(cost_rule, "common") &&
+      (!is.numeric(cost_level) || length(cost_level) != 1L ||
+       !is.finite(cost_level) || cost_level <= 0)) {
+    stop("'cost_level' must be a positive finite scalar.", call. = FALSE)
+  }
+  if (is.null(costs) && identical(cost_rule, "uniform") &&
+      (!is.numeric(cost_range) || length(cost_range) != 2L ||
+       any(!is.finite(cost_range)) || any(cost_range <= 0) ||
+       cost_range[[1L]] >= cost_range[[2L]])) {
+    stop("'cost_range' must be two increasing positive finite values.",
+         call. = FALSE)
   }
   if (!is.numeric(equilibrium_tolerance) ||
       length(equilibrium_tolerance) != 1L ||
@@ -617,11 +549,28 @@ bayes_calibrated_market <- function(
       )
     }
   }
+  primitive_costs <- if (!is.null(costs)) as.numeric(costs) else
+    if (identical(cost_rule, "common")) rep(cost_level, J) else
+      stats::runif(J, cost_range[[1L]], cost_range[[2L]])
+  names(primitive_costs) <- geometry$labels
+  unit_markup <- .bayes_calibrated_unit_markup(spec, geometry, k, inside_size)
+  fitted_alpha <- if (identical(mode, "parameter")) alpha else {
+    anchor <- geometry$anchor_index
+    unit_markup[[anchor]] * (1 - anchor_margin) /
+      (anchor_margin * primitive_costs[[anchor]])
+  }
+  if (!is.finite(fitted_alpha) || fitted_alpha <= 0) {
+    stop("Structural alpha implied by primitive costs is invalid.", call. = FALSE)
+  }
+  geometry$prices <- stats::setNames(
+    as.numeric(primitive_costs + unit_markup / fitted_alpha),
+    geometry$labels
+  )
   primary <- .bayes_calibrated_model(
-    spec, geometry, mode, anchor_margin,
-    alpha = if (identical(mode, "parameter")) alpha else NULL,
+    spec, geometry, alpha = fitted_alpha, costs = primitive_costs,
     k = k, inside_size = inside_size,
-    price_tolerance = equilibrium_tolerance
+    price_tolerance = equilibrium_tolerance,
+    anchor_margin = if (identical(mode, "calibrated")) anchor_margin else NULL
   )
   observed <- seq_len(J) == geometry$anchor_index
   data_frame <- function(g, margins, mask) {
@@ -662,6 +611,11 @@ bayes_calibrated_market <- function(
       anchor_margin = if (identical(mode, "calibrated")) anchor_margin else NA_real_,
       realized_anchor_margin = primary$margins[[geometry$anchor_index]],
       dirichlet_concentration = concentration,
+      cost_rule = if (is.null(costs)) cost_rule else "supplied",
+      cost_level = if (is.null(costs) && identical(cost_rule, "common"))
+        cost_level else NA_real_,
+      cost_range = if (is.null(costs) && identical(cost_rule, "uniform"))
+        cost_range else NULL,
       role_ranking = geometry$group[geometry$ranking],
       inside_size = inside_size,
       seed = seed,
@@ -677,9 +631,28 @@ bayes_calibrated_market <- function(
       shares = geometry$shares,
       margins = primary$margins,
       costs = primary$costs,
+      unit_markup = unit_markup,
+      absolute_margins = stats::setNames(
+        as.numeric(geometry$prices - primitive_costs), geometry$labels
+      ),
+      meanval = stats::setNames(
+        as.numeric(if (identical(spec$antitrust_conduct, "auction2nd"))
+          geometry$b else
+          log(geometry$shares / geometry$s0) +
+            fitted_alpha * geometry$prices), geometry$labels
+      ),
+      auction_value = if (identical(spec$antitrust_conduct, "auction2nd"))
+        stats::setNames(as.numeric(geometry$b + fitted_alpha * primitive_costs),
+                        geometry$labels) else NULL,
+      ownership = stats::setNames(geometry$group, geometry$labels),
+      core = if (identical(spec$route, "core_fringe"))
+        geometry$group[geometry$ranking[seq_len(k)]] else character(),
+      leaders = if (identical(spec$route, "stackelberg"))
+        geometry$group[geometry$ranking[seq_len(k)]] else character(),
       calibration_source = primary$calibration_source,
       equilibrium = primary$equilibrium,
-      model = primary$model
+      model = primary$model,
+      source_fit = primary$source_fit
     ),
     estimation = list(
       data = estimation_data,

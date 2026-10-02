@@ -16,7 +16,11 @@ bayes_calibrated_market(
   alpha = NULL,
   dirichlet_alpha = NULL,
   inside_size = 10000,
-  equilibrium_tolerance = 2e-06
+  equilibrium_tolerance = 2e-06,
+  costs = NULL,
+  cost_rule = c("uniform", "common"),
+  cost_level = 1,
+  cost_range = c(0.7, 1.3)
 )
 }
 \arguments{
@@ -55,17 +59,28 @@ quantities.}
 
 \item{equilibrium_tolerance}{Maximum relative error allowed when checking
 the public-model equilibrium from a perturbed price start.}
+
+\item{costs}{Optional explicit positive physical marginal costs, one per
+product. If omitted, costs are drawn independently of conduct.}
+
+\item{cost_rule}{Draw \code{"uniform"} costs from \code{cost_range}, or use the common
+\code{cost_level}. Ignored when \code{costs} is supplied.}
+
+\item{cost_level}{Positive common cost for \code{cost_rule = "common"}.}
+
+\item{cost_range}{Positive increasing endpoints for uniform cost draws.}
 }
 \value{
-A list of class \code{bayes_calibrated_market} with the draw design,
-full truth data, estimation inputs and margin mask, and a public-model
-equilibrium solve from a perturbed starting price vector for the same
-generated baseline.
+A list of class \code{bayes_calibrated_market} with primitive costs,
+full structural truth, estimation inputs and margin mask, and a public-model
+equilibrium solve from a perturbed starting price vector. Auction truth
+includes \code{auction_value}, its cost-based latent valuation.
 }
 \description{
-Draws one conduct-independent Logit share geometry, fixes every inside
-product's price at exactly one, and either calibrates the structural price
-coefficient from one observed margin or supplies a known coefficient. The
+Draws one conduct-independent Logit share geometry and physical cost vector,
+then sets each price to its physical cost plus the structural markup implied
+by the supplied conduct. It either calibrates the structural price
+coefficient from one observed margin or uses a supplied coefficient. The
 conditional inside shares are drawn from a \code{J}-dimensional Dirichlet with
 the required concentration parameter. Their geometric mean sets the
 outside share through \code{plogis(mean(log(r)))}; centered log shares are kept

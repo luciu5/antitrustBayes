@@ -55,6 +55,7 @@ Collate:
     'methods.R'
     'model_universe.R'
     'params.R'
+    'policy_roles.R'
     'posterior_draw_contract.R'
     'posterior_k.R'
     'posterior_policy_models.R'

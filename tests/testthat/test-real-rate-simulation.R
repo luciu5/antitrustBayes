@@ -14,21 +14,73 @@
   bayes_specify(params, market)
 }
 
+.rate_atomic_fixture <- function(supply = 1L, side = "input") {
+  params <- bayes_params(alpha = .8, s0 = .1, supply_model = supply)
+  market <- bayes_market(
+    prices = c(.2, .1, .3), quantities = c(45, 35, 20),
+    margins = rep(.4, 3), group = c("a", "b", "c"),
+    outside_price = 1, market_side = side, insideSize = 100,
+    labels = c("a", "b", "c"))
+  bayes_specify(params, market)
+}
+
 test_that("real rate domains are explicit and reject unsupported economics", {
   fit <- .rate_domain_fixture()
   expect_identical(.validate_simulation_price_domain(fit, c("positive", "real")),
                    "positive")
   expect_identical(.validate_simulation_price_domain(fit, "real"), "real")
+  for (supply in 1:5) {
+    expect_identical(.validate_simulation_price_domain(
+      .rate_atomic_fixture(supply), "real"), "real")
+  }
   for (other in list(
     .rate_domain_fixture(side = "output"),
     .rate_domain_fixture(demand = "ces", side = "output"),
-    .rate_domain_fixture(supply = 1L))) {
+    .rate_atomic_fixture(side = "output"))) {
     expect_error(.validate_simulation_price_domain(other, "real"),
-                 "only input Logit Cournot")
+                 "supports simultaneous input Logit")
   }
-  fit@metadata$structure <- "simultaneous"
+  fit@metadata$partition_prior <- "cutoff"
   expect_error(.validate_simulation_price_domain(fit, "real"),
-               "only input Logit Cournot")
+               "supports simultaneous input Logit")
+})
+
+test_that("atomic input Logit signed rates require the real-domain option", {
+  for (supply in 1:5) {
+    fit <- .rate_atomic_fixture(supply)
+    owner <- c("a", "a", "c")
+    shock <- rep(-.2, 3)
+    positive <- suppressWarnings(simulate(
+      fit, owner, mcDelta = shock, mc.cores = 1L,
+      price_domain = "positive"))
+    expect_equal(as.integer(positive@n_valid), 0L)
+    detail <- positive@metadata$failure_details$unit_1[[1L]]
+    expect_identical(detail$category, "positive_domain_violation")
+    expect_lt(detail$minimum_rate, 0)
+    real <- suppressWarnings(simulate(
+      fit, owner, mcDelta = shock, mc.cores = 1L,
+      price_domain = "real"))
+    expect_equal(as.integer(real@n_valid), 1L)
+    expect_true(any(real@price_post$unit_1 < 0))
+    expect_true(any(real@metadata$nonpositive_rates$post$unit_1))
+    expect_equal(real@metadata$price_level_change$unit_1,
+                 real@price_post$unit_1 - real@price_pre$unit_1)
+    model <- real@sims$unit_1[[1L]]
+    expect_lt(max(abs(model@mcPost - model@pricePost -
+      antitrust::calcMargins(model, FALSE, level = TRUE))), 1e-6)
+  }
+})
+
+test_that("latent input Logit simulation carries the selected rate domain", {
+  fit <- .rate_atomic_fixture(1L)
+  result <- suppressWarnings(simulate(
+    fit, c("a", "a", "c"), mcDelta = rep(-.2, 3),
+    mc.cores = 1L, price_domain = "real",
+    demand_anchoring = "latent_quality"))
+  expect_equal(as.integer(result@n_valid), 1L)
+  expect_true(any(result@price_post$unit_1 < 0))
+  expect_identical(
+    result@metadata$latent_diagnostics$unit_1[[1L]]$price_domain, "real")
 })
 
 test_that("failure metadata retains domain obstruction and solver stage", {
@@ -119,6 +171,24 @@ test_that("native real rates reuse policy plans and preserve value primitives", 
       expect_identical(positive@metadata$policy_distribution_conditioning,
                        "successful_draws_only")
     }
+  }
+})
+
+test_that("native Bertrand role games retain signed input rates", {
+  skip_if_not_installed("coordination", minimum_version = "0.0.0.9006")
+  for (structure in c("fringe", "stackelberg")) {
+    fit <- .rate_domain_fixture(structure, supply = 1L)
+    plan <- posterior_policy_draws(fit, seed = 43L)
+    result <- suppressWarnings(simulate(
+      fit, c("a", "a", "c"), mcDelta = rep(-.2, 3),
+      draw_plan = plan, mc.cores = 1L, price_domain = "real"))
+    expect_equal(as.integer(result@n_valid), 1L)
+    expect_true(any(result@price_post$unit_1 < 0))
+    model <- result@sims$unit_1[[1L]]
+    check <- if (structure == "fringe")
+      coordination::core_fringe_residuals(model, FALSE) else
+      coordination::stackelberg_residuals(model, FALSE)
+    expect_lt(check$max, 2e-7)
   }
 })
 

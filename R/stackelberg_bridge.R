@@ -312,7 +312,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.")
   .cmdstan_require_policy_inference(fit, allow_experimental)
   price_domain <- .validate_simulation_price_domain(fit, price_domain)
-  .require_real_rate_coordination(price_domain)
+  .require_real_rate_coordination(price_domain, fit@supply_model)
   structure_name <- .stack_bridge_or(fit@metadata$structure,
     if (isTRUE(fit@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous")
   if (!identical(structure_name, "stackelberg")) stop("fit@metadata$structure must be 'stackelberg'.")
@@ -465,7 +465,7 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.")
   .cmdstan_require_policy_inference(fit, allow_experimental)
   price_domain <- .validate_simulation_price_domain(fit, price_domain)
-  .require_real_rate_coordination(price_domain)
+  .require_real_rate_coordination(price_domain, fit@supply_model)
   structure_name <- .stack_bridge_or(
     fit@metadata$structure,
     if (isTRUE(fit@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous"

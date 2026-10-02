@@ -52,12 +52,14 @@
 #'   the native positive dollar markdown is retained and the observed
 #'   value/procurement-price primitive is held fixed.
 #' @param price_domain Counterfactual rate domain. The default
-#'   \code{"positive"} retains existing solvers. \code{"real"} permits
-#'   finite negative or zero solved rates for input Logit Cournot native exact
-#'   fringe or Stackelberg models, using coordination >= 0.0.0.9004. It is an
-#'   explicit domain extension, not a rate-floor model, and leaves the fitted
-#'   posterior unchanged. Unsupported combinations are rejected. Percentage
-#'   changes from zero baseline rates are undefined; use level-rate changes.
+#'   \code{"positive"} rejects nonpositive input Logit solutions.
+#'   \code{"real"} retains finite signed rates for simultaneous input Logit
+#'   Bertrand, MonCom, Cournot, auction, and bargaining games and native exact fringe or
+#'   Stackelberg games (native Cournot requires coordination >= 0.0.0.9004;
+#'   native Bertrand requires >= 0.0.0.9006).
+#'   The option affects simulation only, leaving the fitted posterior
+#'   unchanged. Percentage changes from zero baseline rates are undefined;
+#'   use level-rate changes.
 #' @param draw_plan Optional object returned by
 #'   \code{\link{posterior_policy_draws}}. A plan fixes posterior draw,
 #'   quality, and exact-k role realizations so multiple scenarios can reuse one
@@ -652,7 +654,7 @@ NULL
       utils::packageVersion("coordination") < "0.0.0.9003") {
     stop("native Bayesian reconstruction requires coordination >= 0.0.0.9003.")
   }
-  .require_real_rate_coordination(price_domain)
+  .require_real_rate_coordination(price_domain, object@supply_model)
   if (length(dots)) {
     stop("Unsupported native hard-role simulation argument(s): ",
          paste(names(dots), collapse = ", "), call. = FALSE)
@@ -1016,7 +1018,9 @@ NULL
                                 allow_experimental = FALSE, ..., .call) {
   .cmdstan_require_policy_inference(object, allow_experimental)
   price_domain <- .validate_simulation_price_domain(object, price_domain)
-  .require_real_rate_coordination(price_domain)
+  if (!is.null(.native_ordered_structure(object))) {
+    .require_real_rate_coordination(price_domain, object@supply_model)
+  }
   demand_anchoring <- match.arg(demand_anchoring)
   if (identical(demand_anchoring, "latent_quality")) {
     if (as.integer(object@supply_model) %in% c(4L, 5L)) {
@@ -1101,7 +1105,8 @@ NULL
 
   all_sims <- price_pre <- price_post <- price_change <- list()
   shares_pre <- shares_post <- product_labels <- failures <- list()
-  latent_diagnostics <- list()
+  latent_diagnostics <- failure_details <- undefined_relative_change <- list()
+  signed_relative_change <- price_level_change <- list()
   n_valid <- integer(length(setup$info))
   names(n_valid) <- setup$units$unit_id
 
@@ -1247,24 +1252,39 @@ NULL
         score_info <- .lq_reference_score(
           object, draws, draw_index, unit, plan, market_object, params
         )
-        latent <- .lq_apply_to_fit(fit, score_info, plan)
+        latent <- .lq_apply_to_fit(fit, score_info, plan,
+                                   price_domain = price_domain)
         fit <- latent$fit
         latent_metadata <- latent$metadata
       }
-      result <- if (is_counterfactual) {
-        antitrust::simulate(fit, scenario, ...)
+      atomic_input_logit <- identical(as.character(object@market_side), "input") &&
+          identical(as.character(object@demand_model), "logit") &&
+          as.integer(object@supply_model) %in% 1:5
+      args <- if (is_counterfactual) {
+        list(fit, scenario)
       } else {
-        antitrust::simulate(
-          fit, scenario, mcDelta = mc_delta_unit, subset = subset_unit, ...
-        )
+        list(fit, scenario, mcDelta = mc_delta_unit, subset = subset_unit)
+      }
+      args <- c(args, list(...))
+      if (atomic_input_logit &&
+          utils::packageVersion("antitrust") >= "0.99.42") {
+        args$price_domain <- price_domain
+      }
+      result <- do.call(antitrust::simulate, args)
+      if (atomic_input_logit) {
+        .check_atomic_price_domain(result, price_domain)
       }
       if (!is.null(latent_metadata)) attr(result, "bayes_latent_quality") <- latent_metadata
       result
     }
     run_one_safe <- function(draw_index) {
       tryCatch(
-        list(result = run_one(draw_index), error = NA_character_),
-        error = function(e) list(result = NULL, error = conditionMessage(e))
+        list(result = run_one(draw_index), error = NA_character_,
+             failure_detail = NULL),
+        error = function(e) list(
+          result = NULL, error = conditionMessage(e),
+          failure_detail = .bayes_sim_failure_detail(
+            e, "post_equilibrium", draw_index))
       )
     }
     raw <- if (length(draw_indices) == 1L || mc.cores == 1L) {
@@ -1273,10 +1293,12 @@ NULL
       parallel::mclapply(draw_indices, run_one_safe, mc.cores = mc.cores)
     }
     malformed <- !vapply(raw, function(x) {
-      is.list(x) && identical(names(x), c("result", "error"))
+      is.list(x) && identical(names(x),
+        c("result", "error", "failure_detail"))
     }, logical(1))
     raw[malformed] <- list(list(
-      result = NULL, error = "worker process did not return a result"
+      result = NULL, error = "worker process did not return a result",
+      failure_detail = NULL
     ))
 
     assembled <- .assemble_unit(raw, market_object, draw_indices)
@@ -1289,6 +1311,10 @@ NULL
     product_labels[[unit_id]] <- assembled$labels
     failures[[unit_id]] <- assembled$failures
     latent_diagnostics[[unit_id]] <- assembled$latent_diagnostics
+    failure_details[[unit_id]] <- assembled$failure_details
+    undefined_relative_change[[unit_id]] <- assembled$undefined_relative_change
+    signed_relative_change[[unit_id]] <- assembled$signed_relative_change
+    price_level_change[[unit_id]] <- assembled$price_post - assembled$price_pre
     n_valid[[unit_id]] <- assembled$n_valid
   }
 
@@ -1311,6 +1337,16 @@ NULL
   metadata$demand_anchoring <- demand_anchoring
   metadata$draw_plan <- if (is.null(draw_plan)) NULL else draw_plan$metadata
   metadata$latent_diagnostics <- latent_diagnostics
+  metadata$nonpositive_rates <- list(
+    pre = lapply(price_pre, function(x) is.finite(x) & x <= 0),
+    post = lapply(price_post, function(x) is.finite(x) & x <= 0))
+  metadata$failure_details <- failure_details
+  metadata$undefined_relative_price_change <- undefined_relative_change
+  metadata$signed_relative_price_change <- signed_relative_change
+  metadata$price_level_change <- price_level_change
+  metadata$policy_distribution_conditioning <- if (n_failed) {
+    "successful_draws_only"
+  } else "all_requested_draws"
 
   methods::new(
     "BayesSim",

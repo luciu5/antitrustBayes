@@ -716,13 +716,15 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
 
 .lq_replace_demand <- function(model, score, s0, prices_reference,
                                price_outside, quality, draw_index,
-                               normalization = "preserve_s0_reanchor") {
+                               normalization = "preserve_s0_reanchor",
+                               price_domain = "positive") {
   n <- length(prices_reference)
   if (length(score) != n || any(!is.finite(score))) stop("Latent demand score has invalid dimensions.", call. = FALSE)
   t <- exp(score - max(score)); t <- t / sum(t)
   shares <- (1 - s0) * t
   delta <- log(shares / s0)
-  real_rates <- .model_uses_real_rate_domain(model)
+  real_rates <- .model_uses_real_rate_domain(model) ||
+    identical(price_domain, "real")
   old_price <- as.numeric(model@pricePre)
   if (length(old_price) != n || any(!is.finite(old_price)) ||
       (!real_rates && any(old_price <= 0))) {
@@ -886,7 +888,8 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
     mkt_size_budget = info$mkt_size,
     reference_price = info$reference_price,
     latent_pre_price = info$solved_price,
-    price_domain = if (.model_uses_real_rate_domain(info$model)) "real" else "positive",
+    price_domain = if (identical(info$price_domain, "real") ||
+                       .model_uses_real_rate_domain(info$model)) "real" else "positive",
     nonpositive_pre_rate = info$solved_price <= 0,
     pre_price_discrepancy = info$price_discrepancy,
     mc_pre = info$mc_pre,
@@ -897,12 +900,15 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
   )
 }
 
-.lq_apply_to_fit <- function(fit, score_info, plan) {
+.lq_apply_to_fit <- function(fit, score_info, plan,
+                             price_domain = "positive") {
   info <- .lq_replace_demand(
     fit@model, score_info$score, score_info$s0,
     as.numeric(fit@model@pricePre), as.numeric(fit@model@priceOutside),
-    score_info$quality, score_info$draw_index
+    score_info$quality, score_info$draw_index,
+    price_domain = price_domain
   )
+  info$price_domain <- price_domain
   fit@model <- info$model
   list(fit = fit, info = info,
        metadata = .lq_metadata(info, plan$quality_source,
