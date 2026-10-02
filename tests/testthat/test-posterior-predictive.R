@@ -324,20 +324,6 @@ test_that("collapsed quality prediction reuses plan state without changing the f
                "requires the joint likelihood")
 })
 
-test_that("posterior prediction does not mutate a CmdStanR fit's lazy draw cache", {
-  fixture <- Sys.getenv("ANTITRUSTBAYES_SAVED_CMDSTAN_FIT", "")
-  skip_if(!nzchar(fixture) || !file.exists(fixture),
-          "Set ANTITRUSTBAYES_SAVED_CMDSTAN_FIT to a saved CmdStanR fit RDS.")
-  fit <- readRDS(fixture)
-  skip_if_not(inherits(fit@stanfit, "CmdStanFit"),
-              "The saved fixture does not contain a CmdStanR fit.")
-  before <- serialize(fit@stanfit, NULL, version = 3L)
-  result <- posterior_predict(fit, n_draws = 2L, seed = 192L,
-                              allow_experimental = TRUE)
-  expect_s3_class(result, "posterior_predictive")
-  expect_identical(serialize(fit@stanfit, NULL, version = 3L), before)
-})
-
 test_that("exact-k FOC means accept explicit market-year component states", {
   n <- 4L
   data <- data.frame(

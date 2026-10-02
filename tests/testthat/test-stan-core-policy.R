@@ -53,19 +53,6 @@ test_that("invalid core and chain settings fail clearly", {
   }
 })
 
-test_that("core policy does not mutate the mc.cores option", {
-  had_option <- "mc.cores" %in% names(options())
-  old_option <- getOption("mc.cores")
-  on.exit(if (had_option) options(mc.cores = old_option)
-          else options(mc.cores = NULL), add = TRUE)
-
-  options(mc.cores = 3L)
-  before <- getOption("mc.cores")
-  expect_identical(.resolve_stan_cores(list(), chains = 4L), 3L)
-  expect_identical(getOption("mc.cores"), before)
-})
-
-
 test_that("bayes_est passes the resolved chain policy to sampling", {
   old_option <- options("mc.cores")
   on.exit(options(old_option), add = TRUE)

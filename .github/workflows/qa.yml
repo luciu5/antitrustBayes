@@ -268,7 +268,7 @@ jobs:
           library(testthat)
           testthat::test_dir(
             file.path("tests", "testthat"),
-            filter = "rho-studentt|s0-pooling|simulate-dispatch",
+            filter = "rho-studentt|s0-information-ladder|s0-pooling|simulate-dispatch",
             reporter = "summary", package = "antitrustBayes",
             load_package = "installed"
           )

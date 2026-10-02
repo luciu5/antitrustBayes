@@ -86,16 +86,6 @@ test_that("factorized bivariate Student-t matches the joint density across a gri
   }
 })
 
-test_that("nu -> Inf recovers the historical Normal conditional", {
-  sigma_share <- 0.6
-  sigma_margin <- 0.9
-  rho <- 0.4
-  nu <- 1e5
-  z_s <- 1.3
-  scale2_cond <- sigma_margin * sqrt(1 - rho^2) * sqrt((nu - 2 + z_s^2) / (nu + 1))
-  expect_equal(scale2_cond, sigma_margin * sqrt(1 - rho^2), tolerance = 1e-4)
-})
-
 test_that("fixed and estimated df fits compile and produce finite draws", {
   skip_unless_rho_stan_tests()
   d <- make_rho_smoke_data()

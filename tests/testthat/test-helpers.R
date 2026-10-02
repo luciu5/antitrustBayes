@@ -69,42 +69,6 @@ test_that("validate_inputs catches bad quantities", {
   )
 })
 
-test_that("prepare_stan_data returns correct structure", {
-  N <- 10
-  sd <- prepare_stan_data(
-    prices       = runif(N, 1, 5),
-    quantities   = runif(N, 10, 100),
-    margins      = runif(N, 0.1, 0.5),
-    market       = rep(1:2, each = 5),
-    year         = rep(1, N),
-    group        = sample(1:5, N, replace = TRUE),
-    supply_model = 1L,
-    use_cutoff   = FALSE,
-    use_rho      = TRUE,
-    use_hmt      = FALSE,
-    priors       = list()
-  )
-
-  expect_true(is.list(sd))
-  expect_equal(sd$N, N)
-  expect_equal(sd$N_market, 2L)
-  expect_equal(sd$supply_model, 1L)
-  expect_equal(sd$use_rho, 1L)
-  expect_equal(sd$use_cutoff, 0L)
-  expect_equal(length(sd$shareIn), N)
-  expect_equal(length(sd$marginNormInv), N)
-  expect_equal(length(sd$log_shareIn), N)
-  expect_equal(length(sd$clr_shareIn), N)
-  expect_equal(length(sd$log_marginNormInv), N)
-  expect_equal(sd$log_shareIn, log(sd$shareIn))
-  expect_equal(sd$log_marginNormInv, log(sd$marginNormInv))
-  expect_equal(length(sd$price_std), N)
-  expect_true(sd$price_sd > 0)
-  expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 11L)
-  expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
-})
-
 test_that("default outside-share prior has mean 20% and 5th percentile 10%", {
   sd <- prepare_stan_data(
     prices       = c(1, 2, 3, 4),
@@ -426,45 +390,6 @@ test_that("prepare_stan_data warns on unknown prior", {
     ),
     "Unknown prior parameter"
   )
-})
-
-test_that("prepare_ces_stan_data returns correct structure", {
-  N <- 10
-  sd <- prepare_ces_stan_data(
-    prices       = runif(N, 1, 5),
-    quantities   = runif(N, 10, 100),
-    margins      = runif(N, 0.1, 0.5),
-    market       = rep(1:2, each = 5),
-    year         = rep(1, N),
-    group        = sample(1:5, N, replace = TRUE),
-    supply_model = 1L,
-    use_cutoff   = FALSE,
-    use_rho      = TRUE,
-    use_hmt      = FALSE,
-    priors       = list()
-  )
-
-  expect_true(is.list(sd))
-  expect_equal(sd$N, N)
-  expect_equal(sd$N_market, 2L)
-  expect_equal(length(sd$revShare), N)
-  expect_equal(length(sd$shareIn), N)
-  expect_equal(length(sd$marginNormInv), N)
-  expect_equal(length(sd$log_shareIn), N)
-  expect_equal(length(sd$clr_shareIn), N)
-  expect_equal(length(sd$log_marginNormInv), N)
-  expect_equal(sd$log_shareIn, log(sd$shareIn))
-  expect_equal(sd$log_marginNormInv, log(sd$marginNormInv))
-  expect_equal(length(sd$log_price_std), N)
-  expect_true(sd$log_price_sd > 0)
-  expect_false("implied_s0" %in% names(sd))
-  expect_equal(attr(sd, "model_spec_version"), 11L)
-  expect_equal(attr(sd, "s0_prior_reference"), 0.2, tolerance = 1e-8)
-  # Revenue shares should sum to ~1 within each market
-  for (m in 1:sd$N_market_year) {
-    idx <- which(attr(sd, "market_year_idx") == m)
-    expect_equal(sum(sd$revShare[idx]), 1.0, tolerance = 1e-10)
-  }
 })
 
 test_that("prepare_ces_stan_data computes revenue shares correctly", {

@@ -111,8 +111,8 @@ test_that("automatic one-market panels share one direct outside share", {
       group = rep(c("A", "B", "C"), 2), demand_model = demand,
       market_side = "output", use_rho = FALSE,
       share_likelihood = "gaussian", quality_parameterization = "collapsed",
-      stan_options = list(chains = 1, iter = 1, warmup = 0,
-        algorithm = "Fixed_param", init = 0, seed = 16, refresh = 0)
+      stan_options = list(chains = 1, iter = 40, warmup = 20,
+        init = 0, seed = 16, refresh = 0)
     )
     expect_equal(fit@metadata$s0_pooling_requested, "auto")
     expect_equal(fit@metadata$s0_pooling_resolved, "market")
@@ -125,6 +125,7 @@ test_that("automatic one-market panels share one direct outside share", {
     outside <- antitrustBayes:::.cmdstan_extract(
       fit@stanfit, "s0_prob"
     )$s0_prob
-    expect_equal(outside[1, 1], outside[1, 2], tolerance = 1e-12)
+    expect_equal(as.numeric(outside[, 1]), as.numeric(outside[, 2]),
+                 tolerance = 1e-12)
   }
 })

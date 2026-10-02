@@ -6,6 +6,14 @@ models, panels, exact ordered-k mixtures, missing margins, and the Supreme
 Court banking data. It does not change priors, conduct equations, likelihoods,
 or sampler budgets.
 
+**Current status (October 2026):** The fixture checks below run, but the
+124-task HMC runner is an archived validation protocol. Its `run_task.R`
+still expects the old RStan `stanmodels` object and RStan fit methods; the
+current package uses CmdStanR and has no `stanmodels` object. Port and review
+the runner against the current backend and refresh its frozen kernel hashes
+before treating new enterprise results as validation of the current package.
+The runner commands below describe the historical protocol.
+
 The frozen manifest contains 124 independent tasks:
 
 | Tier | Tasks | Purpose |
@@ -46,6 +54,20 @@ The primary HMC gate is unchanged:
 * exact-k probabilities sum to one within `1e-10`.
 
 ## Local smoke check
+
+The benchmark fixture contracts are an extended validation check, run from
+the repository root when changing the DGP or study design:
+
+```text
+Rscript --vanilla -e 'testthat::test_file("doc/market_intercept_enterprise/fixture_checks.R")'
+```
+
+The ordinary package test suite covers production economics. The fixture
+check validates the manifest and all synthetic cells, ordered-k settings,
+stress regimes, market-intercept truth,
+and agreement between the benchmark DGP conduct schedules and the package.
+The manifest generator, runner, and aggregator validate task identities and
+smoke each cell as part of the benchmark run.
 
 The default runner mode validates fixtures and argument construction without
 loading Stan or sampling. Generate a run manifest, then run any task:
