@@ -20,7 +20,8 @@ bayes_calibrated_market(
   costs = NULL,
   cost_rule = c("uniform", "common"),
   cost_level = 1,
-  cost_range = c(0.7, 1.3)
+  cost_range = c(0.7, 1.3),
+  conditional_shares = NULL
 )
 }
 \arguments{
@@ -30,7 +31,7 @@ bayes_calibrated_market(
 
 \item{dirichlet_concentration}{Required positive Dirichlet concentration,
 either a scalar recycled across the \code{J} inside products or a vector of
-length \code{J}.}
+length \code{J}, unless \code{conditional_shares} is supplied.}
 
 \item{anchor_margin}{Optional observed Lerner margin for the prespecified
 highest-share product in calibrated mode. If omitted, \code{margin_range} is
@@ -69,6 +70,9 @@ product. If omitted, costs are drawn independently of conduct.}
 \item{cost_level}{Positive common cost for \code{cost_rule = "common"}.}
 
 \item{cost_range}{Positive increasing endpoints for uniform cost draws.}
+
+\item{conditional_shares}{Optional explicit positive inside-share vector
+of length \code{J} summing to one. Supplying it skips the Dirichlet draw.}
 }
 \value{
 A list of class \code{bayes_calibrated_market} with primitive costs,

@@ -16,6 +16,52 @@
   bayes_specify(params, market)
 }
 
+test_that("finite negative fringe costs retain draw identity and a typed failure", {
+  params <- bayes_params(
+    s0 = .2, supply_model = 3L, structure = "fringe", alpha = rep(1, 3),
+    partition_prior = "ordered_k", k_support = 1L, k_prior = 1)
+  market <- bayes_market(
+    prices = c(1.1, 1.2, 1.3), quantities = c(40, 30, 20),
+    margins = c(.5, .4, .3), group = c("a", "a", "b"),
+    outside_price = 1, market_side = "output", insideSize = 90,
+    labels = c("one", "two", "three"))
+  fit <- bayes_specify(params, market)
+  plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 11L)
+  realized <- suppressWarnings(posterior_policy_models(fit, draw_plan = plan))
+  expect_identical(realized$draw_indices, plan$draw_indices)
+  expect_true(all(vapply(realized$models[[1L]], is.null, logical(1))))
+  expect_identical(realized$failures$draw_index, plan$draw_indices)
+  expect_true(all(realized$failures$category == "bayes_finite_nonpositive_cost"))
+})
+
+test_that("finite negative baseline costs are typed for every candidate model", {
+  candidates <- c(MC = 2L, B = 1L, C = 3L, A = 4L,
+                  BF = 1L, CF = 3L, BS = 1L, CS = 3L)
+  for (candidate in names(candidates)) {
+    structure <- if (candidate %in% c("BF", "CF")) "fringe" else
+      if (candidate %in% c("BS", "CS")) "stackelberg" else "simultaneous"
+    args <- list(s0 = .2, supply_model = candidates[[candidate]],
+                 structure = structure, alpha = rep(.5, 3L))
+    if (structure != "simultaneous") {
+      args$partition_prior <- "ordered_k"
+      args$k_support <- 1L
+      args$k_prior <- 1
+    }
+    fit <- bayes_specify(do.call(bayes_params, args), bayes_market(
+      prices = c(1.1, 1.2, 1.3), quantities = c(40, 30, 20),
+      margins = c(.5, .4, .3), group = c("a", "b", "c"),
+      outside_price = 1, market_side = "output", insideSize = 90,
+      labels = c("one", "two", "three")))
+    plan <- posterior_policy_draws(fit, n_draws = 1L, seed = 11L)
+    realized <- suppressWarnings(posterior_policy_models(fit, draw_plan = plan))
+    expect_null(realized$models[[1L]][[1L]], info = candidate)
+    expect_identical(realized$failures$draw_index, plan$draw_indices,
+                     info = candidate)
+    expect_identical(realized$failures$category,
+                     "bayes_finite_nonpositive_cost", info = candidate)
+  }
+})
+
 test_that("public realization preserves canonical baseline state without post simulation", {
   testthat::local_mocked_bindings(
     .simulate_antitrust_fit = function(...) stop("unexpected post simulation"),

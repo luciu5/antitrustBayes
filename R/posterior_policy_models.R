@@ -135,6 +135,18 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
             mcDelta = rep(0, market_object$n_prod),
             subset = rep(TRUE, market_object$n_prod)))
         }
+        structural <- if (is.null(native_structure)) model@model else model
+        baseline_cost <- tryCatch(
+          as.numeric(antitrust::calcMC(structural, preMerger = TRUE)),
+          error = function(e) NULL)
+        if (!is.null(baseline_cost) && length(baseline_cost) == nrow(df) &&
+            all(is.finite(baseline_cost)) && any(baseline_cost <= 0)) {
+          condition <- simpleError(sprintf(
+            "Finite nonpositive baseline marginal cost in %d product(s); minimum %.6g.",
+            sum(baseline_cost <= 0), min(baseline_cost)))
+          class(condition) <- c("bayes_finite_nonpositive_cost", class(condition))
+          stop(condition)
+        }
         latent_metadata <- NULL
         if (demand_anchoring == "latent_quality") {
           stage <- "latent_pre_equilibrium"

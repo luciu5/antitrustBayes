@@ -116,6 +116,56 @@ test_that("calibrated Logit markets share one seeded geometry across conduct", {
   }
 })
 
+test_that("explicit primitives calibrate each conduct and re-solve with fixed alpha", {
+  skip_if_not_installed("coordination")
+  r <- c(.24, .18, .16, .14, .11, .09, .08)
+  costs <- seq(.8, 1.2, length.out = 7L)
+  conducts <- c("MC", "B", "C", "A", "BF", "CF", "BS", "CS")
+  markets <- lapply(conducts, function(conduct) {
+    bayes_calibrated_market(
+      conduct = conduct, J = 7L, conditional_shares = r,
+      costs = costs, anchor_margin = .12,
+      k = if (conduct %in% c("BF", "CF", "BS", "CS")) 3L else NULL,
+      seed = 101L)
+  })
+  expect_gt(diff(range(vapply(markets, function(x) x$truth$alpha, numeric(1)))), 1e-4)
+  expect_gt(diff(range(vapply(markets, function(x) x$truth$data$prices[2L], numeric(1)))), 1e-4)
+  for (i in seq_along(markets)) {
+    market <- markets[[i]]
+    expect_identical(unname(market$truth$conditional_shares), r)
+    expect_identical(unname(market$truth$costs), costs)
+    expect_equal(market$truth$s0, plogis(mean(log(r))), tolerance = 1e-14)
+    expect_equal(unname(market$truth$margins[1L]), .12, tolerance = 1e-7)
+    expect_true(market$truth$equilibrium$passed)
+    if (conducts[[i]] %in% c("BF", "CF")) expect_length(market$truth$core, 3L)
+    if (conducts[[i]] %in% c("BS", "CS")) expect_length(market$truth$leaders, 3L)
+    quality <- if (conducts[[i]] == "A") market$truth$auction_value else
+      market$truth$meanval
+    solved <- bayes_resolve_market(market, costs = costs * exp(seq(-.015, .015,
+      length.out = 7L)), meanval = quality + seq(-.02, .02, length.out = 7L))
+    expect_identical(solved$truth$alpha, market$truth$alpha)
+    expect_identical(solved$truth$ownership, market$truth$ownership)
+    expect_identical(solved$truth$core, market$truth$core)
+    expect_identical(solved$truth$leaders, market$truth$leaders)
+    if (conducts[[i]] == "A") {
+      expect_equal(unname(solved$truth$auction_value),
+                   unname(quality + seq(-.02, .02, length.out = 7L)),
+                   tolerance = 1e-12)
+    } else {
+      expect_equal(unname(solved$truth$meanval),
+                   unname(quality + seq(-.02, .02, length.out = 7L)),
+                   tolerance = 1e-12)
+    }
+    expect_gt(max(abs(solved$truth$data$prices - market$truth$data$prices)), 1e-4)
+    expect_lt(solved$truth$equilibrium$max_cost_error, 2e-6)
+    expect_lt(solved$truth$equilibrium$max_relative_error, 2e-6)
+    expect_lt(solved$truth$equilibrium$max_share_error, 2e-6)
+  }
+  expect_error(bayes_calibrated_market(conduct = "B", J = 7L,
+    conditional_shares = rep(.1, 7), costs = costs, anchor_margin = .12),
+    "conditional_shares")
+})
+
 test_that("parameter-driven mode retains supplied alpha and one observed margin", {
   skip_if_not_installed("coordination")
   skip_if(utils::packageVersion("antitrust") < package_version("0.99.38"))

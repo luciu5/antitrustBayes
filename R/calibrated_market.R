@@ -29,19 +29,24 @@
   )
 }
 
-.bayes_calibrated_geometry <- function(J, concentration, inside_size) {
+.bayes_calibrated_geometry <- function(J, concentration, inside_size,
+                                       conditional_shares = NULL) {
   shape <- if (length(concentration) == 1L) {
     rep(concentration, J)
   } else {
     concentration
   }
-  weights <- stats::rgamma(J, shape = shape, rate = 1)
-  if (any(!is.finite(weights)) || any(weights <= 0) ||
-      !is.finite(sum(weights)) || sum(weights) <= 0) {
-    stop("Dirichlet draw was numerically degenerate; increase the concentration.",
-         call. = FALSE)
+  if (is.null(conditional_shares)) {
+    weights <- stats::rgamma(J, shape = shape, rate = 1)
+    if (any(!is.finite(weights)) || any(weights <= 0) ||
+        !is.finite(sum(weights)) || sum(weights) <= 0) {
+      stop("Dirichlet draw was numerically degenerate; increase the concentration.",
+           call. = FALSE)
+    }
+    conditional_shares <- unname(weights / sum(weights))
+  } else {
+    conditional_shares <- unname(as.numeric(conditional_shares))
   }
-  conditional_shares <- unname(weights / sum(weights))
   mean_log_share <- mean(log(conditional_shares))
   s0_formula <- stats::plogis(mean_log_share)
   shares <- unname((1 - s0_formula) * conditional_shares)
@@ -362,7 +367,9 @@
 #' @param J Number of inside products; each product belongs to its own firm.
 #' @param dirichlet_concentration Required positive Dirichlet concentration,
 #'   either a scalar recycled across the `J` inside products or a vector of
-#'   length `J`.
+#'   length `J`, unless `conditional_shares` is supplied.
+#' @param conditional_shares Optional explicit positive inside-share vector
+#'   of length `J` summing to one. Supplying it skips the Dirichlet draw.
 #' @param anchor_margin Optional observed Lerner margin for the prespecified
 #'   highest-share product in calibrated mode. If omitted, `margin_range` is
 #'   required and supplies an open interval for a seeded draw.
@@ -401,7 +408,8 @@ bayes_calibrated_market <- function(
     dirichlet_alpha = NULL,
     inside_size = 10000, equilibrium_tolerance = 2e-6,
     costs = NULL, cost_rule = c("uniform", "common"),
-    cost_level = 1, cost_range = c(0.7, 1.3)) {
+    cost_level = 1, cost_range = c(0.7, 1.3),
+    conditional_shares = NULL) {
   mode <- match.arg(mode)
   cost_rule <- match.arg(cost_rule)
   conduct <- match.arg(conduct)
@@ -427,13 +435,20 @@ bayes_calibrated_market <- function(
     }
     dirichlet_concentration <- dirichlet_alpha
   }
-  if (is.null(dirichlet_concentration)) {
+  if (is.null(dirichlet_concentration) && is.null(conditional_shares)) {
     stop("'dirichlet_concentration' is required.", call. = FALSE)
   }
-  if (!is.numeric(dirichlet_concentration) ||
+  if (!is.null(conditional_shares) &&
+      (!is.numeric(conditional_shares) || length(conditional_shares) != J ||
+       any(!is.finite(conditional_shares)) || any(conditional_shares <= 0) ||
+       abs(sum(conditional_shares) - 1) > 1e-10)) {
+    stop("'conditional_shares' must be a positive finite vector of length J summing to one.",
+         call. = FALSE)
+  }
+  if (!is.null(dirichlet_concentration) && (!is.numeric(dirichlet_concentration) ||
       !length(dirichlet_concentration) %in% c(1L, J) ||
       any(!is.finite(dirichlet_concentration)) ||
-      any(dirichlet_concentration <= 0)) {
+      any(dirichlet_concentration <= 0))) {
     stop("'dirichlet_concentration' must be positive and have length one or J.",
          call. = FALSE)
   }
@@ -536,11 +551,12 @@ bayes_calibrated_market <- function(
   }
   seed <- as.integer(seed)
   set.seed(seed)
-  concentration <- if (length(dirichlet_concentration) == 1L) {
+  concentration <- if (is.null(dirichlet_concentration)) rep(NA_real_, J) else
+    if (length(dirichlet_concentration) == 1L) {
     rep(dirichlet_concentration, J)
   } else as.numeric(dirichlet_concentration)
   geometry <- .bayes_calibrated_geometry(
-    J, concentration, inside_size
+    J, concentration, inside_size, conditional_shares
   )
   if (identical(mode, "calibrated")) {
     if (is.null(anchor_margin)) {
@@ -667,5 +683,131 @@ bayes_calibrated_market <- function(
     )
   )
   class(out) <- c("bayes_calibrated_market", "list")
+  out
+}
+
+#' Re-solve a calibrated market under new costs and product quality
+#'
+#' Keeps conduct, alpha, ownership, and any core or leader roles fixed. For
+#' auction conduct, `meanval` denotes the cost-independent latent valuation
+#' (`market$truth$auction_value`); for other conduct it denotes the Logit
+#' quality intercept (`market$truth$meanval`). The public model is freshly
+#' solved from perturbed baseline prices, then checked against its FOCs.
+#'
+#' @param market A result from [bayes_calibrated_market()].
+#' @param costs Positive physical marginal costs, in product order.
+#' @param meanval Product quality or auction valuation, in product order.
+#' @param equilibrium_tolerance Maximum relative cost/FOC error.
+#' @return A `bayes_calibrated_market` with updated standardized truth and
+#'   fresh-equilibrium diagnostics.
+#' @export
+bayes_resolve_market <- function(market, costs = market$truth$costs,
+                                 meanval = if (identical(market$design$conduct, "A"))
+                                   market$truth$auction_value else market$truth$meanval,
+                                 equilibrium_tolerance = 2e-6) {
+  if (!inherits(market, "bayes_calibrated_market"))
+    stop("'market' must be a calibrated market.", call. = FALSE)
+  J <- market$design$J
+  if (!is.numeric(costs) || length(costs) != J ||
+      any(!is.finite(costs) | costs <= 0))
+    stop("'costs' must be a positive finite vector of length J.", call. = FALSE)
+  if (!is.numeric(meanval) || length(meanval) != J || any(!is.finite(meanval)))
+    stop("'meanval' must be a finite vector of length J.", call. = FALSE)
+  if (!is.numeric(equilibrium_tolerance) ||
+      length(equilibrium_tolerance) != 1L ||
+      !is.finite(equilibrium_tolerance) || equilibrium_tolerance <= 0)
+    stop("'equilibrium_tolerance' must be positive and finite.", call. = FALSE)
+  labels <- as.character(market$truth$data$product)
+  costs <- stats::setNames(as.numeric(costs), labels)
+  quality <- stats::setNames(as.numeric(meanval), labels)
+  model <- market$truth$model
+  alpha <- market$truth$alpha
+  is_auction <- identical(market$design$conduct, "A")
+  model@mcPre <- model@mcPost <- unname(costs)
+  model <- antitrust::initialize_cost_state(model)
+  model@slopes$meanval <- if (is_auction) unname(quality - alpha * costs) else
+    unname(quality)
+  start <- as.numeric(market$truth$data$prices) * 1.13 + 0.037
+  model@priceStart <- start
+  prices <- as.numeric(antitrust::calcPrices(model, preMerger = TRUE))
+  if (length(prices) != J || any(!is.finite(prices) | prices <= 0))
+    stop("Fresh equilibrium solve returned invalid prices.", call. = FALSE)
+  model@pricePre <- prices
+  model@prices <- prices
+  shares <- as.numeric(antitrust::calcShares(model, preMerger = TRUE))
+  if (length(shares) != J || any(!is.finite(shares) | shares <= 0) ||
+      sum(shares) >= 1)
+    stop("Fresh equilibrium solve returned invalid shares.", call. = FALSE)
+  model@shares <- shares
+  model@shareInside <- sum(shares)
+  model@margins <- (prices - costs) / prices
+  verify <- model
+  verify@priceStart <- prices * 0.87 + 0.019
+  check_prices <- as.numeric(antitrust::calcPrices(verify, preMerger = TRUE))
+  verify@pricePre <- check_prices
+  check_shares <- as.numeric(antitrust::calcShares(verify, preMerger = TRUE))
+  price_error <- max(abs(check_prices - prices) / pmax(prices, 1e-12))
+  share_error <- max(abs(check_shares - shares))
+  margins <- as.numeric(antitrust::calcMargins(model, preMerger = TRUE,
+                                               level = FALSE))
+  markup <- as.numeric(antitrust::calcMargins(model, preMerger = TRUE,
+                                              level = TRUE))
+  recovered <- as.numeric(antitrust::calcMC(model, preMerger = TRUE))
+  cost_error <- max(abs(recovered - costs) / pmax(1, abs(costs)))
+  foc_error <- max(abs(prices - costs - markup))
+  if (length(margins) != J || any(!is.finite(margins) | margins <= 0 | margins >= 1) ||
+      !is.finite(cost_error) || !is.finite(foc_error) ||
+      cost_error > equilibrium_tolerance || foc_error > equilibrium_tolerance ||
+      !is.finite(price_error) || price_error > equilibrium_tolerance ||
+      !is.finite(share_error) || share_error > equilibrium_tolerance)
+    stop("Fresh equilibrium failed margin, cost, or FOC validation.", call. = FALSE)
+  role_error <- NA_real_
+  if (market$design$conduct %in% c("BF", "CF"))
+    role_error <- as.numeric(coordination::core_fringe_residuals(model, preMerger = TRUE)$max)
+  if (market$design$conduct %in% c("BS", "CS"))
+    role_error <- as.numeric(coordination::stackelberg_residuals(model, preMerger = TRUE)$max)
+  if (!is.na(role_error) && (!is.finite(role_error) || role_error > 1e-6))
+    stop("Fresh equilibrium rich-model FOC residual exceeds tolerance.", call. = FALSE)
+  out <- market
+  s0 <- 1 - sum(shares)
+  r <- shares / sum(shares)
+  names(prices) <- names(shares) <- names(margins) <- names(r) <- labels
+  out$truth$model <- model
+  out$truth$source_fit <- NULL
+  out$truth$costs <- costs
+  out$truth$shares <- shares
+  out$truth$conditional_shares <- r
+  out$truth$s0 <- out$truth$s0_identity <- s0
+  out$truth$margins <- margins
+  out$truth$unit_markup <- stats::setNames(markup * alpha, labels)
+  out$truth$absolute_margins <- stats::setNames(prices - costs, labels)
+  out$truth$meanval <- stats::setNames(as.numeric(model@slopes$meanval), labels)
+  out$truth$auction_value <- if (is_auction) quality else NULL
+  out$truth$centered_log_shares <- stats::setNames(log(r) - mean(log(r)), labels)
+  out$truth$data$prices <- unname(prices)
+  out$truth$data$shares <- unname(shares)
+  out$truth$data$conditional_shares <- unname(r)
+  out$truth$data$quantities <- unname(market$design$inside_size * r)
+  out$truth$data$margins <- unname(margins)
+  out$truth$data$b <- unname(out$truth$centered_log_shares)
+  out$truth$equilibrium <- list(
+    prices = prices, shares = shares, max_cost_error = cost_error,
+    max_relative_error = price_error, max_share_error = share_error,
+    max_foc_residual = if (is.na(role_error)) foc_error else max(foc_error, role_error),
+    used_perturbed_start = TRUE, start = start, passed = TRUE,
+    gates = list(primitive_costs = TRUE, perturbed_price_solve = TRUE,
+                 solved_share_reproduction = TRUE, baseline_foc = TRUE)
+  )
+  out$fresh_oracle <- out$truth$equilibrium
+  out$design$realized_anchor_margin <- margins[[market$design$anchor_index]]
+  out$design$anchor_price <- prices[[market$design$anchor_index]]
+  out$estimation$data <- out$truth$data
+  out$estimation$data$margin_observed <- market$estimation$margin_observed
+  out$estimation$data$margins[!market$estimation$margin_observed] <- NA_real_
+  out$estimation$conditional_shares <- r
+  out$estimation$s0_true <- s0
+  out$estimation$inputs$prices <- unname(prices)
+  out$estimation$inputs$quantities <- unname(market$design$inside_size * r)
+  out$estimation$inputs$margins <- out$estimation$data$margins
   out
 }

@@ -570,6 +570,24 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     }
     args <- c(args, dots)
   }
+  if (identical(demand, "logit")) {
+    owner <- as.character(df$group)
+    firm_share <- vapply(owner, function(id) sum(shares[owner == id]), numeric(1))
+    in_core <- owner %in% active_core
+    multiplier <- rep(1, length(p))
+    multiplier[in_core] <- if (identical(conduct, "bertrand"))
+      1 / (1 - firm_share[in_core]) else
+        1 + firm_share[in_core] / params$s0
+    implied_cost <- p - multiplier / params$alpha
+    if (length(implied_cost) == length(p) && all(is.finite(implied_cost)) &&
+        any(implied_cost <= 0)) {
+      condition <- simpleError(sprintf(
+        "Finite nonpositive baseline marginal cost in %d product(s); minimum %.6g.",
+        sum(implied_cost <= 0), min(implied_cost)))
+      class(condition) <- c("bayes_finite_nonpositive_cost", class(condition))
+      stop(condition)
+    }
+  }
   out <- do.call(coordination::core_fringe, args)
   residual_diag <- out@diagnostics$residualsPre
   residual_vector <- if (is.list(residual_diag)) residual_diag$all else residual_diag
