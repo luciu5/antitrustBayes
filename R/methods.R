@@ -411,6 +411,12 @@ setMethod("show", "BayesSim", function(object) {
 })
 
 
+.bayes_sim_draw_summary <- function(model, market, levels, revenue, ...) {
+  invisible(capture.output(res <- summary(.terminal_model(model),
+    market = market, levels = levels, revenue = revenue, digits = 10, ...)))
+  res
+}
+
 #' Summarise Bayesian Counterfactual Simulation Results
 #'
 #' Mirrors the \code{summary} method for \pkg{antitrust} \code{Bertrand}
@@ -435,6 +441,8 @@ setMethod("show", "BayesSim", function(object) {
 #'   \code{summary} output. If \code{market = TRUE}, each is a
 #'   single-row data frame of market-level statistics; if
 #'   \code{market = FALSE}, each has one row per product.
+#'   The \code{diagnostics} attribute records requested draw IDs, summary
+#'   failures, and valid/missing counts by estimand. Attrition emits a warning.
 #'
 #' @rdname BayesSim-class
 #' @exportMethod summary
@@ -444,29 +452,33 @@ setMethod(
            digits = 2, ...) {
     # Collect summary data frames from each valid draw
     results_by_market <- list()
+    diagnostics <- list()
 
     for (mk in object@market_ids) {
       sims_mk <- object@sims[[mk]]
       valid <- which(!vapply(sims_mk, is.null, logical(1)))
+      ids <- object@metadata$draw_indices
+      if (is.null(ids)) ids <- seq_along(sims_mk)
+      errors <- rep(NA_character_, length(sims_mk))
+      errors[setdiff(seq_along(sims_mk), valid)] <- "simulation_unavailable"
+      diagnostics[[mk]] <- list(requested = length(sims_mk), draw_ids = ids,
+                                errors = errors, summarized = 0L, estimands = NULL)
       if (length(valid) == 0L) next
 
       draw_dfs <- vector("list", length(valid))
       for (j in seq_along(valid)) {
-        draw_dfs[[j]] <- tryCatch(
-          {
-            # summary prints to console; suppress it
-            invisible(capture.output(
-              res <- summary(.terminal_model(sims_mk[[valid[j]]]),
-                market = market,
-                levels = levels, revenue = revenue,
-                digits = 10, ...
-              )
-            ))
-            res
-          },
-          error = function(e) NULL
-        )
+        value <- tryCatch(.bayes_sim_draw_summary(sims_mk[[valid[j]]],
+          market, levels, revenue, ...), error = identity)
+        if (inherits(value, "error") || !is.data.frame(value)) {
+          diagnostics[[mk]]$errors[valid[j]] <- if (inherits(value, "error"))
+            conditionMessage(value) else "summary_unavailable"
+          value <- NULL
+        }
+        draw_dfs[j] <- list(value)
       }
+      keep <- !vapply(draw_dfs, is.null, logical(1))
+      diagnostics[[mk]]$summary_draw_ids <- ids[valid[keep]]
+      diagnostics[[mk]]$summarized <- sum(keep)
       draw_dfs <- draw_dfs[!vapply(draw_dfs, is.null, logical(1))]
       if (length(draw_dfs) == 0L) next
 
@@ -474,11 +486,19 @@ setMethod(
     }
 
     if (length(results_by_market) == 0L) {
+      reasons <- unlist(lapply(diagnostics, `[[`, "errors"), use.names = FALSE)
+      counts <- table(reasons, useNA = "no")
+      condition <- structure(list(message = paste0(
+        "No simulation draws could be summarized (", length(reasons), " requested): ",
+        paste(names(counts), counts, sep = "=", collapse = "; ")),
+        call = NULL, diagnostics = diagnostics),
+        class = c("bayes_summary_attrition", "warning", "condition"))
+      warning(condition)
       return(NULL)
     }
 
     # Aggregate: compute mean and sd of each numeric column across draws
-    .aggregate_draw_dfs <- function(draw_dfs) {
+    .aggregate_draw_dfs <- function(draw_dfs, mk) {
       ref <- draw_dfs[[1]]
       num_cols <- vapply(ref, is.numeric, logical(1))
 
@@ -500,6 +520,17 @@ setMethod(
         }
       }
 
+      finite <- is.finite(arr)
+      counts <- expand.grid(row = seq_len(nr), estimand = num_names,
+                            stringsAsFactors = FALSE)
+      counts$valid <- as.vector(apply(finite, c(1, 2), sum))
+      counts$missing <- diagnostics[[mk]]$requested - counts$valid
+      diagnostics[[mk]]$estimands <<- counts
+      bad <- which(!finite, arr.ind = TRUE)
+      diagnostics[[mk]]$nonfinite_values <<- data.frame(
+        row = bad[, 1L], estimand = num_names[bad[, 2L]],
+        draw_id = diagnostics[[mk]]$summary_draw_ids[bad[, 3L]])
+      arr[!finite] <- NA_real_
       mean_mat <- apply(arr, c(1, 2), mean, na.rm = TRUE)
       sd_mat <- apply(arr, c(1, 2), sd, na.rm = TRUE)
 
@@ -515,9 +546,16 @@ setMethod(
     }
 
     # Process each market
-    out_list <- lapply(results_by_market, .aggregate_draw_dfs)
+    out_list <- lapply(names(results_by_market), function(mk)
+      .aggregate_draw_dfs(results_by_market[[mk]], mk))
+    names(out_list) <- names(results_by_market)
 
     result <- if (length(out_list) == 1L) out_list[[1]] else out_list
+    attr(result, "diagnostics") <- diagnostics
+    if (any(vapply(diagnostics, function(d) any(!is.na(d$errors)) ||
+                   any(d$estimands$missing > 0L), logical(1))))
+      warning("Simulation summary omitted draws or values; see attr(result, 'diagnostics').",
+              call. = FALSE)
 
     # Print output (needed for Rscript where auto-printing doesn't occur)
     if (length(out_list) == 1L) {

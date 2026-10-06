@@ -44,6 +44,8 @@ data frame with the same structure as the \pkg{antitrust}
 \code{summary} output. If \code{market = TRUE}, each is a
 single-row data frame of market-level statistics; if
 \code{market = FALSE}, each has one row per product.
+The \code{diagnostics} attribute records requested draw IDs, summary
+failures, and valid/missing counts by estimand. Attrition emits a warning.
 }
 \description{
 S4 class holding counterfactual results computed over draws

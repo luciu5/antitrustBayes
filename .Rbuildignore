@@ -2,6 +2,7 @@
 ^\.Rproj\.user$
 ^\.git$
 ^\.gitignore$
+^\.scratch$
 ^\.claude$
 ^\.agents$
 ^\.codex$

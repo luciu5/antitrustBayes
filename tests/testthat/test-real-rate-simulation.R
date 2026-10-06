@@ -24,6 +24,29 @@
   bayes_specify(params, market)
 }
 
+test_that("input fringe MRP adds the markdown for BF and CF", {
+  skip_if_not_installed("coordination", minimum_version = "0.0.0.9006")
+  for (supply in c(1L, 3L)) {
+    fit <- .rate_domain_fixture(supply = supply)
+    for (domain in c("positive", "real")) {
+      model <- bayes_core_fringe_model(fit, fixed_k = 1L, price_domain = domain)
+      prices <- c(.2, .1, .3)
+      expected <- prices + c(if (supply == 1L) 1 / (1 - .405) else 5.05, 1, 1) / .8
+      native <- coordination::core_fringe(prices = prices,
+        shares = .9 * c(.45, .35, .2), margins = rep(.4, 3),
+        ownerPre = c("a", "b", "c"), corePre = "a", demand = "logit",
+        conduct = if (supply == 1L) "bertrand" else "cournot", output = FALSE,
+        insideSize = 100, normIndex = NA, priceOutside = 1, alpha = .8,
+        labels = c("a", "b", "c"), price_domain = domain)
+      expect_equal(unname(antitrust::calcMC(model, TRUE)), expected, tolerance = 1e-8)
+      expect_equal(antitrust::calcMC(model, TRUE), antitrust::calcMC(native, TRUE))
+      expect_equal(unname(antitrust::calcShares(model, TRUE)), .9 * c(.45, .35, .2))
+      expect_equal(as.numeric(antitrust::calcMC(model, TRUE) - prices -
+        antitrust::calcMargins(model, TRUE, level = TRUE)), rep(0, 3), tolerance = 1e-8)
+    }
+  }
+})
+
 test_that("real rate domains are explicit and reject unsupported economics", {
   fit <- .rate_domain_fixture()
   expect_identical(.validate_simulation_price_domain(fit, c("positive", "real")),

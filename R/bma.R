@@ -802,6 +802,9 @@ bayes_weights <- function(comp, method = c("bridge", "stacking")) {
 #'   across models proportional to their weights. All \code{BayesSim}
 #'   methods (e.g., \code{summary}, \code{elast}, \code{CV}) can be
 #'   called on the result.
+#'   Metadata records source attrition and selected source draw IDs separately
+#'   from the pooled valid count. Model weights are retained after within-model
+#'   omission; a positive-weight model with no jointly eligible draw is an error.
 #'
 #' @examples
 #' \donttest{
@@ -867,22 +870,41 @@ bayes_avg <- function(sims, weights, n_draws = 1000L) {
   # Draw indices are selected once per source model and reused in every
   # market, preserving the joint posterior draw across markets.
   selected <- vector("list", length(sims))
+  source_attrition <- vector("list", length(sims))
   for (i in seq_along(sims)) {
-    if (n_per_model[i] == 0L) next
-    common_valid <- Reduce(intersect, lapply(all_markets, function(mk) {
+    valid_by_market <- lapply(all_markets, function(mk) {
       which(!vapply(sims[[i]]@sims[[mk]], is.null, logical(1)))
-    }))
-    if (length(common_valid) == 0L) {
+    })
+    names(valid_by_market) <- all_markets
+    common_valid <- Reduce(intersect, valid_by_market)
+    source_attrition[[i]] <- list(requested = sims[[i]]@n_draws,
+      valid = lengths(valid_by_market),
+      failed = sims[[i]]@n_draws - lengths(valid_by_market),
+      failures = sims[[i]]@failures, eligible_positions = common_valid,
+      common_eligible = length(common_valid), weight = weights[i])
+    if (weights[i] > 0 && length(common_valid) == 0L) {
       stop("Simulation model ", i,
            " has no draw that is valid in every common market.")
     }
-    selected[[i]] <- sample(common_valid, n_per_model[i], replace = TRUE)
+    if (n_per_model[i] == 0L) next
+    selected[[i]] <- common_valid[sample.int(length(common_valid),
+      n_per_model[i], replace = TRUE)]
   }
+  if (any(vapply(seq_along(sims), function(i) weights[i] > 0 &&
+      source_attrition[[i]]$common_eligible < sims[[i]]@n_draws, logical(1))))
+    warning("BMA uses eligible draws within models; source attrition is recorded in metadata.",
+            call. = FALSE)
   source_order <- rep(seq_along(sims), n_per_model)
   source_position <- stats::ave(source_order, source_order, FUN = seq_along)
   permutation <- sample.int(n_draws)
   source_order <- source_order[permutation]
   source_position <- source_position[permutation]
+  source_draw <- vapply(seq_len(n_draws), function(row) {
+    i <- source_order[row]
+    position <- selected[[i]][source_position[row]]
+    ids <- sims[[i]]@metadata$draw_indices
+    if (is.null(ids)) position else ids[position]
+  }, numeric(1))
 
   pooled_sims     <- list()
   pooled_ppre     <- list()
@@ -933,6 +955,9 @@ bayes_avg <- function(sims, weights, n_draws = 1000L) {
   pooled_metadata <- list(
     source_models = names(sims),
     weights = weights,
+    source_attrition = stats::setNames(source_attrition, names(sims)),
+    source_selection = data.frame(model_index = source_order,
+                                  draw_id = source_draw),
     component_metadata = lapply(sims, slot, "metadata")
   )
 

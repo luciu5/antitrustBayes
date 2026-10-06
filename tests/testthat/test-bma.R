@@ -54,6 +54,54 @@ test_that("bayes_avg preserves zero model weights", {
   expect_equal(result@n_draws, 5L)
 })
 
+test_that("BMA preserves weights and exposes joint source attrition", {
+  a <- make_test_sim("a")
+  a@sims$m1[2] <- list(NULL)
+  a@sims$m2[1] <- list(NULL)
+  a@metadata$draw_indices <- c(10L, 20L, 30L)
+  expect_warning(result <- bayes_avg(list(a = a, b = make_test_sim("b")),
+    weights = c(.5, .5), n_draws = 10L), "source attrition")
+  expect_equal(unname(result@metadata$weights), c(.5, .5))
+  expect_equal(result@metadata$source_attrition$a$common_eligible, 1L)
+  expect_equal(unname(result@metadata$source_attrition$a$failed), c(1L, 1L))
+  selected <- result@metadata$source_selection
+  expect_true(all(selected$draw_id[selected$model_index == 1] == 30))
+  expect_true(all(unlist(result@sims$m2)[selected$model_index == 1] == "a-m2-3"))
+  a@sims$m1 <- rep(list(NULL), 3L)
+  expect_error(bayes_avg(list(a, make_test_sim("b")), c(.0001, .9999), 10L),
+    "no draw that is valid")
+})
+
+test_that("simulation summaries report failures without shifting draw IDs", {
+  sim <- make_test_sim("a", markets = "m1", n = 4L)
+  sim@sims$m1[1] <- list(NULL)
+  sim@metadata$draw_indices <- c(10L, 20L, 30L, 40L)
+  testthat::with_mocked_bindings(
+    .bayes_sim_draw_summary = function(model, ...) {
+      if (model == "a-m1-2") stop("deliberate summary failure")
+      data.frame(price = if (model == "a-m1-3") NA_real_ else 2)
+    }, {
+      expect_warning(capture.output(result <- summary(sim)), "omitted draws or values")
+      expect_equal(result$mean$price, 2)
+      d <- attr(result, "diagnostics")$m1
+      expect_equal(d$summary_draw_ids, c(30L, 40L))
+      expect_equal(d$errors[2], "deliberate summary failure")
+      expect_equal(d$estimands$valid, 1)
+      expect_equal(d$estimands$missing, 3)
+      expect_equal(d$nonfinite_values$draw_id, 30L)
+      sim@sims$m1 <- rep(list("a-m1-2"), 4L)
+      warning_data <- NULL
+      all_failed <- withCallingHandlers(summary(sim), warning = function(w) {
+        warning_data <<- w
+        invokeRestart("muffleWarning")
+      })
+      expect_null(all_failed)
+      expect_s3_class(warning_data, "bayes_summary_attrition")
+      expect_match(conditionMessage(warning_data), "4 requested")
+      expect_true(all(warning_data$diagnostics$m1$errors == "deliberate summary failure"))
+    })
+})
+
 test_that("bayes_weights falls back cleanly after failed bridges", {
   comp <- data.frame(
     model = c("a", "b"),

@@ -22,6 +22,9 @@ A \code{\linkS4class{BayesSim}} object with draws resampled
 across models proportional to their weights. All \code{BayesSim}
 methods (e.g., \code{summary}, \code{elast}, \code{CV}) can be
 called on the result.
+Metadata records source attrition and selected source draw IDs separately
+from the pooled valid count. Model weights are retained after within-model
+omission; a positive-weight model with no jointly eligible draw is an error.
 }
 \description{
 Combines merger simulation results from multiple models using

@@ -570,7 +570,9 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
     }
     args <- c(args, dots)
   }
-  if (identical(demand, "logit")) {
+  # This is an output-cost check: MC = price - markup. Input MRP is
+  # price + markdown; native coordination also supports signed input rates.
+  if (identical(demand, "logit") && identical(fit@market_side, "output")) {
     owner <- as.character(df$group)
     firm_share <- vapply(owner, function(id) sum(shares[owner == id]), numeric(1))
     in_core <- owner %in% active_core

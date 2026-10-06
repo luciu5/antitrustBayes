@@ -15,6 +15,7 @@ inst/stan/*.hpp
 tmp_lib/
 
 # Research evidence and large delivery artifacts stay local.
+/.scratch/policy_ladder_repair_handoff/
 /doc/stackelberg/*
 *.bundle
 
