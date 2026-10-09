@@ -16,6 +16,25 @@ make_latent_exact_k_fixture <- function() {
   list(fit = fit, owner = groups)
 }
 
+test_that("singleton ordered-k support retains its count in public policy plans", {
+  market <- bayes_market(
+    prices = seq(1.1, 1.7, length.out = 7), quantities = 7:1,
+    margins = rep(.3, 7), group = letters[1:7],
+    outside_price = 1, market_side = "output"
+  )
+  for (structure in c("fringe", "stackelberg")) for (supply in c(1L, 3L)) {
+    for (k in 1:6) {
+      fit <- bayes_specify(bayes_params(
+        alpha = c(6, 6), s0 = .2, supply_model = supply,
+        structure = structure, partition_prior = "ordered_k",
+        k_support = k, k_prior = 1
+      ), market)
+      plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 12L)
+      expect_equal(as.integer(unlist(plan$k_cache)), rep(k, 2L))
+    }
+  }
+})
+
 test_that("policy draw plans bind exact-k role semantics and validate reuse", {
   fx <- make_latent_exact_k_fixture()
   named_fixed_k <- .lq_validate_role_plan_args(

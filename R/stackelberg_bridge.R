@@ -259,7 +259,9 @@
   } else if (role_mapping == "map") {
     component$k[which.max(component$probability)]
   } else {
-    sample(component$k, 1L, prob = component$probability)
+    # sample(x) treats a single positive number as 1:x. Select a position
+    # so singleton ordered-k support retains the declared count.
+    component$k[[sample.int(length(component$k), 1L, prob = component$probability)]]
   }
   k <- base_k + as.integer(role_offset)
   if (!k %in% component$k) {
