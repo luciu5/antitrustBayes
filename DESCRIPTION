@@ -46,6 +46,7 @@ Collate:
     'bma.R'
     'calibrated_market.R'
     'cmdstan_backend.R'
+    'conditional_k.R'
     'conduct.R'
     'data.R'
     'decisions.R'

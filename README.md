@@ -19,6 +19,11 @@ Additional utilities:
 
 - **`bayes_compare()`** — Compare models using bridge sampling, with WAIC/LOO-IC and stacking where the likelihood supports them. Collapsed-quality fits use bridge evidence; ordinary pointwise LOO/WAIC is unavailable. Logit/CES comparison is allowed when both fits use the same quantity-space outcomes and market side.
 - **`bayes_avg()`** — Bayesian model averaging across supply model specifications.
+- **`bayes_conditional_k_arguments()`**, **`bayes_est_conditional_k()`**, and
+  **`bayes_combine_conditional_k()`** — Separate fixed-k computation for one
+  market's Bertrand/Cournot fringe or Stackelberg hypothesis. Components keep
+  the original continuous priors; their evidence and predictions are mixed
+  with the original k prior and resulting posterior k weights.
 - **`bayes_prior_manifest()`** and **`bank_model_priors()`** — Reproducible proper parameter priors and candidate-set probabilities. The banking baseline assigns 0.30 each to Bertrand, Cournot, and monopolistic competition and 0.10 to the auction model; equal-weight and core-three sensitivities are available.
 - **`conduct_distance()`**, **`conduct_information_matrix()`**, and **`conduct_validation()`** — Theory-guided conduct distinguishability and targeted Monte Carlo validation.
 - **`merger_decision()`** and **`decision_regret()`** — Translate posterior merger effects into threshold decisions and decision regret.
@@ -97,6 +102,41 @@ Shared proper priors are required for bridge-sampling
 model probabilities. Use `likelihood = "share"` and `likelihood = "margin"`
 fits with `bayes_evidence_decomposition()` when you want to report how much
 evidence comes from each block.
+
+## Separate fixed-k computation
+
+For one market with several periods, a marginalized ordered-k fit can mix
+poorly between continuous posterior regions. An alternate calculation fits
+each k separately, then combines its normalized evidence:
+
+```r
+calls <- bayes_conditional_k_arguments(
+  prices = dat$prices, quantities = dat$quantities, margins = dat$margins,
+  market = dat$market, year = dat$year, group = dat$group,
+  demand_model = "logit", market_side = "output",
+  structure = "fringe", supply_model = "cournot",
+  k_support = 1:6, k_prior = rep(1/6, 6),
+  stan_options = list(chains = 4, iter = 4000, warmup = 2000, cores = 4)
+)
+# No HMC above. Execute/schedule each ordinary bayes_est call explicitly:
+# fits <- lapply(calls, function(args) do.call(bayes_est, args))
+# Review every component's diagnostics and obtain its normalized bridge logml.
+# mixture <- bayes_combine_conditional_k(
+#   logml = log_z, k_support = attr(calls, "k_support"),
+#   k_prior = attr(calls, "k_prior")
+# )
+```
+
+`bayes_est_conditional_k()` executes the same component calls sequentially and
+retains failed components as error conditions. The argument builder permits
+independent scheduling and explicit component seeds/output paths. The mixer
+requires the complete original support; it never renormalizes over missing
+evidence. Use its posterior k weights to mix conditional policy draws, keeping
+one draw plan per component for paired counterfactuals. The components represent
+one conduct hypothesis; its top-level model prior is unchanged.
+
+This route applies to all four rich families. It rejects multiple markets:
+separate market k values and shared parameters require joint combinations.
 
 ## Dependencies
 
