@@ -124,6 +124,37 @@ to Logit/CES, every conduct family, and sampled/collapsed intercepts. It is
 inactive for a single market. Keep the scientific prior consistent across
 candidate models; changing it requires new evidence under that prior.
 
+## Alpha and outside-share hierarchy SD priors
+
+From version 0.2.0.9003, active log-price-effect and outside-share hierarchy SDs
+default to Gamma(shape=2, rate=5). Both means are 0.4, close to the historical
+HalfNormal(0, 0.5) mean 0.399, with less probability near negligible heterogeneity.
+The log-price effect means log-alpha for Logit and log of the standardized
+price effect for CES. Outside-share SD is on the logit scale.
+
+```r
+priors <- list(
+  prior_sigma_alpha_family = "gamma",
+  prior_sigma_alpha_shape = 2,
+  prior_sigma_alpha_rate = 10, # Mean 0.2 for a smaller heterogeneity scale.
+  prior_sigma_s0_pool_family = "gamma",
+  prior_sigma_s0_pool_shape = 2,
+  prior_sigma_s0_pool_rate = 5
+)
+# fit <- bayes_est(..., priors = priors)
+```
+
+To reproduce the historical defaults, explicitly select both `"half_normal"`
+families and set `prior_sigma_alpha = 0.5` and `prior_sigma_s0_pool = 0.5`.
+These existing unsuffixed fields control only the Half-Normal scales; changing
+them does not change a Gamma rate. Family names also accept codes 1 and 2.
+Alpha SD is absent without multi-market pooling. Outside-share SD is active
+for multi-market market pooling or market-year pooling, including a one-market
+panel. Both choices preserve normalized evidence and active prior provenance.
+Use a frozen historical library for existing fits; rebuild and refit under a
+new run label when adopting the new priors. Banking libraries are not rebuilt
+by these package source changes. Residual-scale heterogeneity is unchanged.
+
 ## Separate fixed-k computation
 
 For one market with several periods, a marginalized ordered-k fit can mix

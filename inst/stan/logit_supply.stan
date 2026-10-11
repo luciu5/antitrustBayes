@@ -368,12 +368,18 @@ data {
   real s0_prior_mean;
   real<lower=0> s0_prior_sd;
   real<lower=0> prior_sigma_alpha;
+  int<lower=1, upper=2> prior_sigma_alpha_family;
+  real<lower=0> prior_sigma_alpha_shape;
+  real<lower=0> prior_sigma_alpha_rate;
   // Market-intercept SD prior: 1 = half-normal, 2 = Gamma(shape, rate).
   int<lower=1, upper=2> prior_sigma_b_market_family;
   real<lower=0> prior_sigma_b_market_scale;
   real<lower=0> prior_sigma_b_market_shape;
   real<lower=0> prior_sigma_b_market_rate;
   real<lower=0> prior_sigma_s0_pool;
+  int<lower=1, upper=2> prior_sigma_s0_pool_family;
+  real<lower=0> prior_sigma_s0_pool_shape;
+  real<lower=0> prior_sigma_s0_pool_rate;
   real<lower=0> prior_sigma_beta_s0;
   real<lower=0> prior_sigma_resid_market;
   real<lower=0> prior_cutoff_alpha;
@@ -714,7 +720,14 @@ model {
   } else {
     target += normal_lpdf(mu_log_a_free[1] | prior_alpha_mean, prior_alpha_sd);
   }
-  if (pool_alpha_by_market == 1) target += normal_lpdf(sigma_log_a_vec | 0, prior_sigma_alpha) - num_elements(sigma_log_a_vec) * normal_lccdf(0 | 0, prior_sigma_alpha);
+  if (pool_alpha_by_market == 1) {
+    if (prior_sigma_alpha_family == 1) {
+      target += normal_lpdf(sigma_log_a_vec | 0, prior_sigma_alpha)
+        - num_elements(sigma_log_a_vec) * normal_lccdf(0 | 0, prior_sigma_alpha);
+    } else {
+      target += gamma_lpdf(sigma_log_a_vec | prior_sigma_alpha_shape, prior_sigma_alpha_rate);
+    }
+  }
   if (pool_alpha_by_market == 1) {
     if (use_centered_alpha == 1) target += normal_lpdf(log_a_market_pool | mu_log_a, sigma_log_a);
     else target += std_normal_lpdf(r_market_a_raw);
@@ -755,7 +768,12 @@ model {
   if (use_s0_market_pool == 1) {
     target += normal_lpdf(mu_s0_pool_vec | s0_prior_mean, s0_prior_sd);
     if (is_single_market == 0) {
-      target += normal_lpdf(sigma_s0_pool_vec | 0, prior_sigma_s0_pool) - num_elements(sigma_s0_pool_vec) * normal_lccdf(0 | 0, prior_sigma_s0_pool);
+      if (prior_sigma_s0_pool_family == 1) {
+        target += normal_lpdf(sigma_s0_pool_vec | 0, prior_sigma_s0_pool)
+          - num_elements(sigma_s0_pool_vec) * normal_lccdf(0 | 0, prior_sigma_s0_pool);
+      } else {
+        target += gamma_lpdf(sigma_s0_pool_vec | prior_sigma_s0_pool_shape, prior_sigma_s0_pool_rate);
+      }
       if (market_s0_joint_active == 1) {
         target += std_normal_lpdf(c_s0_raw);
       } else if (market_s0_rotation_active == 1) {
@@ -771,7 +789,12 @@ model {
     }
   } else if (use_s0_market_year_pool == 1) {
     target += normal_lpdf(mu_s0_pool_vec | s0_prior_mean, s0_prior_sd);
-    target += normal_lpdf(sigma_s0_pool_vec | 0, prior_sigma_s0_pool) - num_elements(sigma_s0_pool_vec) * normal_lccdf(0 | 0, prior_sigma_s0_pool);
+    if (prior_sigma_s0_pool_family == 1) {
+      target += normal_lpdf(sigma_s0_pool_vec | 0, prior_sigma_s0_pool)
+        - num_elements(sigma_s0_pool_vec) * normal_lccdf(0 | 0, prior_sigma_s0_pool);
+    } else {
+      target += gamma_lpdf(sigma_s0_pool_vec | prior_sigma_s0_pool_shape, prior_sigma_s0_pool_rate);
+    }
     if (market_s0_rotation_active == 1) {
       if (use_centered_s0_pool == 1) {
         vector[N_market_year] v_s0;

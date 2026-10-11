@@ -188,8 +188,16 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
     inactive <- c(inactive, "prior_cutoff_alpha", "prior_cutoff_beta")
   if (!.bayes_is_smooth_fringe(fit))
     inactive <- c(inactive, "prior_sigma_meanval_fringe")
-  if (!alpha_pool) inactive <- c(inactive, "prior_sigma_alpha")
-  if (!s0_scale) inactive <- c(inactive, "prior_sigma_s0_pool")
+  hierarchy_active <- c(prior_sigma_alpha = alpha_pool,
+                        prior_sigma_s0_pool = s0_scale)
+  for (prefix in names(hierarchy_active)) {
+    fields <- c(prefix, paste0(prefix, c("_family", "_shape", "_rate")))
+    family <- .mu_or(stan[[paste0(prefix, "_family")]], 1L)
+    if (!hierarchy_active[[prefix]]) inactive <- c(inactive, fields)
+    else if (isTRUE(family == 1L))
+      inactive <- c(inactive, paste0(prefix, c("_shape", "_rate")))
+    else if (isTRUE(family == 2L)) inactive <- c(inactive, prefix)
+  }
   if (k_s0 == 0L) inactive <- c(inactive, "prior_sigma_beta_s0")
   if (!isTRUE(stan$use_market_resid_scale == 1L))
     inactive <- c(inactive, "prior_sigma_resid_market")

@@ -32,6 +32,15 @@ through \code{priors}: \code{prior_sigma_b_market_family = "half_normal"}
 The prior applies to sampled and collapsed market intercepts in both
 demand systems and all conduct families. It is inactive for one market.
 These hyperparameters stay fixed across the tight/diffuse manifests.
+The log-price-effect and outside-share hierarchy SDs default to
+normalized Gamma(shape = 2, rate = 5) priors. Select each family using
+\code{prior_sigma_alpha_family} or \code{prior_sigma_s0_pool_family},
+with suffixes \code{_shape} and \code{_rate} for Gamma. Their existing
+unsuffixed fields set the half-normal scales when that family is
+selected. Alpha's hierarchy requires multiple markets; outside-share
+hierarchy priors apply to active market or market-year pooling.
+Gamma defaults replace the historical half-normal defaults in
+version 0.2.0.9003; select half-normal explicitly to retain that prior.
 }
 \examples{
 priors <- bayes_prior_manifest()

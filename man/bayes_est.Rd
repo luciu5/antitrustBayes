@@ -339,6 +339,21 @@ or collapsed intercepts. Inactive for one market.}
 \item{\code{prior_sigma_b_market_shape}}{Gamma shape (default 2).}
 \item{\code{prior_sigma_b_market_rate}}{Gamma rate (default 5), not scale.
 Both families use normalized densities for marginal likelihoods.}
+\item{\code{prior_sigma_alpha_family}}{Log-price-effect hierarchy SD
+prior: \code{"gamma"} (default, code 2) or \code{"half_normal"}
+(code 1). Active only with across-market alpha pooling.}
+\item{\code{prior_sigma_alpha}}{Half-normal scale (default 0.5), used
+only when the half-normal family is selected.}
+\item{\code{prior_sigma_alpha_shape}, \code{prior_sigma_alpha_rate}}{
+Gamma shape/rate (defaults 2 and 5).}
+\item{\code{prior_sigma_s0_pool_family}}{Outside-share hierarchy SD
+prior: \code{"gamma"} (default, code 2) or \code{"half_normal"}
+(code 1). Applies to active market or market-year pooling.}
+\item{\code{prior_sigma_s0_pool}}{Half-normal scale (default 0.5), used
+only when the half-normal family is selected.}
+\item{\code{prior_sigma_s0_pool_shape}, \code{prior_sigma_s0_pool_rate}}{
+Gamma shape/rate (defaults 2 and 5). All hierarchy densities are normalized
+for model evidence. Set family explicitly to reproduce historical priors.}
 \item{\code{prior_sigma_share}}{Lognormal center for log-share error SD
 (default 0.5).}
 \item{\code{prior_sigma_margin}}{Lognormal center for log inverse-margin
