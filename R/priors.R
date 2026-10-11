@@ -8,6 +8,22 @@
 #' outside-share, standardized price-coefficient, and margin-noise priors by
 #' one half and two, respectively.
 #'
+#' @details For multiple markets, the market-intercept SD prior can be selected
+#'   through \code{priors}: \code{prior_sigma_b_market_family = "half_normal"}
+#'   (historical default, canonical code 1) uses
+#'   \code{prior_sigma_b_market_scale = 0.5};
+#'   \code{prior_sigma_b_market_family = "gamma"} (code 2) uses
+#'   \code{prior_sigma_b_market_shape = 2} and
+#'   \code{prior_sigma_b_market_rate = 5}. Gamma uses a rate, not a scale.
+#'   The prior applies to sampled and collapsed market intercepts in both
+#'   demand systems and all conduct families. It is inactive for one market.
+#'   These hyperparameters stay fixed across the tight/diffuse manifests.
+#' @examples
+#' priors <- bayes_prior_manifest()
+#' priors$prior_sigma_b_market_family <- "gamma"
+#' priors$prior_sigma_b_market_shape <- 2
+#' priors$prior_sigma_b_market_rate <- 5
+#' # Supply priors to bayes_est(..., priors = priors).
 #' @param name Character. One of \code{"baseline"}, \code{"tight"}, or
 #'   \code{"diffuse"}.
 #' @return A named list suitable for the \code{priors} argument to
@@ -31,6 +47,12 @@ bayes_prior_manifest <- function(name = c("baseline", "tight", "diffuse")) {
     s0_prior_mean = -1.446786403764666,
     s0_prior_sd = 0.456234014550216 * multiplier,
     prior_sigma_alpha = 0.5,
+    # Market-intercept SD: 1 = half-normal, 2 = Gamma (shape/rate).
+    # Preserve the historical default; callers can select either family.
+    prior_sigma_b_market_family = 1L,
+    prior_sigma_b_market_scale = 0.5,
+    prior_sigma_b_market_shape = 2,
+    prior_sigma_b_market_rate = 5,
     prior_sigma_s0_pool = 0.5,
     prior_sigma_beta_s0 = 1,
     prior_sigma_resid_market = 0.35,
@@ -122,7 +144,31 @@ resolve_prior_manifest <- function(prior_manifest, priors) {
   }
   base <- bayes_prior_manifest(prior_manifest)
   if (length(priors)) base[names(priors)] <- priors
-  base
+  .normalize_market_intercept_sd_prior(base)
+}
+
+# Public priors accept readable family names; Stan and saved provenance use
+# canonical integer codes, matching the existing numeric hyperparameter list.
+.normalize_market_intercept_sd_prior <- function(priors) {
+  family <- priors$prior_sigma_b_market_family
+  if (is.character(family) && length(family) == 1L && !is.na(family) &&
+      family %in% c("half_normal", "gamma")) {
+    family <- unname(c(half_normal = 1L, gamma = 2L)[family])
+  }
+  if (!is.numeric(family) || length(family) != 1L || !is.finite(family) ||
+      !family %in% c(1L, 2L)) {
+    stop("Prior 'prior_sigma_b_market_family' must be 'half_normal' or 'gamma' ",
+         "(or code 1 or 2).", call. = FALSE)
+  }
+  priors$prior_sigma_b_market_family <- as.integer(family)
+  for (name in c("prior_sigma_b_market_scale", "prior_sigma_b_market_shape",
+                 "prior_sigma_b_market_rate")) {
+    value <- priors[[name]]
+    if (!is.numeric(value) || length(value) != 1L || !is.finite(value) || value <= 0) {
+      stop("Prior '", name, "' must be a positive finite numeric scalar.", call. = FALSE)
+    }
+  }
+  priors
 }
 
 package_provenance <- function(data, prior_manifest, model_prior = NA_real_) {

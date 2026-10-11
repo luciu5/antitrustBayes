@@ -21,3 +21,22 @@ the baseline centers fixed and multiply the standard deviations of the
 outside-share, standardized price-coefficient, and margin-noise priors by
 one half and two, respectively.
 }
+\details{
+For multiple markets, the market-intercept SD prior can be selected
+through \code{priors}: \code{prior_sigma_b_market_family = "half_normal"}
+(historical default, canonical code 1) uses
+\code{prior_sigma_b_market_scale = 0.5};
+\code{prior_sigma_b_market_family = "gamma"} (code 2) uses
+\code{prior_sigma_b_market_shape = 2} and
+\code{prior_sigma_b_market_rate = 5}. Gamma uses a rate, not a scale.
+The prior applies to sampled and collapsed market intercepts in both
+demand systems and all conduct families. It is inactive for one market.
+These hyperparameters stay fixed across the tight/diffuse manifests.
+}
+\examples{
+priors <- bayes_prior_manifest()
+priors$prior_sigma_b_market_family <- "gamma"
+priors$prior_sigma_b_market_shape <- 2
+priors$prior_sigma_b_market_rate <- 5
+# Supply priors to bayes_est(..., priors = priors).
+}

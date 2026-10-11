@@ -368,6 +368,11 @@ data {
   real s0_prior_mean;
   real<lower=0> s0_prior_sd;
   real<lower=0> prior_sigma_alpha;
+  // Market-intercept SD prior: 1 = half-normal, 2 = Gamma(shape, rate).
+  int<lower=1, upper=2> prior_sigma_b_market_family;
+  real<lower=0> prior_sigma_b_market_scale;
+  real<lower=0> prior_sigma_b_market_shape;
+  real<lower=0> prior_sigma_b_market_rate;
   real<lower=0> prior_sigma_s0_pool;
   real<lower=0> prior_sigma_beta_s0;
   real<lower=0> prior_sigma_resid_market;
@@ -716,7 +721,13 @@ model {
   }
   if (is_single_market == 0) {
     target += normal_lpdf(mu_b_market_vec | 0, 1);
-    target += normal_lpdf(sigma_b_market_vec | 0, 0.5) - num_elements(sigma_b_market_vec) * normal_lccdf(0 | 0, 0.5);
+    if (prior_sigma_b_market_family == 1) {
+      target += normal_lpdf(sigma_b_market_vec | 0, prior_sigma_b_market_scale)
+        - num_elements(sigma_b_market_vec) * normal_lccdf(0 | 0, prior_sigma_b_market_scale);
+    } else {
+      target += gamma_lpdf(sigma_b_market_vec | prior_sigma_b_market_shape,
+                          prior_sigma_b_market_rate);
+    }
     if (market_intercept_parameterization == 1)
       target += std_normal_lpdf(b_market_raw);
   }

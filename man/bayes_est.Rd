@@ -331,6 +331,14 @@ The default prior on the standardized price coefficient is fixed at
 
 The \code{priors} argument accepts a named list with any of:
 \describe{
+\item{\code{prior_sigma_b_market_family}}{Market-intercept SD prior:
+\code{"half_normal"} (historical default, code 1) or \code{"gamma"}
+(code 2). Applies to multiple markets, both demand systems and sampled
+or collapsed intercepts. Inactive for one market.}
+\item{\code{prior_sigma_b_market_scale}}{Half-normal SD (default 0.5).}
+\item{\code{prior_sigma_b_market_shape}}{Gamma shape (default 2).}
+\item{\code{prior_sigma_b_market_rate}}{Gamma rate (default 5), not scale.
+Both families use normalized densities for marginal likelihoods.}
 \item{\code{prior_sigma_share}}{Lognormal center for log-share error SD
 (default 0.5).}
 \item{\code{prior_sigma_margin}}{Lognormal center for log inverse-margin

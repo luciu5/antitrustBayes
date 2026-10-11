@@ -175,6 +175,15 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
     (isTRUE(stan$use_s0_market_pool == 1L) && n_market > 1L)
   k_s0 <- .mu_or(stan$K_s0, if (is.matrix(stan$X_s0)) ncol(stan$X_s0) else 0L)
   inactive <- character()
+  market_sd_fields <- c("prior_sigma_b_market_family",
+    "prior_sigma_b_market_scale", "prior_sigma_b_market_shape", "prior_sigma_b_market_rate")
+  if (n_market == 1L) {
+    inactive <- c(inactive, market_sd_fields)
+  } else if (isTRUE(stan$prior_sigma_b_market_family == 1L)) {
+    inactive <- c(inactive, "prior_sigma_b_market_shape", "prior_sigma_b_market_rate")
+  } else if (isTRUE(stan$prior_sigma_b_market_family == 2L)) {
+    inactive <- c(inactive, "prior_sigma_b_market_scale")
+  }
   if (!.bayes_uses_cutoff_partition(fit))
     inactive <- c(inactive, "prior_cutoff_alpha", "prior_cutoff_beta")
   if (!.bayes_is_smooth_fringe(fit))

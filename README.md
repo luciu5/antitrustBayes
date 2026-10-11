@@ -103,6 +103,27 @@ model probabilities. Use `likelihood = "share"` and `likelihood = "margin"`
 fits with `bayes_evidence_decomposition()` when you want to report how much
 evidence comes from each block.
 
+## Market-intercept SD prior
+
+For multiple markets, select the prior through `bayes_est(..., priors = ...)`:
+
+```r
+priors <- list(
+  prior_sigma_b_market_family = "gamma",
+  prior_sigma_b_market_shape = 2,
+  prior_sigma_b_market_rate = 5
+)
+# fit <- bayes_est(..., priors = priors)
+```
+
+Gamma uses shape and **rate**. The historical default remains half-normal;
+select it with `prior_sigma_b_market_family = "half_normal"` and
+`prior_sigma_b_market_scale = 0.5`. Both choices use normalized densities for
+bridge evidence and are recorded in resolved fit priors. The setting applies
+to Logit/CES, every conduct family, and sampled/collapsed intercepts. It is
+inactive for a single market. Keep the scientific prior consistent across
+candidate models; changing it requires new evidence under that prior.
+
 ## Separate fixed-k computation
 
 For one market with several periods, a marginalized ordered-k fit can mix

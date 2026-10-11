@@ -641,6 +641,10 @@ validate_priors <- function(priors) {
       stop("Prior '", nm, "' must be a finite numeric scalar.")
     }
   }
+  if ("prior_sigma_b_market_family" %in% names(priors) &&
+      !priors$prior_sigma_b_market_family %in% c(1L, 2L)) {
+    stop("Prior 'prior_sigma_b_market_family' must use code 1 or 2.")
+  }
   positive <- setdiff(
     names(priors),
     c("prior_alpha_mean", "s0_prior_mean", "bargaining_prior_lower")
@@ -1186,6 +1190,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     }
   }
 
+  default_priors <- .normalize_market_intercept_sd_prior(default_priors)
   s0_prior_reference <- logit_normal_mean(
     default_priors$s0_prior_mean,
     default_priors$s0_prior_sd
@@ -1717,6 +1722,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   }
 
 
+  default_priors <- .normalize_market_intercept_sd_prior(default_priors)
   s0_prior_reference <- logit_normal_mean(
     default_priors$s0_prior_mean,
     default_priors$s0_prior_sd
