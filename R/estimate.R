@@ -217,6 +217,13 @@
 #'   \code{cores}, and \code{control}). If \code{cores} is omitted or
 #'   \code{NULL}, the default is \code{min(chains, getOption("mc.cores", 1L))};
 #'   an explicit \code{cores} value is validated and used unchanged.
+#'   Partial \code{control} lists preserve unspecified package defaults:
+#'   \code{adapt_delta = 0.95} and \code{max_treedepth = 13L}.
+#'   For example, \code{control = list(metric = "dense_e")} changes only
+#'   the metric. A dense metric can help correlated pooled Cournot fits;
+#'   compare diagnostics and elapsed time for the application.
+#'   An explicitly \code{NULL} control field delegates that field to CmdStan;
+#'   \code{control = NULL} delegates all controls.
 #' @param inference \code{"hmc"} (default) for CmdStanR sampling, or
 #'   \code{"pathfinder"} for exploratory approximate draws. Pathfinder
 #'   diagnostics do not establish HMC convergence or valid model evidence.
@@ -673,7 +680,12 @@ bayes_est <- function(prices, quantities, margins,
     control = list(adapt_delta = 0.95, max_treedepth = 13L)
   )
   for (nm in names(stan_options)) {
-    default_stan[[nm]] <- stan_options[[nm]]
+    if (identical(nm, "control") && is.list(stan_options[[nm]])) {
+      default_stan$control <- utils::modifyList(
+        default_stan$control, stan_options[[nm]], keep.null = TRUE)
+    } else {
+      default_stan[[nm]] <- stan_options[[nm]]
+    }
   }
   ## Keep the chain count needed for the default core policy even when a
   ## caller explicitly supplies chains = NULL.  A non-NULL cores entry is

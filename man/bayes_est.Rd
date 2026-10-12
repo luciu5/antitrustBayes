@@ -237,7 +237,14 @@ posterior model odds are computed by \code{bayes_compare}.}
 arguments (e.g., \code{chains}, total \code{iter}, \code{warmup},
 \code{cores}, and \code{control}). If \code{cores} is omitted or
 \code{NULL}, the default is \code{min(chains, getOption("mc.cores", 1L))};
-an explicit \code{cores} value is validated and used unchanged.}
+an explicit \code{cores} value is validated and used unchanged.
+Partial \code{control} lists preserve unspecified package defaults:
+\code{adapt_delta = 0.95} and \code{max_treedepth = 13L}.
+For example, \code{control = list(metric = "dense_e")} changes only
+the metric. A dense metric can help correlated pooled Cournot fits;
+compare diagnostics and elapsed time for the application.
+An explicitly \code{NULL} control field delegates that field to CmdStan;
+\code{control = NULL} delegates all controls.}
 
 \item{inference}{\code{"hmc"} (default) for CmdStanR sampling, or
 \code{"pathfinder"} for exploratory approximate draws. Pathfinder

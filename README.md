@@ -185,6 +185,32 @@ from zero. Fixed Normal prior scales for signed coefficients are not sampled
 SD parameters and remain unchanged. Select all four `*_family` fields
 explicitly as `"half_normal"` to reproduce historical hierarchy priors.
 
+## HMC controls
+
+Supply sampling controls through `bayes_est(..., stan_options = list(control =
+list(...)))`. Partial control lists preserve the package's `adapt_delta = .95`
+and `max_treedepth = 13L` defaults unless those fields are explicitly overridden.
+For example, a pooled Cournot fit can use a dense metric:
+
+```r
+fit <- bayes_est(
+  prices = dat$prices, quantities = dat$quantities, margins = dat$margins,
+  market = dat$market, year = dat$year, group = dat$group,
+  demand_model = "logit", market_side = "output", supply_model = "cournot",
+  use_alpha_market_pool = TRUE,
+  stan_options = list(control = list(metric = "dense_e"))
+)
+```
+
+A dense metric can help when posterior parameters are strongly correlated.
+Compare divergences, R-hat, ESS, BFMI and elapsed time for the application;
+it can also take longer. Both `metric = "diag_e"` and the existing
+`use_centered_alpha` argument remain available. These controls affect the
+sampler while preserving the model and its priors.
+Setting a control field to `NULL` delegates that field to CmdStan's default;
+`control = NULL` delegates all controls. An empty `control = list()` retains
+the package defaults.
+
 ## Separate fixed-k computation
 
 For one market with several periods, a marginalized ordered-k fit can mix

@@ -130,7 +130,26 @@
   }
   codes <- fit$return_codes()
   if (!length(codes) || anyNA(codes) || any(codes != 0L)) {
-    stop("CmdStanR did not complete every process successfully.", call. = FALSE)
+    message <- "CmdStanR did not complete every process successfully."
+    failed <- which(is.na(codes) | codes != 0L)
+    if (length(failed)) {
+      message <- paste0(message, " Failed process return codes: ",
+        paste(paste0(failed, "=", codes[failed]), collapse = ", "), ".")
+      if (is.function(fit$output)) {
+        output <- vapply(failed, function(id) {
+          lines <- tryCatch(capture.output(fit$output(id = id)),
+                            error = function(e) character())
+          lines <- lines[nzchar(trimws(lines))]
+          if (!length(lines)) return("")
+          tail_output <- paste(tail(lines, 12L), collapse = "\n")
+          paste0("Process ", id, " output:\n",
+            substr(tail_output, max(1L, nchar(tail_output) - 1999L), nchar(tail_output)))
+        }, character(1))
+        output <- output[nzchar(output)]
+        if (length(output)) message <- paste(message, paste(output, collapse = "\n"), sep = "\n")
+      }
+    }
+    stop(message, call. = FALSE)
   }
   if (identical(inference, "hmc") &&
       !identical(as.integer(fit$num_chains()), as.integer(requested_chains))) {
