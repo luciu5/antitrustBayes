@@ -189,7 +189,8 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   if (!.bayes_is_smooth_fringe(fit))
     inactive <- c(inactive, "prior_sigma_meanval_fringe")
   hierarchy_active <- c(prior_sigma_alpha = alpha_pool,
-                        prior_sigma_s0_pool = s0_scale)
+                        prior_sigma_s0_pool = s0_scale,
+                        prior_sigma_resid_market = isTRUE(stan$use_market_resid_scale == 1L))
   for (prefix in names(hierarchy_active)) {
     fields <- c(prefix, paste0(prefix, c("_family", "_shape", "_rate")))
     family <- .mu_or(stan[[paste0(prefix, "_family")]], 1L)
@@ -199,8 +200,6 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
     else if (isTRUE(family == 2L)) inactive <- c(inactive, prefix)
   }
   if (k_s0 == 0L) inactive <- c(inactive, "prior_sigma_beta_s0")
-  if (!isTRUE(stan$use_market_resid_scale == 1L))
-    inactive <- c(inactive, "prior_sigma_resid_market")
   if (!isTRUE(stan$estimate_df == 1L))
     inactive <- c(inactive, "prior_nu_shape", "prior_nu_rate")
   if (!identical(.mu_supply(fit), "bargaining"))

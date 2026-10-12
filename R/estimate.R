@@ -270,8 +270,8 @@
 #' The \code{priors} argument accepts a named list with any of:
 #' \describe{
 #'   \item{\code{prior_sigma_b_market_family}}{Market-intercept SD prior:
-#'     \code{"half_normal"} (historical default, code 1) or \code{"gamma"}
-#'     (code 2). Applies to multiple markets, both demand systems and sampled
+#'     \code{"gamma"} (default, code 2) or \code{"half_normal"}
+#'     (historical alternative, code 1). Applies to multiple markets, both demand systems and sampled
 #'     or collapsed intercepts. Inactive for one market.}
 #'   \item{\code{prior_sigma_b_market_scale}}{Half-normal SD (default 0.5).}
 #'   \item{\code{prior_sigma_b_market_shape}}{Gamma shape (default 2).}
@@ -292,6 +292,15 @@
 #'   \item{\code{prior_sigma_s0_pool_shape}, \code{prior_sigma_s0_pool_rate}}{
 #'     Gamma shape/rate (defaults 2 and 5). All hierarchy densities are normalized
 #'     for model evidence. Set family explicitly to reproduce historical priors.}
+#'   \item{\code{prior_sigma_resid_market_family}}{Optional market residual-scale
+#'     hierarchy SD prior: \code{"gamma"} (default, code 2) or
+#'     \code{"half_normal"} (historical alternative, code 1). Applies to both
+#'     log share-error and log margin-error heterogeneity SDs, only when
+#'     \code{use_market_resid_scale = TRUE}.}
+#'   \item{\code{prior_sigma_resid_market}}{Historical Half-Normal scale
+#'     (default 0.35), used only when that family is selected.}
+#'   \item{\code{prior_sigma_resid_market_shape}, \code{prior_sigma_resid_market_rate}}{
+#'     Gamma shape/rate (defaults 2 and 7). Densities are normalized for evidence.}
 #'   \item{\code{prior_sigma_share}}{Lognormal center for log-share error SD
 #'     (default 0.5).}
 #'   \item{\code{prior_sigma_margin}}{Lognormal center for log inverse-margin

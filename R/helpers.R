@@ -642,7 +642,8 @@ validate_priors <- function(priors) {
     }
   }
   for (name in intersect(c("prior_sigma_b_market_family",
-                           "prior_sigma_alpha_family", "prior_sigma_s0_pool_family"),
+                           "prior_sigma_alpha_family", "prior_sigma_s0_pool_family",
+                           "prior_sigma_resid_market_family"),
                          names(priors))) {
     if (!priors[[name]] %in% c(1L, 2L))
       stop("Prior '", name, "' must use code 1 or 2.")

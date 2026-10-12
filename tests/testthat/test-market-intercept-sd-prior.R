@@ -22,7 +22,7 @@
 }
 
 test_that("market SD family names and valid hyperparameters resolve canonically", {
-  expect_identical(bayes_prior_manifest()$prior_sigma_b_market_family, 1L)
+  expect_identical(bayes_prior_manifest()$prior_sigma_b_market_family, 2L)
   for (manifest in c("baseline", "tight", "diffuse")) {
     p <- resolve_prior_manifest(manifest, list(prior_sigma_b_market_family = "gamma",
       prior_sigma_b_market_shape = 3, prior_sigma_b_market_rate = 7))
@@ -54,10 +54,13 @@ test_that("all conduct and demand kernels receive the selected market SD prior",
       expect_equal(d$prior_sigma_b_market_shape, 2.5)
       expect_equal(d$prior_sigma_b_market_rate, 6)
     }
-    old <- .market_sd_data(demand, model)$data
+    default <- .market_sd_data(demand, model)$data
     hn <- .market_sd_data(demand, model, priors = list(
       prior_sigma_b_market_family = "half_normal", prior_sigma_b_market_scale = .5))$data
-    expect_identical(hn, old)
+    expect_identical(hn$prior_sigma_b_market_family, 1L)
+    expect_equal(hn$prior_sigma_b_market_scale, .5)
+    expect_identical(hn[setdiff(names(hn), "prior_sigma_b_market_family")],
+                     default[setdiff(names(default), "prior_sigma_b_market_family")])
   }
 })
 
@@ -93,15 +96,17 @@ test_that("evidence identity tracks active market SD choices only", {
         resolved_priors = d[names(bayes_prior_manifest())]))
   }
   active <- function(fit) .mu_active_priors(fit, gaussian_only = TRUE)
-  hn <- make_fit(2L, list())
+  hn <- make_fit(2L, list(prior_sigma_b_market_family = "half_normal"))
   gamma <- make_fit(2L, list(prior_sigma_b_market_family = "gamma"))
   expect_false(identical(active(hn), active(gamma)))
   expect_false(identical(active(gamma), active(make_fit(2L, list(
     prior_sigma_b_market_family = "gamma", prior_sigma_b_market_rate = 6)))))
   expect_identical(active(gamma), active(make_fit(2L, list(
     prior_sigma_b_market_family = "gamma", prior_sigma_b_market_scale = 9))))
-  expect_identical(active(hn), active(make_fit(2L, list(prior_sigma_b_market_shape = 9))))
-  expect_false(identical(active(hn), active(make_fit(2L, list(prior_sigma_b_market_scale = .7)))))
+  expect_identical(active(hn), active(make_fit(2L, list(
+    prior_sigma_b_market_family = "half_normal", prior_sigma_b_market_shape = 9))))
+  expect_false(identical(active(hn), active(make_fit(2L, list(
+    prior_sigma_b_market_family = "half_normal", prior_sigma_b_market_scale = .7)))))
   stale <- gamma; stale@metadata$resolved_priors$prior_sigma_b_market_rate <- 6
   expect_error(active(stale), "Active prior metadata")
   expect_identical(active(make_fit(1L, list())), active(make_fit(1L,

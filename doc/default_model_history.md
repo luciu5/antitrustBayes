@@ -1,5 +1,40 @@
 # Default-model history and promotion discipline
 
+## Hierarchy SD prior defaults (2026-10-12)
+
+Version 0.2.0.9003 made the active alpha and outside-share hierarchy SD
+defaults Gamma(shape=2, rate=5). In version 0.2.0.9004, the user also approved
+Gamma defaults for market-intercept SD (shape 2, rate 5) and the optional
+market residual-scale heterogeneity SDs (shape 2, rate 7). The latter remains
+disabled unless requested. These means are close to the historical
+Half-Normal means; the Gamma density vanishes at zero. All four families
+remain user-selectable, with proper normalization and active prior metadata.
+
+Persistent-quality SD retains its positive-truncated Normal centered at 1;
+share and margin error SDs retain Lognormal priors. Their modes already lie
+away from zero. Fixed scales on signed-coefficient priors are hyperparameters,
+not sampled SDs, so replacing them with Gamma would change the coefficient
+support rather than an SD prior.
+
+The [paired known-truth comparison](validation/hierarchical_prior_recovery_results.md)
+tested alpha/outside-share Gamma versus Half-Normal while explicitly holding
+the intercept Half-Normal and residual hierarchy disabled. It is not evidence
+of HMC improvement from these additional default changes. Their verification
+uses deterministic API, provenance, Stan compilation and normalized-density
+checks. Existing fits and banking libraries keep their frozen priors; adopting
+new defaults requires a newly installed package and separately labeled fits.
+
+Verification on 2026-10-12 passed 1,500 assertions in nine focused files,
+installation into an isolated library, and stanc plus C++ compilation for
+all four kernels. Ninety-six full-kernel log-density differences for
+intercept, residual and combined prior changes matched R's normalized
+Gamma/Half-Normal densities, with maximum absolute error 5.33e-14. These
+checks used default and custom hyperparameters and no HMC. Independent
+review found no substantive issues. Raw verification artifacts are local at
+`/tmp/sd-gamma-defaults-zaZJRh`.
+
+## Likelihood and quality defaults
+
 The historical specification used joint Gaussian share/margin disturbances and
 explicit quality coordinates. Student-t residuals were subsequently adopted
 amid divergence concerns. That history motivates investigation; it does not

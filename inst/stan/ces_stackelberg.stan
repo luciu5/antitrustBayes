@@ -382,6 +382,9 @@ data {
   real<lower=0> prior_sigma_s0_pool_rate;
   real<lower=0> prior_sigma_beta_s0;
   real<lower=0> prior_sigma_resid_market;
+  int<lower=1, upper=2> prior_sigma_resid_market_family;
+  real<lower=0> prior_sigma_resid_market_shape;
+  real<lower=0> prior_sigma_resid_market_rate;
   int<lower=0, upper=1> estimate_df;
   real<lower=2> resid_df_fixed;
   real<lower=0> prior_nu_shape;
@@ -856,8 +859,17 @@ model {
   if (use_market_resid_scale == 1) {
     target += std_normal_lpdf(log_sigma_share_market_raw);
     target += std_normal_lpdf(log_sigma_margin_market_raw);
-    target += normal_lpdf(sigma_log_sigma_share_market | 0, prior_sigma_resid_market) - num_elements(sigma_log_sigma_share_market) * normal_lccdf(0 | 0, prior_sigma_resid_market);
-    target += normal_lpdf(sigma_log_sigma_margin_market | 0, prior_sigma_resid_market) - num_elements(sigma_log_sigma_margin_market) * normal_lccdf(0 | 0, prior_sigma_resid_market);
+    if (prior_sigma_resid_market_family == 1) {
+      target += normal_lpdf(sigma_log_sigma_share_market | 0, prior_sigma_resid_market)
+        - num_elements(sigma_log_sigma_share_market) * normal_lccdf(0 | 0, prior_sigma_resid_market);
+      target += normal_lpdf(sigma_log_sigma_margin_market | 0, prior_sigma_resid_market)
+        - num_elements(sigma_log_sigma_margin_market) * normal_lccdf(0 | 0, prior_sigma_resid_market);
+    } else {
+      target += gamma_lpdf(sigma_log_sigma_share_market | prior_sigma_resid_market_shape,
+                          prior_sigma_resid_market_rate);
+      target += gamma_lpdf(sigma_log_sigma_margin_market | prior_sigma_resid_market_shape,
+                          prior_sigma_resid_market_rate);
+    }
   }
   if (estimate_df == 1) target += gamma_lpdf(nu_minus_2 | prior_nu_shape, prior_nu_rate);
   if (rho_active == 1) {

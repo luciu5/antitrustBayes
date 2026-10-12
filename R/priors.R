@@ -8,9 +8,10 @@
 #' outside-share, standardized price-coefficient, and margin-noise priors by
 #' one half and two, respectively.
 #'
-#' @details For multiple markets, the market-intercept SD prior can be selected
-#'   through \code{priors}: \code{prior_sigma_b_market_family = "half_normal"}
-#'   (historical default, canonical code 1) uses
+#' @details For multiple markets, the market-intercept SD defaults to
+#'   Gamma(shape = 2, rate = 5). Select its prior through \code{priors}:
+#'   \code{prior_sigma_b_market_family = "half_normal"}
+#'   (historical alternative, canonical code 1) uses
 #'   \code{prior_sigma_b_market_scale = 0.5};
 #'   \code{prior_sigma_b_market_family = "gamma"} (code 2) uses
 #'   \code{prior_sigma_b_market_shape = 2} and
@@ -27,6 +28,19 @@
 #'   hierarchy priors apply to active market or market-year pooling.
 #'   Gamma defaults replace the historical half-normal defaults in
 #'   version 0.2.0.9003; select half-normal explicitly to retain that prior.
+#'   From version 0.2.0.9004, market-intercept SD also defaults to Gamma,
+#'   and the optional market residual-scale hierarchy defaults to
+#'   Gamma(shape = 2, rate = 7) for both log-scale heterogeneity SDs.
+#'   Select the latter with \code{prior_sigma_resid_market_family};
+#'   \code{_shape} and \code{_rate} set Gamma parameters, while
+#'   \code{prior_sigma_resid_market = 0.35} sets the historical Half-Normal
+#'   scale. This hierarchy remains disabled unless
+#'   \code{use_market_resid_scale = TRUE}. Its Gamma mean 2/7 is close to
+#'   the historical Half-Normal mean 0.35 * sqrt(2/pi).
+#'   Quality SD retains its positive-truncated Normal centered at 1, and
+#'   share/margin error SDs retain Lognormal priors; these already have
+#'   modes away from zero. Fixed prior scales on signed coefficients are
+#'   hyperparameters, not sampled SDs, and remain unchanged.
 #' @examples
 #' priors <- bayes_prior_manifest()
 #' priors$prior_sigma_b_market_family <- "gamma"
@@ -60,8 +74,7 @@ bayes_prior_manifest <- function(name = c("baseline", "tight", "diffuse")) {
     prior_sigma_alpha_shape = 2,
     prior_sigma_alpha_rate = 5,
     # Market-intercept SD: 1 = half-normal, 2 = Gamma (shape/rate).
-    # Preserve the historical default; callers can select either family.
-    prior_sigma_b_market_family = 1L,
+    prior_sigma_b_market_family = 2L,
     prior_sigma_b_market_scale = 0.5,
     prior_sigma_b_market_shape = 2,
     prior_sigma_b_market_rate = 5,
@@ -70,7 +83,10 @@ bayes_prior_manifest <- function(name = c("baseline", "tight", "diffuse")) {
     prior_sigma_s0_pool_shape = 2,
     prior_sigma_s0_pool_rate = 5,
     prior_sigma_beta_s0 = 1,
-    prior_sigma_resid_market = 0.35,
+    prior_sigma_resid_market = 0.35, # Half-normal scale when selected.
+    prior_sigma_resid_market_family = 2L,
+    prior_sigma_resid_market_shape = 2,
+    prior_sigma_resid_market_rate = 7,
     prior_cutoff_alpha = 3,
     prior_cutoff_beta = 100,
     # Fixed default df for the joint bivariate Student-t; 5 is a practical
@@ -167,7 +183,8 @@ resolve_prior_manifest <- function(prior_manifest, priors) {
 .normalize_hierarchical_sd_priors <- function(priors) {
   scales <- c(prior_sigma_b_market = "prior_sigma_b_market_scale",
               prior_sigma_alpha = "prior_sigma_alpha",
-              prior_sigma_s0_pool = "prior_sigma_s0_pool")
+              prior_sigma_s0_pool = "prior_sigma_s0_pool",
+              prior_sigma_resid_market = "prior_sigma_resid_market")
   for (prefix in names(scales)) {
     family_name <- paste0(prefix, "_family")
     family <- priors[[family_name]]

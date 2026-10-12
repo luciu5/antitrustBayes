@@ -116,8 +116,8 @@ priors <- list(
 # fit <- bayes_est(..., priors = priors)
 ```
 
-Gamma uses shape and **rate**. The historical default remains half-normal;
-select it with `prior_sigma_b_market_family = "half_normal"` and
+Gamma uses shape and **rate** and is the default from version 0.2.0.9004.
+Select the historical alternative with `prior_sigma_b_market_family = "half_normal"` and
 `prior_sigma_b_market_scale = 0.5`. Both choices use normalized densities for
 bridge evidence and are recorded in resolved fit priors. The setting applies
 to Logit/CES, every conduct family, and sampled/collapsed intercepts. It is
@@ -153,7 +153,37 @@ for multi-market market pooling or market-year pooling, including a one-market
 panel. Both choices preserve normalized evidence and active prior provenance.
 Use a frozen historical library for existing fits; rebuild and refit under a
 new run label when adopting the new priors. Banking libraries are not rebuilt
-by these package source changes. Residual-scale heterogeneity is unchanged.
+by these package source changes.
+
+## Optional residual-heterogeneity SD priors
+
+When `use_market_resid_scale = TRUE`, the SDs of market deviations in log
+share-error and log margin-error scales default to Gamma(shape=2, rate=7).
+The mean 2/7 = .286 is close to the historical HalfNormal(0, .35) mean .279;
+the mode is .143. This changes the heterogeneity prior without enabling the
+optional hierarchy, which remains disabled by default.
+
+```r
+priors <- list(
+  prior_sigma_resid_market_family = "gamma",
+  prior_sigma_resid_market_shape = 2,
+  prior_sigma_resid_market_rate = 7
+)
+# Supply with use_market_resid_scale = TRUE in a supported likelihood configuration.
+```
+
+To select the historical prior, set `prior_sigma_resid_market_family =
+"half_normal"` and `prior_sigma_resid_market = .35`. Both share and margin
+heterogeneity SDs use this specification. Densities are normalized, and
+inactive families/hyperparameters do not change the model-evidence identity.
+
+All sampled SDs that previously had zero-centered Half-Normal defaults now
+default to Gamma. Persistent-quality SD keeps its positive-truncated Normal
+centered at 1, expressing quality dispersion on its existing scale. Share and
+margin error SDs keep Lognormal priors. These priors already have modes away
+from zero. Fixed Normal prior scales for signed coefficients are not sampled
+SD parameters and remain unchanged. Select all four `*_family` fields
+explicitly as `"half_normal"` to reproduce historical hierarchy priors.
 
 ## Separate fixed-k computation
 
