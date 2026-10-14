@@ -3,6 +3,7 @@
 ^\.git$
 ^\.gitignore$
 ^\.scratch$
+^AGENTS\.md$
 ^\.claude$
 ^\.agents$
 ^\.codex$

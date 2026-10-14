@@ -1,3 +1,7 @@
+> **Historical checkpoint: September 17, 2026 environment-recovery checkpoint.**
+> For current development and the consolidated agenda, use the [documentation index](../README.md).
+> References below to current HEAD, libraries, candidates, or worktrees describe that recovery session. The original evidence and incomplete outcomes are preserved.
+
 # Execution-environment recovery
 
 Current checkpoint: the user committed and pushed the reviewed compatibility,

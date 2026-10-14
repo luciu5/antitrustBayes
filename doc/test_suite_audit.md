@@ -1,5 +1,10 @@
 # antitrustBayes test-suite audit (2026-10-01)
 
+This is a historical audit. Counts, timings, and descriptions of the suite
+below refer to the audit runs and follow-up evidence recorded here; they are
+not a current inventory or a claim that those checks have been rerun. Use the
+[documentation index](README.md) for current validation tiers and commands.
+
 The before-state, block-level inventory and dispositions are in
 [`test_audit_inventory.csv`](test_audit_inventory.csv). It records all 286
 `test_that()` blocks in 49 files, branch `main`, descriptions, measured block

@@ -1,3 +1,7 @@
+> **Historical checkpoint: September 14, 2026 evidence index.**
+> For current development and the consolidated agenda, use the [documentation index](../README.md).
+> Empirical pilot progress and package-check counts below belong to the recorded run. They are not current process status or current-suite results.
+
 # Stackelberg evidence index
 
 This index distinguishes derivation, executed numerical validation, posterior

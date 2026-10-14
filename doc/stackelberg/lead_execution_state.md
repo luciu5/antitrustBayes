@@ -1,3 +1,7 @@
+> **Historical checkpoint: September 14, 2026 execution log.**
+> For current development and the consolidated agenda, use the [documentation index](../README.md).
+> Running-session IDs, temporary paths, and pending jobs below are historical observations. This review has not established their present availability or subsequent outcomes.
+
 # Lead execution state (2026-09-14 06:26 UTC)
 
 The user waived backward compatibility. Final all-four Stan graphs are native

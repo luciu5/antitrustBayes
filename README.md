@@ -2,6 +2,9 @@
 
 Bayesian estimation of differentiated-products demand and supply models using CmdStanR, with posterior counterfactual analysis via the [antitrust](https://github.com/luciu5/antitrust) R package.
 
+For development, current validation commands, and research-document status,
+start with the [documentation index](doc/README.md).
+
 ## Overview
 
 `antitrustBayes` provides three core entry points:
@@ -30,23 +33,39 @@ Additional utilities:
 
 ## Installation
 
-The package depends on CmdStanR, an installed CmdStan toolchain, and the matching development stack.
-Install the known-compatible `antitrust` revision before installing
-`antitrustBayes`:
+Install CmdStanR and a CmdStan toolchain following the
+[CmdStanR installation instructions](https://mc-stan.org/cmdstanr/).
+Install compatible revisions of `antitrust` and `coordination` before
+installing `antitrustBayes`. The declared package minima are
+`antitrust >= 0.99.38`, `coordination >= 0.0.0.9003`, and `cmdstanr >= 0.9.0`;
+these are dependency requirements, not a tested combination of arbitrary
+revisions. Check the selected R library before development:
 
 ```r
-# Install from GitHub (requires remotes)
-remotes::install_github(
-  "luciu5/antitrust@103c2491607d7f164f5e4e00fc21d6ea79331138"
-)
-remotes::install_github(
-  "luciu5/antitrustBayes"
+stopifnot(
+  packageVersion("antitrust") >= "0.99.38",
+  packageVersion("coordination") >= "0.0.0.9003",
+  packageVersion("cmdstanr") >= "0.9.0"
 )
 ```
 
-The dependency-stack CI uses the same pinned `antitrust` SHA by default and
-records both resolved repository SHAs. Its manual dispatch accepts another
-`antitrust` branch or SHA for compatibility testing.
+With compatible dependencies already installed, install the package from GitHub
+without upgrading the selected dependency versions:
+
+```r
+remotes::install_github("luciu5/antitrustBayes", upgrade = "never")
+```
+
+The [dependency-stack CI](.github/workflows/qa.yml) defaults to `antitrust`
+SHA `103c2491607d7f164f5e4e00fc21d6ea79331138` (version 0.99.39) and
+records resolved `antitrust` and `antitrustBayes` repository SHAs. It does
+not pin `coordination` or the complete dependency stack. In the sources
+inspected on October 13, 2026, `coordination` 0.0.0.9006 requires
+`antitrust >= 0.99.41`, so it cannot be combined with that default CI pin.
+Some integration tests also require `coordination >= 0.0.0.9006` and skip
+with older versions. CI manual dispatch accepts another `antitrust` branch
+or SHA for explicit compatibility testing. See the documentation index for
+local environment checks and validation tiers.
 
 ## Quick Start
 
@@ -250,4 +269,5 @@ separate market k values and shared parameters require joint combinations.
 
 - [CmdStanR](https://mc-stan.org/cmdstanr/) (>= 0.9.0) and a working [CmdStan](https://mc-stan.org/users/interfaces/cmdstan) installation
 - [antitrust](https://github.com/luciu5/antitrust) (>= 0.99.38)
+- [coordination](https://github.com/luciu5/coordination) (>= 0.0.0.9003; the selected revision may require a newer `antitrust`)
 - [loo](https://mc-stan.org/loo/) (>= 2.5.0)

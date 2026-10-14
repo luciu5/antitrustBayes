@@ -1,5 +1,9 @@
 # Performance audit results
 
+> **Dated audit evidence: September 2026.** For current development, use the
+> [documentation index](../README.md). Revision and session observations below
+> describe the recorded audit; the retained measurements and limitations remain.
+
 Execution resumed after an environment reset on September 17. Workspace
 sources and the compact evidence below survive; the latest `/tmp`-only paired
 vectorization HMC arrays do not. Their comparison is incomplete and establishes
@@ -19,8 +23,9 @@ fourth-order differences agreeing with each kernel's analytic derivative within
 The older chronological candidate-hold statements below describe earlier stages.
 This establishes numerical equivalence, not a new HMC ESS/second improvement.
 
-The user committed and pushed the four reviewed source/report units; main and
-the locally recorded origin/main now match ea29e96. The working tree was clean
+At the September 17 checkpoint, the user had committed and pushed the four
+reviewed source/report units; main and the locally recorded origin/main matched
+ea29e96. The working tree was clean
 before this next audit unit. Optional parallel bridge execution remains outside
 production: eight archived benchmark jobs (48 bridge estimates, 16 separate
 public comparisons) have exact paired evidence and iteration counts, but only

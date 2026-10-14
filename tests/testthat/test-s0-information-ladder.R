@@ -92,7 +92,11 @@ test_that("single-market market pooling uses a direct prior source", {
                  fixed = TRUE)
     expect_match(src, "if (is_single_market == 1) base_logit = mu_s0_pool_vec[1];",
                  fixed = TRUE)
-    expect_match(src, "if (is_single_market == 0) {\n      target += normal_lpdf(sigma_s0_pool_vec",
+    expect_match(src, paste0(
+      "if (is_single_market == 0) {\n",
+      "      if (prior_sigma_s0_pool_family == 1) {\n",
+      "        target += normal_lpdf(sigma_s0_pool_vec"
+    ),
                  fixed = TRUE)
     expect_match(src, "target += normal_lpdf(mu_s0_pool_vec | s0_prior_mean, s0_prior_sd);",
                  fixed = TRUE)

@@ -1,7 +1,10 @@
 # Model universe: specification before implementation
 
-Status: mathematical/design proposal for independent review. This is a model
-comparison layer, not a change to conduct equations or fitted priors.
+Status (reviewed 2026-10-13): original design contract with a public implementation
+in [model_universe.R](../R/model_universe.R), [usage examples](statistical_toolkit_usage.md),
+and [focused tests](../tests/testthat/test-model-universe.R). The contract below
+remains the original design; implementation does not establish broad model-selection
+recovery or restricted-family policy BMA. See the [current index](README.md).
 
 ## Economic states and Bayesian hypotheses
 

@@ -1,3 +1,7 @@
+> **Historical checkpoint: September 2026 frozen audit plan.**
+> For current development and the consolidated agenda, use the [documentation index](../README.md).
+> Baseline revisions, execution constraints, and implementation steps below describe the original audit. Retained result reports determine which work was executed; this plan does not select new work.
+
 # Performance and structural-lifecycle audit
 
 Baseline: antitrustBayes main `3ef5ee6`, antitrust refactor `684c009`, and

@@ -1,3 +1,7 @@
+> **Historical checkpoint: September 17, 2026 recovery checklist.**
+> For current development and the consolidated agenda, use the [documentation index](../../README.md).
+> The commands, revision claims, worktree constraints, and model assignments below describe that session. They are not instructions to resume or claims about current HEAD.
+
 # Resume the active performance audit
 
 Work on Bayes main. Keep actual antitrust/refactor and trade/refactor untouched

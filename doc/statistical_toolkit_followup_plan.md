@@ -1,3 +1,7 @@
+> **Historical checkpoint: Original toolkit roadmap.**
+> For current development and the consolidated agenda, use the [documentation index](README.md).
+> Its overlapping agenda is consolidated in the current index. The original requests and scientific caveats below are preserved; several items now have separate implementations and result reports.
+
 # Statistical toolkit follow-up: bounded priorities
 
 Status: requested work, specifications and experiments in progress. This note
