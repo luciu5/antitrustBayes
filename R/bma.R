@@ -82,13 +82,15 @@ validate_comparison_contract <- function(fits) {
   paste0(paste(lines, collapse = "\n"), "\n")
 }
 
-.bayes_cmdstan_source_contract <- function(metadata, source_code,
-                                           require_hmc = TRUE) {
+.bayes_stan_source_contract <- function(metadata, source_code,
+                                        require_hmc = TRUE,
+                                        backend = "cmdstanr") {
   if (!is.list(metadata)) {
     stop("Fit provenance metadata is unavailable.", call. = FALSE)
   }
-  if (!identical(metadata$backend, "cmdstanr")) {
-    stop("Evidence requires a fit produced by the CmdStanR backend.",
+  if (!identical(metadata$backend, backend)) {
+    stop("Evidence requires a fit produced by the ",
+         if (backend == "cmdstanr") "CmdStanR" else "Nutpie", " backend.",
          call. = FALSE)
   }
   inference <- metadata$inference
@@ -130,10 +132,12 @@ validate_comparison_contract <- function(fits) {
   current_code_hash <- digest::digest(current_code, algo = "sha256",
                                       serialize = FALSE)
   if (!identical(code_hash, current_code_hash)) {
-    stop("Saved CmdStan fit source does not match the current kernel source; ",
+    stop("Saved ", if (backend == "cmdstanr") "CmdStan" else "Nutpie",
+         " fit source does not match the current kernel source; ",
          "evidence is unavailable for this fit.", call. = FALSE)
   }
   list(
+    backend = backend,
     kernel = kernel,
     inference = inference,
     source_file = source_file,
@@ -141,6 +145,11 @@ validate_comparison_contract <- function(fits) {
     current_hash = current_hash,
     code_hash = code_hash
   )
+}
+
+.bayes_cmdstan_source_contract <- function(metadata, source_code,
+                                           require_hmc = TRUE) {
+  .bayes_stan_source_contract(metadata, source_code, require_hmc, "cmdstanr")
 }
 
 .bayes_cmdstan_evidence_contract <- function(fit, require_hmc = TRUE) {
@@ -154,7 +163,206 @@ validate_comparison_contract <- function(fits) {
   )
 }
 
+.bayes_nutpie_evidence_contract <- function(fit, require_hmc = TRUE) {
+  if (!inherits(fit@stanfit, "NutpieFit")) {
+    stop("Evidence requires a retained NutpieFit object.", call. = FALSE)
+  }
+  native <- fit@stanfit$metadata
+  contract <- .bayes_stan_source_contract(
+    fit@metadata, native$source_code, require_hmc, "nutpie"
+  )
+  if (!identical(native$inference, fit@metadata$inference)) {
+    stop("Nutpie draw provenance and saved inference methods differ.", call. = FALSE)
+  }
+  if (!identical(native$source_hash, contract$saved_hash)) {
+    stop("Nutpie draw provenance and saved Stan source hashes differ.",
+         call. = FALSE)
+  }
+  contract
+}
+
+.bayes_evidence_contract <- function(fit, require_hmc = TRUE) {
+  if (inherits(fit@stanfit, "NutpieFit")) {
+    .bayes_nutpie_evidence_contract(fit, require_hmc)
+  } else {
+    .bayes_cmdstan_evidence_contract(fit, require_hmc)
+  }
+}
+
+.bayes_comparison_backend <- function(fit) {
+  if (inherits(fit@stanfit, "NutpieFit")) return("nutpie")
+  if (inherits(fit@stanfit, "CmdStanFit")) return("cmdstanr")
+  fit@metadata$backend %||% "unavailable"
+}
+
+.bayes_comparison_backends <- function(fits, require_evidence = TRUE) {
+  backends <- vapply(fits, .bayes_comparison_backend, character(1))
+  if (isTRUE(require_evidence) && length(unique(backends)) > 1L) {
+    stop("Mixed-backend comparison is unavailable until normalized target ",
+         "and evidence equivalence have been validated; use fits from one ",
+         "backend for the complete candidate set.", call. = FALSE)
+  }
+  backends
+}
+
+## Enable only after the executed same-kernel target/evidence validation in
+## doc/validation/nutpie_evidence_design.md. Saved metadata cannot enable it.
+.bayes_nutpie_bridge_validated <- FALSE
+
+.bayes_require_nutpie_bridge <- function() {
+  if (!isTRUE(.bayes_nutpie_bridge_validated)) {
+    stop("Nutpie bridge evidence is unavailable: normalized BridgeStan ",
+         "target and marginal-likelihood equivalence with CmdStanR have not ",
+         "been validated. No model probabilities can be computed from this ",
+         "candidate set. See doc/validation/nutpie_evidence_design.md.",
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+.bayes_bridge_data <- function(fit, fields = fit@metadata$stan_data_fields) {
+  if (!is.character(fields) || !length(fields) || anyNA(fields) ||
+      anyDuplicated(fields) || !all(fields %in% names(fit@stan_data))) {
+    stop("Saved fit has no valid Stan data field contract for bridge sampling.",
+         call. = FALSE)
+  }
+  data <- fit@stan_data[fields]
+  saved_hash <- fit@metadata$stan_data_hash
+  if (!is.character(saved_hash) || length(saved_hash) != 1L ||
+      !identical(saved_hash, digest::digest(data, algo = "sha256"))) {
+    stop("Saved Stan data differ from the data used for fitting; bridge evidence is unavailable.",
+         call. = FALSE)
+  }
+  data
+}
+
+## Construct a normalized evaluator for validation without enabling public
+## Nutpie bridge evidence. Loading an existing shared library never samples
+## or compiles a model, downloads sources, or revives a serialized pointer.
+.bayes_nutpie_bridge_context <- function(fit, contract = NULL) {
+  if (is.null(contract)) contract <- .bayes_nutpie_evidence_contract(fit)
+  if (!requireNamespace("bridgestan", quietly = TRUE)) {
+    stop("Nutpie bridge target evaluation requires the optional 'bridgestan' R package.",
+         call. = FALSE)
+  }
+  native <- fit@stanfit$metadata
+  lib <- native$lib_path
+  if (!is.character(lib) || length(lib) != 1L || is.na(lib) ||
+      !file.exists(lib) || !grepl("\\.(so|dll|dylib)$", lib)) {
+    stop("The saved Nutpie BridgeStan shared library is unavailable; normalized target evaluation cannot be restored.",
+         call. = FALSE)
+  }
+  if (!identical(native$lib_hash,
+                 digest::digest(file = lib, algo = "sha256"))) {
+    stop("The Nutpie BridgeStan shared library hash differs from its saved provenance.",
+         call. = FALSE)
+  }
+  data <- .bayes_bridge_data(fit)
+  if (!identical(native$stan_data_hash, fit@metadata$stan_data_hash)) {
+    stop("Nutpie draw provenance and saved Stan data hashes differ.",
+         call. = FALSE)
+  }
+  data_file <- tempfile("antitrustBayes-nutpie-bridge-", fileext = ".json")
+  on.exit(unlink(data_file), add = TRUE)
+  cmdstanr::write_stan_json(data, file = data_file)
+  json <- paste(readLines(data_file, warn = FALSE), collapse = "\n")
+  if (!identical(native$data_json, json) ||
+      !identical(native$data_json_hash, digest::digest(json, algo = "sha256"))) {
+    stop("Nutpie serialized Stan data differ from the data used for fitting.",
+         call. = FALSE)
+  }
+  seed <- native$seed
+  if (!is.numeric(seed) || length(seed) != 1L || !is.finite(seed) ||
+      seed < 0 || seed > .Machine$integer.max || seed != as.integer(seed)) {
+    stop("Nutpie fit has no valid saved model-construction seed.", call. = FALSE)
+  }
+  model <- bridgestan::StanModel$new(lib, data_file, as.integer(seed))
+  version <- model$model_version()
+  native_version <- paste(version$major, version$minor, version$patch, sep = ".")
+  if (!identical(native_version, as.character(utils::packageVersion("bridgestan")))) {
+    stop("Normalized Nutpie target evaluation requires a 'bridgestan' R package matching ",
+         "the saved model ABI (", native_version, ").", call. = FALSE)
+  }
+  .bayes_nutpie_bridge_context_from_model(fit, model, contract)
+}
+
+.bayes_nutpie_bridge_context_from_model <- function(fit, model, contract) {
+  raw_names <- as.character(unlist(model$param_names(
+    include_tp = FALSE, include_gq = FALSE), use.names = FALSE))
+  ## BridgeStan uses dots for indices; retained draws use Stan bracket names.
+  bracket_name <- function(x) vapply(strsplit(x, ".", fixed = TRUE), function(y) {
+    if (length(y) == 1L) y else paste0(y[[1L]], "[",
+                                      paste(y[-1L], collapse = ","), "]")
+  }, character(1))
+  parameter_names <- bracket_name(raw_names)
+  unc_names <- as.character(unlist(model$param_unc_names(), use.names = FALSE))
+  if (!length(parameter_names) || anyNA(parameter_names) ||
+      any(!nzchar(parameter_names)) ||
+      anyDuplicated(parameter_names) || !length(unc_names) ||
+      anyNA(unc_names) || any(!nzchar(unc_names)) || anyDuplicated(unc_names) ||
+      length(unc_names) != model$param_unc_num()) {
+    stop("BridgeStan returned an invalid parameter-coordinate contract.", call. = FALSE)
+  }
+  draws <- as.array(.bayes_backend_draws(fit@stanfit, format = "draws_array"))
+  columns <- dimnames(draws)[[3L]]
+  if (anyNA(columns) || anyDuplicated(columns) ||
+      !all(parameter_names %in% columns)) {
+    stop("Nutpie posterior is missing required Stan parameter coordinates.", call. = FALSE)
+  }
+  constrained <- matrix(draws[, , match(parameter_names, columns), drop = FALSE],
+                        ncol = length(parameter_names))
+  unconstrained <- t(matrix(vapply(seq_len(nrow(constrained)), function(i) {
+    q <- as.numeric(model$param_unconstrain(constrained[i, ]))
+    if (length(q) != length(unc_names) || any(!is.finite(q))) {
+      stop("BridgeStan produced invalid unconstrained posterior coordinates.",
+           call. = FALSE)
+    }
+    restored <- as.numeric(model$param_constrain(
+      q, include_tp = FALSE, include_gq = FALSE))
+    if (!isTRUE(all.equal(restored, constrained[i, ],
+                          tolerance = 1e-8, check.attributes = FALSE))) {
+      stop("Nutpie constrained/unconstrained parameter round trip failed.",
+           call. = FALSE)
+    }
+    q
+  }, numeric(length(unc_names))), nrow = length(unc_names)))
+  colnames(unconstrained) <- unc_names
+  log_posterior <- function(q, data) {
+    value <- model$log_density(as.numeric(q), propto = FALSE, jacobian = TRUE)
+    if (!is.numeric(value) || length(value) != 1L || is.na(value) ||
+        value == Inf) {
+      stop("BridgeStan returned an invalid normalized log density.", call. = FALSE)
+    }
+    as.numeric(value)
+  }
+  values <- vapply(seq_len(nrow(unconstrained)), function(i)
+    log_posterior(unconstrained[i, ], NULL), numeric(1))
+  if (any(!is.finite(values))) {
+    stop("Normalized BridgeStan density is non-finite at retained posterior draws.",
+         call. = FALSE)
+  }
+  bounds <- stats::setNames(rep(Inf, length(unc_names)), unc_names)
+  list(
+    samples = unconstrained,
+    bridge_args = list(log_posterior = log_posterior, data = NULL,
+                       lb = -bounds, ub = bounds, cores = 1L),
+    log_posterior = log_posterior,
+    constrained_parameter_names = parameter_names,
+    draw_index = data.frame(
+      iteration = rep(seq_len(dim(draws)[[1L]]), dim(draws)[[2L]]),
+      chain = rep(seq_len(dim(draws)[[2L]]), each = dim(draws)[[1L]])),
+    source = "nutpie_bridgestan_normalized_unconstrained",
+    backend = "nutpie", kernel = contract$kernel,
+    saved_hash = contract$saved_hash, current_hash = contract$current_hash,
+    migration = FALSE, cleanup = function() invisible(NULL)
+  )
+}
+
 .bayes_bridge_restore_context <- function(fit, contract = NULL) {
+  if (inherits(fit@stanfit, "NutpieFit")) {
+    .bayes_require_nutpie_bridge()
+    return(.bayes_nutpie_bridge_context(fit, contract))
+  }
   if (is.null(contract)) contract <- .bayes_cmdstan_evidence_contract(fit)
   fields <- fit@metadata$stan_data_fields
   if (is.null(fields)) {
@@ -186,6 +394,7 @@ validate_comparison_contract <- function(fits) {
   samples$runset$args$data_file <- data_file
   list(
     samples = samples,
+    backend = "cmdstanr",
     source = "cmdstanr_saved_fit_reconstructed_data",
     kernel = contract$kernel,
     saved_hash = contract$saved_hash,
@@ -195,10 +404,10 @@ validate_comparison_contract <- function(fits) {
   )
 }
 
-.bayes_cmdstan_log_lik_array <- function(stanfit, parameter_name,
-                                         expected_units = NULL) {
-  if (!inherits(stanfit, "CmdStanMCMC")) {
-    stop("Predictive scoring requires a CmdStanR CmdStanMCMC fit.",
+.bayes_log_lik_array <- function(stanfit, parameter_name,
+                                 expected_units = NULL) {
+  if (!inherits(stanfit, "CmdStanMCMC") && !inherits(stanfit, "NutpieFit")) {
+    stop("Predictive scoring requires an HMC sampler fit.",
          call. = FALSE)
   }
   if (!is.character(parameter_name) || length(parameter_name) != 1L ||
@@ -207,7 +416,8 @@ validate_comparison_contract <- function(fits) {
          call. = FALSE)
   }
   draws <- tryCatch(
-    stanfit$draws(variables = parameter_name, format = "draws_array"),
+    .bayes_backend_draws(stanfit, variables = parameter_name,
+                         format = "draws_array"),
     error = function(e) stop("Cannot read generated quantity '",
                              parameter_name, "': ", conditionMessage(e),
                              call. = FALSE)
@@ -259,6 +469,15 @@ validate_comparison_contract <- function(fits) {
   }
   array(as.numeric(log_lik), dim = dim(log_lik),
         dimnames = dimnames(log_lik))
+}
+
+.bayes_cmdstan_log_lik_array <- function(stanfit, parameter_name,
+                                         expected_units = NULL) {
+  if (!inherits(stanfit, "CmdStanMCMC")) {
+    stop("Predictive scoring requires a CmdStanR CmdStanMCMC fit.",
+         call. = FALSE)
+  }
+  .bayes_log_lik_array(stanfit, parameter_name, expected_units)
 }
 
 .bayes_cmdstan_log_lik_units <- function(fit, parameter_name) {
@@ -354,6 +573,14 @@ validate_comparison_contract <- function(fits) {
 #' LOO clusters must contain whole partition units; observation LOO and period
 #' LOO with a market-shared count are unsupported for fringe and Stackelberg.
 #'
+#' Nutpie HMC fits support predictive comparison through their generated
+#' log-likelihood draws where those predictive units are defined. Nutpie bridge
+#' evidence and posterior model probabilities are currently unavailable pending
+#' executed native target and marginal-likelihood validation against CmdStanR.
+#' The internal normalized BridgeStan evaluator does not enable public bridge
+#' comparison. Mixed-backend bridge comparison is also unavailable. Use
+#' \code{bridge = FALSE} for eligible predictive-only comparisons.
+#'
 #' @examples
 #' \donttest{
 #' # fit1 <- bayes_est(..., supply_model = "bertrand")
@@ -429,6 +656,7 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
     stop("At least one BayesLogit fit is required.")
   }
   invisible(lapply(fits, validate_fit_spec))
+  backends <- .bayes_comparison_backends(fits, require_evidence = bridge)
   validate_comparison_contract(fits)
   collapsed_quality <- any(vapply(fits, .bayes_is_collapsed_quality, logical(1)))
   if (collapsed_quality && !isTRUE(bridge)) {
@@ -436,7 +664,10 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
          "use bridge = TRUE for normalized evidence.", call. = FALSE)
   }
   if (!collapsed_quality) .bayes_comparison_units(fits, loo_unit)
-  if (bridge) .bayes_validate_bridge(fits)
+  if (bridge) {
+    .bayes_validate_bridge(fits)
+    if ("nutpie" %in% backends) .bayes_require_nutpie_bridge()
+  }
 
   # Handle named and unnamed arguments
   nms <- names(fits)
@@ -495,7 +726,7 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
     contract_error <- NULL
     if (loo_available || bridge) {
       evidence_contract <- tryCatch(
-        .bayes_cmdstan_evidence_contract(fit),
+        .bayes_evidence_contract(fit),
         error = function(e) {
           contract_error <<- conditionMessage(e)
           NULL
@@ -506,7 +737,7 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
     if (loo_available) {
       loo_error <- contract_error
       loo_result <- if (!is.null(loo_error)) NULL else tryCatch({
-        log_lik <- .bayes_cmdstan_log_lik_array(
+        log_lik <- .bayes_log_lik_array(
           fit@stanfit, parameter_name,
           expected_units = .bayes_cmdstan_log_lik_units(fit, parameter_name)
         )
@@ -557,14 +788,16 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
       }
       if (is.null(bridge_context)) {
         bridge_list[[i]] <- rep(list(NULL), bridge_repetitions)
-        bridge_context_info[[i]] <- list(status = "incomplete")
+        bridge_context_info[[i]] <- list(status = "incomplete",
+                                         backend = backends[[i]],
+                                         reason = bridge_error)
       } else {
         bridge_list[[i]] <- lapply(seq_len(bridge_repetitions), function(rep_id) {
           tryCatch(
-            bridgesampling::bridge_sampler(
-              bridge_context$samples, repetitions = 1L, method = bridge_method,
-              silent = TRUE, maxiter = bridge_maxiter
-            ),
+            do.call(bridgesampling::bridge_sampler, c(list(
+              samples = bridge_context$samples, repetitions = 1L,
+              method = bridge_method, silent = TRUE, maxiter = bridge_maxiter
+            ), bridge_context$bridge_args)),
             error = function(e) {
               warning("Bridge sampling failed for model ", nms[i],
                       ", repetition ", rep_id, ": ", conditionMessage(e))
@@ -581,6 +814,7 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
           status = if (all(bridge_valid))
             "validated" else "bridge_failed",
           completed_repetitions = sum(bridge_valid),
+          backend = backends[[i]],
           source = bridge_context$source,
           kernel = bridge_context$kernel,
           saved_hash = bridge_context$saved_hash,
@@ -634,6 +868,7 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
 
   result <- data.frame(
     model         = nms,
+    backend       = unname(backends),
     supply_model  = vapply(fits, function(f)
       supply_names[f@supply_model], character(1)),
     demand_model  = vapply(fits, slot, character(1), "demand_model"),
@@ -700,7 +935,20 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
   attr(result, "loo_compare") <- comp
   attr(result, "loo_list") <- loo_list
   if (bridge) attr(result, "bridge_list") <- bridge_list
-  if (bridge) attr(result, "bridge_context_info") <- bridge_context_info
+  if (bridge) attr(result, "bridge_context_info") <- stats::setNames(
+    bridge_context_info, nms)
+  attr(result, "backend_metadata") <- stats::setNames(lapply(fits, function(fit) {
+    list(backend = .bayes_comparison_backend(fit),
+         inference = fit@metadata$inference,
+         stan_kernel = fit@metadata$stan_kernel,
+         stan_source_hash = fit@metadata$stan_source_hash,
+         stan_data_hash = fit@metadata$stan_data_hash,
+         sampler = if (inherits(fit@stanfit, "NutpieFit")) {
+           fit@stanfit$metadata$provenance
+         } else list(cmdstanr = fit@metadata$backend_version,
+                     cmdstan = fit@metadata$cmdstan_version,
+                     controls = fit@metadata$sampler_controls))
+  }), nms)
   attr(result, "prior_weights") <- prior_weights
   attr(result, "loo_unit") <- loo_unit
   result

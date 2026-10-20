@@ -865,6 +865,8 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   ## Keep the ordinary bayes_compare table contract available to downstream
   ## tools such as bayes_weights(), while retaining universe-specific fields.
   table$model_prior <- table$prior_weight
+  table$backend <- source_evidence$backend[
+    match(table$source, source_evidence$model)]
   table$logml <- table$logml_restricted
   table$post_prob <- table$posterior_probability
   table$bf_vs_best <- NA_real_
@@ -875,6 +877,7 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   attr(table, "status") <- result$status
   attr(table, "descriptor") <- descriptor
   attr(table, "source_comparison") <- source_evidence
+  attr(table, "backend_metadata") <- attr(source_evidence, "backend_metadata")
   attr(table, "diagnostics") <- list(
     evidence_identity = "Z_restricted = Z_source * posterior_mass / prior_mass",
     multimarket_mass = "within_draw_market_product_then_draw_average",

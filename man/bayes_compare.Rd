@@ -107,6 +107,14 @@ refers to the transformed-outcome working likelihood. Bridge comparison
 with an active, non-normalized HMT penalty is unsupported. Exact ordered-k
 LOO clusters must contain whole partition units; observation LOO and period
 LOO with a market-shared count are unsupported for fringe and Stackelberg.
+
+Nutpie HMC fits support predictive comparison through their generated
+log-likelihood draws where those predictive units are defined. Nutpie bridge
+evidence and posterior model probabilities are currently unavailable pending
+executed native target and marginal-likelihood validation against CmdStanR.
+The internal normalized BridgeStan evaluator does not enable public bridge
+comparison. Mixed-backend bridge comparison is also unavailable. Use
+\code{bridge = FALSE} for eligible predictive-only comparisons.
 }
 \examples{
 \donttest{
