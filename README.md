@@ -13,7 +13,7 @@ start with the [documentation index](doc/README.md).
 
 `antitrustBayes` provides three core entry points:
 
-- **`bayes_est()`** — Estimate a hierarchical Bayesian Logit or CES demand + supply model using CmdStanR HMC. An explicit Pathfinder option provides exploratory approximate draws. Supports Bertrand, monopolistic competition, Cournot, second-score auction, and (for applications where it is institutionally defensible) Nash bargaining.
+- **`bayes_est()`** — Estimate a hierarchical Bayesian Logit or CES demand + supply model using CmdStanR HMC (default) or optional Nutpie NUTS. CmdStanR's explicit Pathfinder option provides exploratory approximate draws. Supports Bertrand, monopolistic competition, Cournot, second-score auction, and (for applications where it is institutionally defensible) Nash bargaining.
 
 - **`bayes_specify()`** — Create the same structural-fit interface from supplied parameter draws and observed market geometry, without running Stan.
 
@@ -73,9 +73,12 @@ local environment checks and validation tiers.
 
 ## Optional Nutpie backend
 
-The adapter is implemented; paired HMC and counterfactual-distribution validation
-await the local run described in the [validation status](doc/validation/nutpie_backend_results.md).
-Use CmdStanR for validated production inference until those results are reviewed.
+The [executed validation](doc/validation/nutpie_backend_results.md) covers 34
+sampler fits in 12 fixtures, all four Stan kernels and pooled C/CF/CS cases.
+Scored posterior/policy comparisons agree within the declared Monte Carlo
+tolerances. Divergences, several elevated R-hats and mixed ESS improvements
+support keeping Nutpie experimental and CmdStanR the default. Low-rank
+adaptation did not consistently improve on diagonal adaptation in these runs.
 
 A CmdStan-only installation does not need `nutpieR`, BridgeStan's R client,
 Python, or Rust. Request the optional sampler explicitly:
@@ -87,7 +90,7 @@ fit <- bayes_est(
   supply_model = "cournot", backend = "nutpie",
   stan_options = list(chains = 4, iter = 2000, warmup = 1000, cores = 4,
     seed = 604, control = list(adapt_delta = .95, max_treedepth = 13)),
-  nutpie_options = list(adaptation = "low_rank")
+  nutpie_options = list(adaptation = "diag")
 )
 plan <- posterior_policy_draws(fit, n_draws = 200, seed = 701)
 # Reuse plan as draw_plan in both merger and tariff simulate() calls.
@@ -130,9 +133,14 @@ model specification, resolved priors, versions and controls. Posterior and
 policy operations on a reloaded fit use those arrays without live native
 pointers. Evidence evaluation additionally needs the original compatible
 compiled library and its byte seal.
+CmdStanR's CSV precision remains unchanged (eight significant digits in the
+validated toolchain); CmdStan users can request `stan_options = list(sig_figs = 18)`
+for strict algebraic checks. Nutpie retains native double arrays.
 
-Nutpie bridge evidence is disabled until normalized target and marginal-
-likelihood equivalence have been executed and reviewed. `bayes_compare()`
+The [evidence experiment](doc/validation/nutpie_evidence_results.md) passed
+native target, bridge-uncertainty and model-probability checks. Certification
+remains inconclusive because all six evidence fits had divergences under a
+fixed protocol requiring zero. Nutpie bridge evidence remains disabled. `bayes_compare()`
 fails explicitly for Nutpie bridge evidence and mixed-backend evidence comparisons;
 adding a flag to fit metadata cannot enable it. Predictive scoring can use
 Nutpie `log_lik`, including mixed-backend predictive-only comparisons, through the common draw interface where the existing
@@ -145,7 +153,8 @@ See the [evidence contract](doc/validation/nutpie_evidence_design.md) and
 [paired validation runner](doc/validation/nutpie_backend_validation.R).
 The runner uses fixed package fixtures, records unavailable tasks and raw
 warnings, separates compile time, and requires explicit opt-in for sampling.
-No efficiency or robustness advantage is claimed without executed validation.
+The executed timing/ESS tables describe these fixtures and matched draw budgets;
+they do not establish a general efficiency or robustness advantage.
 
 ## Quick Start
 

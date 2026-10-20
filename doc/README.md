@@ -1,6 +1,6 @@
 # Development and evidence index
 
-Reviewed 2026-10-19 against baseline `fff419b` and the optional Nutpie backend
+Reviewed 2026-10-20 against baseline `fff419b` and the optional Nutpie backend
 work, package version `0.2.0.9005`.
 This is the current operational agenda and navigation entrypoint. Topic contracts
 and results remain the detailed sources; historical checklists do not select work.
@@ -87,7 +87,7 @@ checklists in the historical umbrella and recovery notes below.
 | Sampler presets and diagnostic verdicts | Proposed, unimplemented; current controls remain explicit. | [proposal](sampler_usability_followup_plan.md) |
 | Prior-predictive diagnostics | Historical requested follow-up; no general public prior-predictive interface was found in this review. Scope separately before implementation. | [historical roadmap](statistical_toolkit_followup_plan.md), [inference contract](market_prediction_inference_design.md) |
 | Recovery and model discrimination | Current bounded CmdStanR gates exist; broad repeated-sample coverage and general conduct identification remain open. | [validation entrypoint](validation/README.md) |
-| Optional Nutpie sampler | Thin backend adapters, generated-quantity extraction, policy reconstruction and deterministic regressions implemented. Paired HMC, difficult-geometry and native evidence validation await local execution; evidence/BMA remains disabled for Nutpie. CmdStanR remains the default. | [status and execution route](validation/nutpie_backend_results.md), [paired runner](validation/nutpie_backend_validation.R), [evidence design](validation/nutpie_evidence_design.md) |
+| Optional Nutpie sampler | Completed 34 fits plus the unchanged-fit CES policy replay: all 1,385 scored checks within declared MCSE tolerances; diagnostics, attrition and tail uncertainty retained. All 15 evidence tasks passed numerical checks, but divergences leave certification inconclusive and evidence/BMA disabled. CmdStanR remains default; Nutpie experimental. Opt-in CmdStan regressions: 590 assertions passed; focused runner: 61 passed. | [executed results](validation/nutpie_backend_results.md), [evidence results](validation/nutpie_evidence_results.md), [paired runner](validation/nutpie_backend_validation.R) |
 
 ## Historical checkpoints
 

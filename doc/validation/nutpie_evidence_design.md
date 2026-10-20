@@ -1,5 +1,14 @@
 # Nutpie evidence contract
 
+Execution update, 2026-10-20: all four native target checks and all 18
+economic-model bridge repetitions completed. Native targets agree to at most
+`1.101341e-13`; paired evidence and complete-universe probabilities satisfy
+the fixed numerical tolerances. Certification remains **inconclusive** because
+all six evidence fits have divergences. The public Nutpie evidence gate remains
+closed. See the [executed results](nutpie_evidence_results.md) for actual
+numbers, diagnostics and the precise remaining validation requirement. The
+October 19 protocol/status text below records the pre-execution design.
+
 Written 2026-10-19 before changing evidence dispatch. Baseline: package
 0.2.0.9005, Git `fff419be8f4d9096eeff7b7f39dcc5e4481ef8ab`.
 
