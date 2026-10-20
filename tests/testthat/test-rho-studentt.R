@@ -282,7 +282,8 @@ test_that("CES rho and Student-t log_lik agree with independent calculations", {
 test_that("predicted shares distinguish conditional and unconditional identities", {
   skip_unless_rho_stan_tests()
   d <- make_rho_smoke_data(N = 8)
-  fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 7)
+  fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 7,
+                    sig_figs = 18L)
   fit <- suppressWarnings(bayes_est(
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",

@@ -80,7 +80,8 @@ test_that("multi-market intercept hierarchies are noncentered", {
           use_s0_market_pool = TRUE,
           priors = list(prior_sigma_s0_pool = 0.3),
           stan_options = list(
-            chains = 1, iter = 160, warmup = 80, refresh = 0, seed = 3
+            chains = 1, iter = 160, warmup = 80, refresh = 0, seed = 3,
+            sig_figs = 18L
           )
         ),
         case$args
@@ -206,7 +207,8 @@ test_that("CES market-level s0 pooling keeps quantity s0 fixed but transforms R0
       use_alpha_market_pool = TRUE,
       use_s0_market_pool = TRUE, use_centered_s0_pool = centered,
       priors = list(prior_sigma_s0_pool = 0.3),
-      stan_options = list(chains = 1, iter = 160, warmup = 80, refresh = 0, seed = 3)
+      stan_options = list(chains = 1, iter = 160, warmup = 80, refresh = 0, seed = 3,
+                          sig_figs = 18L)
     ))
     expect_s4_class(fit, "BayesLogit")
 
