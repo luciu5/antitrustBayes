@@ -241,7 +241,7 @@ nutpie_validation_policy <- function(fit) {
           unique(roles)
         }
         native <- !methods::is(source, "AntitrustFit")
-        roles <- if (!native) list() else if (methods::is(source, "StackelbergLogit"))
+        roles <- if (!native) list() else if (methods::is(source, "StackelbergLogit") || methods::is(source, "StackelbergCES"))
           list(leadersPost = remap(promoted@tariff_state$leadersPre)) else
           list(corePost = remap(promoted@tariff_state$corePre))
         solved <- suppressWarnings(do.call(trade::simulate, c(list(promoted,

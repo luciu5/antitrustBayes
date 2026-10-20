@@ -181,3 +181,53 @@ test_that("runtime seal detects source changes before validation can reuse scien
   expect_identical(first$packages, second$packages)
   expect_false(identical(first$source_hashes[["R/policy.R"]], second$source_hashes[["R/policy.R"]]))
 })
+
+test_that("CES Stackelberg validation runs merger and tariff policies with inherited leaders", {
+  skip_if_not_installed("trade")
+  fixture <- .validation_runner_env$nutpie_validation_ces_fixture("CS")
+  a <- fixture$arguments
+  market <- bayes_market(prices = a$prices, quantities = a$quantities,
+    margins = a$margins, group = a$group, outside_price = 1,
+    insideSize = 1000, market_side = "output")
+  specified <- bayes_specify(bayes_params(gamma = 6, s0 = .2,
+    supply_model = 3L, structure = "stackelberg", partition_prior = "ordered_k",
+    k_support = 2L, k_prior = 1), market)
+  plan <- posterior_policy_draws(specified, n_draws = 1L, seed = 491871L)
+  prepared <- suppressWarnings(posterior_policy_models(specified, draw_plan = plan,
+    insideSize = 1000, demand_anchoring = "latent_quality"))
+  expect_s4_class(prepared$models[[1L]][[1L]], "StackelbergCES")
+  fit <- methods::new("BayesLogit", stanfit = NULL,
+    data = as.data.frame(a[c("prices", "quantities", "margins", "market", "year", "group")]))
+  ## A specified economic state replaces sampling only. Run the complete
+  ## validation policy function, including native promotion and both solves.
+  local_mocked_bindings(
+    .bayes_backend_draws = function(...) array(0, c(1L, 1L, 1L)),
+    posterior_policy_draws = function(...) plan,
+    posterior_policy_models = function(...) prepared,
+    .package = "antitrustBayes")
+  native_simulate <- trade::simulate
+  solved <- list()
+  local_mocked_bindings(simulate = function(...) {
+    value <- native_simulate(...)
+    solved[[length(solved) + 1L]] <<- value
+    value
+  }, .package = "trade")
+  result <- suppressWarnings(.validation_runner_env$nutpie_validation_policy(fit))
+  expect_equal(nrow(result$draws), 2L)
+  expect_setequal(result$draws$regime, c("merger", "tariff25"))
+  expect_true(all(result$draws$status == "ok"), info = paste(result$draws$reason, collapse = "; "))
+  expect_true(all(is.finite(result$draws$price_pct)))
+  expect_true(all(result$draws$cost_identity_error < 1e-8))
+  expect_true(all(result$summary$n_valid == 1L))
+  expect_identical(result$plan, plan)
+  expect_length(solved, 2L)
+  if (length(solved) == 2L) {
+    firms <- aggregate(a$quantities, list(firm = a$group), sum)
+    pair <- as.character(firms$firm[order(-firms$x)[1:2]])
+    inherited <- as.character(solved[[1L]]@tariff_state$leadersPre)
+    inherited[inherited == pair[[2L]]] <- pair[[1L]]
+    expect_identical(as.character(solved[[1L]]@tariff_state$leadersPost), unique(inherited))
+    expect_identical(as.character(solved[[2L]]@tariff_state$leadersPost),
+      as.character(solved[[2L]]@tariff_state$leadersPre))
+  }
+})
