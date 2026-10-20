@@ -2,6 +2,10 @@
 
 Bayesian estimation of differentiated-products demand and supply models using CmdStanR, with posterior counterfactual analysis via the [antitrust](https://github.com/luciu5/antitrust) R package.
 
+CmdStanR remains the default. An optional experimental Nutpie backend evaluates the same
+installed Stan programs through BridgeStan; it is an alternative NUTS sampler,
+with diagonal or low-rank adaptation. It does not change the economic model.
+
 For development, current validation commands, and research-document status,
 start with the [documentation index](doc/README.md).
 
@@ -66,6 +70,82 @@ Some integration tests also require `coordination >= 0.0.0.9006` and skip
 with older versions. CI manual dispatch accepts another `antitrust` branch
 or SHA for explicit compatibility testing. See the documentation index for
 local environment checks and validation tiers.
+
+## Optional Nutpie backend
+
+The adapter is implemented; paired HMC and counterfactual-distribution validation
+await the local run described in the [validation status](doc/validation/nutpie_backend_results.md).
+Use CmdStanR for validated production inference until those results are reviewed.
+
+A CmdStan-only installation does not need `nutpieR`, BridgeStan's R client,
+Python, or Rust. Request the optional sampler explicitly:
+
+```r
+fit <- bayes_est(
+  prices = dat$prices, quantities = dat$quantities, margins = dat$margins,
+  market = dat$market, year = dat$year, group = dat$group,
+  supply_model = "cournot", backend = "nutpie",
+  stan_options = list(chains = 4, iter = 2000, warmup = 1000, cores = 4,
+    seed = 604, control = list(adapt_delta = .95, max_treedepth = 13)),
+  nutpie_options = list(adaptation = "low_rank")
+)
+plan <- posterior_policy_draws(fit, n_draws = 200, seed = 701)
+# Reuse plan as draw_plan in both merger and tariff simulate() calls.
+```
+
+`backend = "cmdstanr"` gives the original route. `inference = "pathfinder"`
+remains CmdStan-only; Nutpie initially supports `inference = "hmc"`.
+`stan_options` supplies chains, total iterations, warmup, cores, seed, refresh,
+initial values and warmup retention; `control$adapt_delta` and
+`control$max_treedepth` translate to Nutpie target acceptance and maximum depth.
+Nutpie requires positive warmup, no thinning, and one thread within a chain.
+Unsupported controls fail explicitly. Its adaptation choice belongs in
+`nutpie_options`: `"diag"` (default) or `"low_rank"`. Low-rank
+`mass_matrix_gamma` and `mass_matrix_eigval_cutoff` are native Nutpie controls;
+CmdStan `dense_e` is a different adaptation strategy and is never translated
+implicitly. Native diagnostics and the resolved controls are retained.
+
+The adapter requires `nutpieR >= 1.9.1`. Prefer a compatible prebuilt package
+from the [official R-universe repository](https://andytimm.r-universe.dev):
+
+```r
+install.packages("nutpieR",
+  repos = c("https://andytimm.r-universe.dev", "https://cloud.r-project.org"))
+```
+
+Check the installed version. If that repository does not yet provide the
+required version for your platform, the audited source revision is:
+
+```r
+remotes::install_github("andytimm/nutpieR",
+  ref = "8e88a975d5e0b8ed3c76de84d22adb33de601a1e", upgrade = "never")
+```
+
+Source installation needs Rust >= 1.85; supported prebuilt binaries avoid that
+requirement. Runtime Stan compilation needs a C++ toolchain. No Python or PyMC
+is used. Set `options(antitrustBayes.nutpie_cache = "/writable/cache")` for
+compiled artifacts; installed package files are never compiled in place.
+Saved fits retain ordinary draw arrays, diagnostics, source/data SHA-256,
+model specification, resolved priors, versions and controls. Posterior and
+policy operations on a reloaded fit use those arrays without live native
+pointers. Evidence evaluation additionally needs the original compatible
+compiled library and its byte seal.
+
+Nutpie bridge evidence is disabled until normalized target and marginal-
+likelihood equivalence have been executed and reviewed. `bayes_compare()`
+fails explicitly for Nutpie bridge evidence and mixed-backend evidence comparisons;
+adding a flag to fit metadata cannot enable it. Predictive scoring can use
+Nutpie `log_lik`, including mixed-backend predictive-only comparisons, through the common draw interface where the existing
+likelihood permits LOO/WAIC. The restriction on ordinary observation-level
+scoring for collapsed quality is preserved. Conditional-k call generation
+forwards `backend` and `nutpie_options`; all original components remain
+required for evidence-based family weights.
+
+See the [evidence contract](doc/validation/nutpie_evidence_design.md) and
+[paired validation runner](doc/validation/nutpie_backend_validation.R).
+The runner uses fixed package fixtures, records unavailable tasks and raw
+warnings, separates compile time, and requires explicit opt-in for sampling.
+No efficiency or robustness advantage is claimed without executed validation.
 
 ## Quick Start
 

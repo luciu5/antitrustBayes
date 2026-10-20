@@ -1,6 +1,7 @@
 # Development and evidence index
 
-Reviewed 2026-10-13 against `e9fc40e`, package version `0.2.0.9005`.
+Reviewed 2026-10-19 against baseline `fff419b` and the optional Nutpie backend
+work, package version `0.2.0.9005`.
 This is the current operational agenda and navigation entrypoint. Topic contracts
 and results remain the detailed sources; historical checklists do not select work.
 Update this index when a completed task changes a status or verification route.
@@ -17,6 +18,7 @@ do not retroactively change saved fits or establish universal HMC improvement.
 | Task | Start here | Smallest relevant test filter |
 | --- | --- | --- |
 | Estimation, controls, priors | [estimation](../R/estimate.R), [priors](../R/priors.R) | `stan-control-policy`, `hierarchical-sd-priors`, `market-intercept-sd-prior`, or `residual-sd-prior` |
+| Sampler backends and paired validation | [backend adapters](../R/sampler_backend.R), [Nutpie status/results](validation/nutpie_backend_results.md), [evidence contract](validation/nutpie_evidence_design.md) | `sampler-backend|nutpie|backend-policy-equivalence` |
 | Quality/intercept reconstruction | [quality](../R/posterior_quality.R), [collapse contract](market_intercept_collapse_plan.md) | `posterior-quality|market-intercept-collapse` |
 | Evidence and exact-k comparison | [comparison](../R/bma.R), [model universe](../R/model_universe.R), [conditional k](../R/conditional_k.R) | `bma|model-universe|restriction-comparison|conditional-k` |
 | Policy states and counterfactuals | [draw plans](../R/posterior_draw_contract.R), [usage](statistical_toolkit_usage.md), [tariff contract](tariff_posterior_reuse_plan.md) | `posterior-policy-models|latent-quality-simulation|simulate-dispatch` |
@@ -85,6 +87,7 @@ checklists in the historical umbrella and recovery notes below.
 | Sampler presets and diagnostic verdicts | Proposed, unimplemented; current controls remain explicit. | [proposal](sampler_usability_followup_plan.md) |
 | Prior-predictive diagnostics | Historical requested follow-up; no general public prior-predictive interface was found in this review. Scope separately before implementation. | [historical roadmap](statistical_toolkit_followup_plan.md), [inference contract](market_prediction_inference_design.md) |
 | Recovery and model discrimination | Current bounded CmdStanR gates exist; broad repeated-sample coverage and general conduct identification remain open. | [validation entrypoint](validation/README.md) |
+| Optional Nutpie sampler | Thin backend adapters, generated-quantity extraction, policy reconstruction and deterministic regressions implemented. Paired HMC, difficult-geometry and native evidence validation await local execution; evidence/BMA remains disabled for Nutpie. CmdStanR remains the default. | [status and execution route](validation/nutpie_backend_results.md), [paired runner](validation/nutpie_backend_validation.R), [evidence design](validation/nutpie_evidence_design.md) |
 
 ## Historical checkpoints
 
