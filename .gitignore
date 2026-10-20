@@ -16,6 +16,11 @@ tmp_lib/
 
 # Research evidence and large delivery artifacts stay local.
 /.scratch/policy_ladder_repair_handoff/
+/.scratch/nutpie-validation/
+/.scratch/nutpie-library/
+/.scratch/nutpie-cache/
+/.scratch/nutpie-toolchain/
+/.scratch/nutpie-evidence-audit/
 /doc/stackelberg/*
 *.bundle
 

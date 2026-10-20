@@ -39,8 +39,8 @@ posterior and \code{BayesSpecifiedFit} stores directly supplied draws.
 
 \item{\code{metadata}}{Bayesian provenance and prior metadata.}
 
-\item{\code{stanfit}}{A CmdStanR fit object (\code{CmdStanMCMC} or exploratory
-\code{CmdStanPathfinder}).}
+\item{\code{stanfit}}{A native sampler fit: CmdStanR (\code{CmdStanMCMC} or
+exploratory \code{CmdStanPathfinder}), or a serializable Nutpie draw record.}
 
 \item{\code{stan_data}}{A \code{list} of the data passed to Stan.}
 

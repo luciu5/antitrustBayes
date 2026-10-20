@@ -224,7 +224,15 @@
 #'   compare diagnostics and elapsed time for the application.
 #'   An explicitly \code{NULL} control field delegates that field to CmdStan;
 #'   \code{control = NULL} delegates all controls.
-#' @param inference \code{"hmc"} (default) for CmdStanR sampling, or
+#' @param backend Sampler backend: \code{"cmdstanr"} (default), or optional
+#'   \code{"nutpie"}, which samples the identical installed Stan kernel using
+#'   \pkg{nutpieR}/BridgeStan. Nutpie supports HMC/NUTS only.
+#' @param nutpie_options Named backend-specific options. Use
+#'   \code{adaptation = "diag"} (default) or \code{"low_rank"}; CmdStan
+#'   metrics such as \code{dense_e} have no implicit Nutpie translation.
+#'   Chains, total iterations, warmup, cores, seed, target acceptance and depth
+#'   retain the common \code{stan_options} controls.
+#' @param inference \code{"hmc"} (default) for NUTS sampling, or
 #'   \code{"pathfinder"} for exploratory approximate draws. Pathfinder
 #'   diagnostics do not establish HMC convergence or valid model evidence.
 #' @param pathfinder_options Named CmdStanR Pathfinder options such as
@@ -245,8 +253,9 @@
 #' market-scoped quality and active residual correlation when both equations
 #' are present. Student-t residuals, sampled quality, and global quality remain
 #' available by setting the corresponding arguments explicitly. Collapsed fits
-#' retain normalized bridge evidence; their observation-level predictive arrays
-#' are unavailable for LOO/WAIC.
+#' retain normalized bridge evidence under CmdStanR; Nutpie bridge evidence is
+#' disabled pending executed target/evidence equivalence validation. Their
+#' observation-level predictive arrays are unavailable for LOO/WAIC.
 #'
 #' Two demand models are supported:
 #' \describe{
@@ -421,9 +430,20 @@ bayes_est <- function(prices, quantities, margins,
                       k_support = NULL,
                       k_prior = NULL,
                       k_scope = "market",
+                      backend = c("cmdstanr", "nutpie"),
+                      nutpie_options = list(),
                       ...) {
   cl <- match.call()
   inference <- match.arg(inference)
+  backend <- match.arg(backend)
+  if (!is.list(nutpie_options)) stop("nutpie_options must be a named list.", call. = FALSE)
+  if (backend == "nutpie" && inference != "hmc")
+    stop("The Nutpie backend supports inference = 'hmc' only; Pathfinder requires cmdstanr.", call. = FALSE)
+  if (backend == "cmdstanr" && length(nutpie_options))
+    stop("nutpie_options require backend = 'nutpie'.", call. = FALSE)
+  if (backend == "nutpie" && length(pathfinder_options))
+    stop("pathfinder_options require backend = 'cmdstanr' and inference = 'pathfinder'.", call. = FALSE)
+  if (backend == "nutpie") .nutpie_require()
   if (!is.list(stan_options) || !is.list(pathfinder_options)) {
     stop("'stan_options' and 'pathfinder_options' must be named lists.",
          call. = FALSE)
@@ -719,6 +739,7 @@ bayes_est <- function(prices, quantities, margins,
   }
   default_stan$threads_per_chain <- threads_per_chain
   default_stan$grainsize <- NULL
+  if (backend == "nutpie") .nutpie_sample_options(default_stan, nutpie_options)
 
   # Prepare Stan data based on demand model
   if (demand_model == "logit") {
@@ -872,16 +893,24 @@ bayes_est <- function(prices, quantities, margins,
   df$market_year <- market_year_size$market_year_labels[df$market_year_idx]
   df$N_mt <- market_year_size$N_mt[df$market_year_idx]
 
-  # Compile the unchanged kernel once per source/CmdStan version, then infer.
-  stan_mod <- .cmdstan_model_for_kernel(stan_kernel)
-  stan_data_names <- names(stan_mod$variables()$data)
+  # Both backends receive the exact declared data from the unchanged kernel.
+  # CmdStan follows its existing compile/sample path, including Pathfinder.
+  if (backend == "cmdstanr") {
+    stan_mod <- .cmdstan_model_for_kernel(stan_kernel)
+    stan_data_names <- names(stan_mod$variables()$data)
+  } else {
+    stan_data_names <- .nutpie_stan_data_fields(stan_kernel)
+    stan_mod <- .nutpie_model_for_kernel(stan_kernel)
+  }
   missing_stan_data <- setdiff(stan_data_names, names(stan_data))
   if (length(missing_stan_data)) {
     stop("Prepared data are missing Stan field(s): ",
          paste(missing_stan_data, collapse = ", "), ".", call. = FALSE)
   }
   cmdstan_data <- stan_data[stan_data_names]
-  if (identical(inference, "hmc")) {
+  if (backend == "nutpie") {
+    stanfit <- .nutpie_sample(stan_mod, cmdstan_data, default_stan, nutpie_options)
+  } else if (identical(inference, "hmc")) {
     stanfit <- do.call(stan_mod$sample, c(
       list(data = cmdstan_data), .cmdstan_sample_options(default_stan)
     ))
@@ -891,17 +920,14 @@ bayes_est <- function(prices, quantities, margins,
       .cmdstan_pathfinder_options(pathfinder_options)
     ))
   }
-  .assert_stan_sampling_contract(
-    stanfit,
-    requested_chains = default_stan$chains,
-    inference = inference
-  )
-  ## CmdStanR reads CSV lazily. Materialize all retained draws before returning
-  ## the fit so ordinary saveRDS() works after temporary CSV files disappear.
-  invisible(stanfit$draws())
+  .bayes_backend_sampling_contract(stanfit,
+    requested_chains = default_stan$chains, inference = inference)
+  # Materialize retained draws so saveRDS() survives removal of sampler files.
+  retained_shape <- dim(.bayes_backend_draws(stanfit))
+  native_metadata <- .bayes_backend_provenance(stanfit)$metadata
 
   metadata <- package_provenance(df, prior_manifest, model_prior)
-  metadata$backend <- "cmdstanr"
+  metadata$backend <- backend
   metadata$inference <- inference
   metadata$stan_kernel <- stan_kernel
   metadata$stan_source_hash <- digest::digest(
@@ -909,7 +935,40 @@ bayes_est <- function(prices, quantities, margins,
   )
   metadata$stan_data_fields <- stan_data_names
   metadata$stan_data_hash <- digest::digest(cmdstan_data, algo = "sha256")
-  metadata$cmdstan_version <- as.character(cmdstanr::cmdstan_version())
+  metadata$backend_version <- as.character(utils::packageVersion(
+    if (backend == "cmdstanr") "cmdstanr" else "nutpieR"))
+  if (backend == "cmdstanr") {
+    metadata$cmdstan_version <- as.character(cmdstanr::cmdstan_version())
+  } else {
+    metadata$sampler <- .bayes_backend_provenance(stanfit)
+    metadata$nutpieR_version <- metadata$backend_version
+  }
+  metadata$sampler_controls <- list(
+    seed = native_metadata$seed %||% default_stan$seed,
+    chains = as.integer(default_stan$chains),
+    warmup = as.integer(default_stan$warmup),
+    retained_draws = as.integer(retained_shape[[1L]]),
+    postwarmup_iterations = as.integer(default_stan$iter - default_stan$warmup),
+    thin = default_stan$thin %||% 1L,
+    cores = as.integer(default_stan$cores),
+    target_accept = default_stan$control$adapt_delta,
+    max_depth = default_stan$control$max_treedepth,
+    adaptation = if (backend == "cmdstanr") default_stan$control$metric %||% "diag_e" else
+      stanfit$metadata$resolved_options$adaptation
+  )
+  metadata$sampler_controls$delegated_to_backend <- c(
+    if (is.null(default_stan$control$adapt_delta)) "target_accept",
+    if (is.null(default_stan$control$max_treedepth)) "max_depth"
+  )
+  metadata$sampler_controls$native_control_source <- if (backend == "nutpie")
+    "metadata$sampler$metadata$sampler_config" else "stanfit$metadata()"
+  if (inference == "pathfinder") {
+    metadata$sampler_controls <- list(
+      inference = "pathfinder", seed = native_metadata$seed %||% pathfinder_options$seed,
+      retained_draws = prod(retained_shape[1:2]), requested = pathfinder_options,
+      native_control_source = "stanfit$metadata()"
+    )
+  }
   metadata$pathfinder_pareto_k <- if (identical(inference, "pathfinder"))
     .cmdstan_pathfinder_pareto_k(stanfit) else NA_real_
   metadata$inference_status <- if (identical(inference, "hmc")) "hmc_unreviewed" else

@@ -9,7 +9,8 @@ Authors@R: c(
            role = c("aut", "cre"))
     )
 Description: Bayesian estimation of differentiated products demand and supply
-    models using 'Stan' via 'CmdStanR', with counterfactual simulation via the
+    models using 'Stan' via 'CmdStanR' or the optional 'nutpieR' backend,
+    with counterfactual simulation via the
     'antitrust' package. Provides posterior distributions of price effects,
     consumer welfare changes, and other competition metrics. Supports Bayesian model
     averaging and comparison across supply models using bridge sampling,
@@ -37,7 +38,9 @@ Suggests:
     knitr,
     rmarkdown,
     ggplot2,
-    bayesplot
+    bayesplot,
+    nutpieR (>= 1.9.1),
+    bridgestan
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/antitrustBayes/qa-canonical-r: 4.6.1
@@ -48,6 +51,7 @@ Collate:
     'calibrated_market.R'
     'cmdstan_backend.R'
     'sampler_backend.R'
+    'nutpie_backend.R'
     'conditional_k.R'
     'conduct.R'
     'data.R'

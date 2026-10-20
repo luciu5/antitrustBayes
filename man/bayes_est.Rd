@@ -49,6 +49,8 @@ bayes_est(
   k_support = NULL,
   k_prior = NULL,
   k_scope = "market",
+  backend = c("cmdstanr", "nutpie"),
+  nutpie_options = list(),
   ...
 )
 }
@@ -246,7 +248,17 @@ compare diagnostics and elapsed time for the application.
 An explicitly \code{NULL} control field delegates that field to CmdStan;
 \code{control = NULL} delegates all controls.}
 
-\item{inference}{\code{"hmc"} (default) for CmdStanR sampling, or
+\item{backend}{Sampler backend: \code{"cmdstanr"} (default), or optional
+\code{"nutpie"}, which samples the identical installed Stan kernel using
+\pkg{nutpieR}/BridgeStan. Nutpie supports HMC/NUTS only.}
+
+\item{nutpie_options}{Named backend-specific options. Use
+\code{adaptation = "diag"} (default) or \code{"low_rank"}; CmdStan
+metrics such as \code{dense_e} have no implicit Nutpie translation.
+Chains, total iterations, warmup, cores, seed, target acceptance and depth
+retain the common \code{stan_options} controls.}
+
+\item{inference}{\code{"hmc"} (default) for NUTS sampling, or
 \code{"pathfinder"} for exploratory approximate draws. Pathfinder
 diagnostics do not establish HMC convergence or valid model evidence.}
 
@@ -307,8 +319,9 @@ New fits default to Gaussian share and margin residuals with collapsed,
 market-scoped quality and active residual correlation when both equations
 are present. Student-t residuals, sampled quality, and global quality remain
 available by setting the corresponding arguments explicitly. Collapsed fits
-retain normalized bridge evidence; their observation-level predictive arrays
-are unavailable for LOO/WAIC.
+retain normalized bridge evidence under CmdStanR; Nutpie bridge evidence is
+disabled pending executed target/evidence equivalence validation. Their
+observation-level predictive arrays are unavailable for LOO/WAIC.
 
 Two demand models are supported:
 \describe{

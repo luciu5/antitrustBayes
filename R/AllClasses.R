@@ -16,8 +16,8 @@ setOldClass(c("bayes_market", "list"))
 #' @slot market_side Character market-side identifier.
 #' @slot call The matched construction call.
 #' @slot metadata Bayesian provenance and prior metadata.
-#' @slot stanfit A CmdStanR fit object (\code{CmdStanMCMC} or exploratory
-#'   \code{CmdStanPathfinder}).
+#' @slot stanfit A native sampler fit: CmdStanR (\code{CmdStanMCMC} or
+#'   exploratory \code{CmdStanPathfinder}), or a serializable Nutpie draw record.
 #' @slot stan_data A \code{list} of the data passed to Stan.
 #' @slot price_sd Numeric scalar: the standard deviation of prices (logit) or
 #'   log-prices (CES) used for standardization.
