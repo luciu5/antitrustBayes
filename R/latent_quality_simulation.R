@@ -369,7 +369,7 @@
   version <- as.integer(version)
   if (version == 1L && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
     if (is.null(fit@stanfit)) stop("Cannot validate a legacy plan without its Stan fit.", call. = FALSE)
-    draws <- .cmdstan_extract(fit@stanfit)
+    draws <- .bayes_backend_extract(fit@stanfit)
   }
   if (version %in% c(2L, 3L) && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
     draws <- .posterior_extract(fit, "policy_plan")
@@ -549,7 +549,7 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
   if (signature_version == 1L && !methods::is(fit, "BayesSpecifiedFit")) {
     ## Explicit compatibility path: v1 hashes the old unrestricted extract.
     if (is.null(fit@stanfit)) stop("Cannot validate a legacy plan without its Stan fit.", call. = FALSE)
-    draws <- .cmdstan_extract(fit@stanfit)
+    draws <- .bayes_backend_extract(fit@stanfit)
   } else if (!methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
     draws <- .posterior_extract(fit, "policy_plan")
   }

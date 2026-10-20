@@ -28,6 +28,7 @@ Imports:
     coordination (>= 0.0.0.9003),
     bridgesampling (>= 1.1.0),
     digest,
+    posterior,
     loo (>= 2.5.0),
     parallel,
     stats
@@ -46,6 +47,7 @@ Collate:
     'bma.R'
     'calibrated_market.R'
     'cmdstan_backend.R'
+    'sampler_backend.R'
     'conditional_k.R'
     'conduct.R'
     'data.R'

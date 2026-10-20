@@ -126,7 +126,7 @@ setGeneric("wtp_convert", function(object, to_gamma = TRUE)
 setMethod("wtp_convert", "BayesLogit", function(object, to_gamma = TRUE) {
   p_bar <- mean(object@data$prices)
   mu_log_a_draws <- as.vector(
-    .cmdstan_extract(object@stanfit, "mu_log_a")[[1]]
+    .bayes_backend_extract(object@stanfit, "mu_log_a")[[1]]
   )
 
   if (to_gamma) {
@@ -164,6 +164,8 @@ setMethod("show", "BayesLogit", function(object) {
     "logit"
   }
   cat("Bayesian", demand_label, "Demand Estimation\n")
+  if (!is.null(object@metadata$backend))
+    cat("  Sampler backend:", object@metadata$backend, "\n")
   cat("  Supply model:", supply_names[object@supply_model], "\n")
   cat("  Observations:", nrow(object@data), "\n")
   cat("  Markets:", length(unique(object@data$market)), "\n")
@@ -178,7 +180,7 @@ setMethod("show", "BayesLogit", function(object) {
   cat(" ", price_label, "(scaling):", round(object@price_sd, 4), "\n")
 
   # Basic MCMC diagnostics
-  fit_summary <- object@stanfit$summary(
+  fit_summary <- .bayes_backend_summary(object@stanfit,
     variables = c("mu_log_a", "sigma_share", "sigma_margin")
   )
   cat("\nKey parameter estimates:\n")
@@ -205,7 +207,7 @@ setMethod("show", "BayesLogit", function(object) {
 #' @param object A \code{BayesLogit} object.
 #' @exportMethod summary
 setMethod("summary", "BayesLogit", function(object) {
-  s <- object@stanfit$summary()
+  s <- .bayes_backend_summary(object@stanfit)
   print(s)
   invisible(s)
 })

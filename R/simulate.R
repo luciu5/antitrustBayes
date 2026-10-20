@@ -1042,7 +1042,7 @@ NULL
   draws <- if (specified) NULL else if (legacy_plan) {
     ## Version-1 plans hash the old unrestricted extract.  This is the one
     ## deliberate compatibility exception to the selective draw contract.
-    .cmdstan_extract(object@stanfit)
+    .bayes_backend_extract(object@stanfit)
   } else .posterior_extract(
     object,
     if (!is.null(draw_plan) || identical(demand_anchoring, "latent_quality"))

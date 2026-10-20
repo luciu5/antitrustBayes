@@ -65,7 +65,7 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
   legacy_plan <- is.list(draw_plan) && is.list(draw_plan$fit_signature) &&
     (is.null(draw_plan$fit_signature$fit_signature_version) ||
      identical(as.integer(draw_plan$fit_signature$fit_signature_version), 1L))
-  draws <- if (specified) NULL else if (legacy_plan) .cmdstan_extract(fit@stanfit)
+  draws <- if (specified) NULL else if (legacy_plan) .bayes_backend_extract(fit@stanfit)
     else .posterior_extract(fit, "policy_plan")
   plan <- if (is.null(draw_plan))
     .lq_make_policy_plan(fit, draws, n_draws = n_draws,

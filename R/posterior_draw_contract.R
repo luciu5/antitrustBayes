@@ -6,22 +6,7 @@
   if (methods::is(fit, "BayesSpecifiedFit") || is.null(fit@stanfit)) {
     return(character())
   }
-  st <- fit@stanfit
-  if (inherits(st, "CmdStanFit")) {
-    return(unique(as.character(st$metadata()$stan_variables)))
-  }
-  slots <- methods::slotNames(st)
-  ## `model_pars` describes everything compiled into the Stan model. The
-  ## retained `sim$pars_oi` list is authoritative for a serialized fit:
-  ## compiled fields can be absent from the retained draws.
-  if ("sim" %in% slots && is.list(st@sim) &&
-      is.character(st@sim$pars_oi) && length(st@sim$pars_oi)) {
-    return(unique(as.character(st@sim$pars_oi)))
-  }
-  if ("model_pars" %in% slots && is.character(st@model_pars)) {
-    return(unique(as.character(st@model_pars)))
-  }
-  character()
+  .bayes_backend_variable_names(fit@stanfit)
 }
 
 .posterior_contract_structure <- function(fit) {
@@ -320,7 +305,7 @@
 .posterior_extract <- function(fit, purpose = "simulation", conditioning = "auto") {
   if (methods::is(fit, "BayesSpecifiedFit")) return(NULL)
   contract <- .posterior_contract(fit, purpose, conditioning)
-  raw <- .cmdstan_extract(fit@stanfit, variables = contract$actual)
+  raw <- .bayes_backend_extract(fit@stanfit, variables = contract$actual)
   .posterior_normalize_draw_names(raw, contract)
 }
 
