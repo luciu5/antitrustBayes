@@ -68,3 +68,52 @@ test_that("component scheduling preserves failed fits and explicit numerical opt
   expect_s3_class(result$fits[[2]], "error")
   expect_identical(result$fits[[3]]$k_support, 3L)
 })
+
+test_that("conditional evidence retains failed repetitions without dropping any k state", {
+  logml <- c(`1` = -1, `2` = -2, `3` = -3)
+  prior <- c(.2, .3, .5)
+  attempts <- rbind(first = logml, second = c(-.9, NA, -2.9),
+    third = logml - .1, fourth = c(NA, -1.8, -2.8))
+  colnames(attempts) <- names(logml)
+  result <- bayes_combine_conditional_k(logml, 1:3, prior, attempts)
+  expected <- log(sum(exp(logml) * prior))
+  expect_equal(result$logml, expected)
+  expect_equal(result$posterior_k$probability, unname(exp(logml) * prior / exp(expected)))
+  expect_identical(result$component_repetitions, attempts)
+  expect_identical(result$requested_repetitions, 4L)
+  expect_identical(result$completed_repetitions, 2L)
+  expect_identical(result$component_completed_repetitions, c(`1` = 3L, `2` = 3L, `3` = 4L))
+  expect_equal(result$repetitions, c(first = expected, second = NA, third = expected - .1, fourth = NA))
+  expect_equal(result$logml_sd, sd(c(expected, expected - .1)))
+  expect_identical(result$numerical_status, "partial")
+  missing_component <- logml; missing_component[2L] <- NA_real_
+  expect_error(bayes_combine_conditional_k(missing_component, 1:3, prior, attempts), "Every original")
+  expect_error(bayes_combine_conditional_k(logml[-2L], 1:3, prior, attempts), "Every original")
+  zero_prior <- c(0, .4, .6)
+  failed_zero <- attempts[1L, , drop = FALSE]; failed_zero[1L, 1L] <- NA_real_
+  zero <- bayes_combine_conditional_k(logml, 1:3, zero_prior, failed_zero)
+  expect_true(is.finite(zero$logml))
+  expect_true(is.na(zero$repetitions[[1L]]))
+  expect_error(bayes_combine_conditional_k(c(`1` = NA_real_, logml[-1L]), 1:3,
+    zero_prior), "Every original")
+})
+
+test_that("conditional repeat variability stays unavailable without two joint complete attempts", {
+  logml <- c(`1` = -1, `2` = -2)
+  one <- matrix(logml, 1L, dimnames = list("only", names(logml)))
+  result <- bayes_combine_conditional_k(logml, 1:2, repetitions = one)
+  expect_true(is.finite(result$logml))
+  expect_true(is.na(result$logml_sd))
+  expect_identical(result$completed_repetitions, 1L)
+  expect_identical(result$numerical_status, "complete")
+  disjoint <- rbind(c(-1, NA), c(NA, -2)); colnames(disjoint) <- names(logml)
+  result <- bayes_combine_conditional_k(logml, 1:2, repetitions = disjoint)
+  expect_true(is.finite(result$logml))
+  expect_true(all(is.na(result$repetitions)))
+  expect_true(is.na(result$logml_sd))
+  expect_identical(result$completed_repetitions, 0L)
+  expect_identical(result$component_completed_repetitions, c(`1` = 1L, `2` = 1L))
+  expect_identical(result$numerical_status, "unavailable")
+  disjoint[1L, 2L] <- Inf
+  expect_error(bayes_combine_conditional_k(logml, 1:2, repetitions = disjoint), "finite values or NA")
+})

@@ -76,6 +76,13 @@
 #' @param prior_weights Numeric vector of scientific prior probabilities, in
 #'   the same order as \code{hypotheses}.
 #' @return An object of class \code{bayes_model_universe}.
+#' @details The resulting comparison table separates point-evidence
+#'   availability from bridge repetition completeness. Its \code{status}
+#'   attribute retains the complete-support contract; \code{numerical_status},
+#'   requested/completed repetition columns and \code{bridge_context_info}
+#'   retain incomplete attempts. Finite estimates can yield probabilities with
+#'   partial repetitions. Missing positive-prior evidence still withholds all
+#'   probabilities. Sampler diagnostics remain in \code{backend_metadata}.
 #' @export
 bayes_model_universe <- function(hypotheses, prior_weights) {
   if (!is.list(hypotheses) || !length(hypotheses) ||
@@ -727,6 +734,25 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   m + log(sum(exp(x[finite] - m)))
 }
 
+.mu_source_numerics <- function(source_evidence, source) {
+  info <- attr(source_evidence, "bridge_context_info", exact = TRUE)[[source]]
+  count <- function(value) {
+    if (is.numeric(value) && length(value) == 1L && is.finite(value) &&
+        value >= 0 && value == floor(value)) as.integer(value) else NA_integer_
+  }
+  requested <- count(info$requested_repetitions)
+  completed <- count(info$completed_repetitions)
+  status <- info$status
+  if (length(status) != 1L || is.na(status) ||
+      !status %in% c("complete", "partial", "unavailable")) {
+    status <- if (is.finite(requested) && is.finite(completed)) {
+      if (completed == 0L) "unavailable" else
+        if (completed < requested) "partial" else "complete"
+    } else "unreported"
+  }
+  list(status = status, requested = requested, completed = completed)
+}
+
 .mu_result_from_evidence <- function(rows, source_evidence, prior_weights,
                                      status_override = NULL,
                                      restriction_results = NULL) {
@@ -738,6 +764,7 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   evidence_bad <- FALSE
   for (i in seq_len(n)) {
     row <- rows[[i]]
+    numerics <- .mu_source_numerics(source_evidence, row$source)
     source_row <- source_evidence[match(row$source, source_evidence$model), , drop = FALSE]
     if (!nrow(source_row)) {
       source_logml <- NA_real_; source_sd <- NA_real_
@@ -805,6 +832,10 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
       posterior_mass = posterior_mass, logml_source = source_logml,
       logml_restricted = restricted, log_evidence_vs_source = log_ratio,
       logml_sd = source_sd,
+      point_estimate_available = is.finite(restricted),
+      numerical_status = if (is.finite(restricted)) numerics$status else "unavailable",
+      requested_repetitions = numerics$requested,
+      completed_repetitions = numerics$completed,
       restriction_method = as.character(.mu_or(restriction$method, "encompassing_prior")),
       evidence_status = if (is.na(restricted)) "bridge_failed" else
         if (linear_underflow) "restriction_mass_underflow" else
@@ -835,7 +866,12 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
     }
   }
   rownames(out) <- NULL
-  list(table = out, status = status)
+  contributing <- out$prior_weight > 0
+  numerical_status <- if (any(!out$point_estimate_available[contributing]) ||
+      any(out$numerical_status[contributing] == "unavailable")) "unavailable" else
+    if (any(out$numerical_status[contributing] == "partial")) "partial" else
+      if (any(out$numerical_status[contributing] == "unreported")) "unreported" else "complete"
+  list(table = out, status = status, numerical_status = numerical_status)
 }
 
 .bayes_compare_universe <- function(args, universe, bridge, bridge_maxiter,
@@ -875,9 +911,11 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
     table$logml[finite] - max(table$logml[finite])
   )
   attr(table, "status") <- result$status
+  attr(table, "numerical_status") <- result$numerical_status
   attr(table, "descriptor") <- descriptor
   attr(table, "source_comparison") <- source_evidence
   attr(table, "backend_metadata") <- attr(source_evidence, "backend_metadata")
+  attr(table, "bridge_context_info") <- attr(source_evidence, "bridge_context_info")
   attr(table, "diagnostics") <- list(
     evidence_identity = "Z_restricted = Z_source * posterior_mass / prior_mass",
     multimarket_mass = "within_draw_market_product_then_draw_average",

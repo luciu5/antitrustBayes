@@ -99,12 +99,19 @@ bayes_est_conditional_k <- function(..., k_support, k_prior = NULL,
 #' @param k_support Complete original support, in order, supplied explicitly so
 #'   a missing component cannot redefine the hypothesis.
 #' @param k_prior Original k probabilities; defaults to uniform.
-#' @param repetitions Optional finite matrix with repetitions in rows and k
-#'   states in columns, named in support order. The reported SD is bridge repeat
-#'   variability, not a certificate of evidence accuracy.
+#' @param repetitions Optional numeric matrix with repetitions in rows and k
+#'   states in columns, named in support order. Failed attempts may be
+#'   \code{NA}; every original k column and every attempted row is retained.
+#'   A combined repetition is available only when that row is finite for every
+#'   k state. The reported SD uses complete rows and is unavailable with fewer
+#'   than two; it measures bridge repeat variability, not evidence accuracy.
 #' @return A list with \code{logml}, \code{posterior_k}, original \code{k_prior},
-#'   and combined repetitions/\code{logml_sd} when supplied. This represents one
-#'   scientific conduct hypothesis, not additional top-level model candidates.
+#'   and combined repetitions/\code{logml_sd} when supplied. The original
+#'   matrix is retained in \code{component_repetitions}; requested, joint
+#'   completed and per-component completed repetition counts and
+#'   \code{numerical_status} describe repetition availability separately from
+#'   the finite point estimate. This represents one scientific conduct
+#'   hypothesis, not additional top-level model candidates.
 #' @export
 bayes_combine_conditional_k <- function(logml, k_support,
                                        k_prior = NULL, repetitions = NULL) {
@@ -121,13 +128,28 @@ bayes_combine_conditional_k <- function(logml, k_support,
   total <- log_sum(log_weight)
   out <- list(logml = total, k_prior = prior,
     posterior_k = data.frame(k = as.integer(k_support), probability = exp(log_weight - total)),
-    component_logml = logml, repetitions = NULL, logml_sd = NA_real_)
+    component_logml = logml, repetitions = NULL, logml_sd = NA_real_,
+    component_repetitions = NULL, requested_repetitions = 0L,
+    completed_repetitions = 0L,
+    component_completed_repetitions = stats::setNames(integer(length(labels)), labels),
+    numerical_status = "unreported")
   if (!is.null(repetitions)) {
-    if (!is.matrix(repetitions) || !is.numeric(repetitions) || nrow(repetitions) < 2L ||
-        !identical(colnames(repetitions), labels) || any(!is.finite(repetitions)))
-      stop("repetitions must have at least two finite rows and all original k columns.", call. = FALSE)
-    out$repetitions <- apply(repetitions, 1L, function(x) log_sum(x + log(prior)))
-    out$logml_sd <- stats::sd(out$repetitions)
+    if (!is.matrix(repetitions) || !is.numeric(repetitions) || nrow(repetitions) < 1L ||
+        !identical(colnames(repetitions), labels) ||
+        any(!is.finite(repetitions) & !is.na(repetitions)))
+      stop("repetitions must have at least one numeric row, all original k columns, and finite values or NA failures.", call. = FALSE)
+    complete <- rowSums(is.finite(repetitions)) == length(labels)
+    out$component_repetitions <- repetitions
+    out$requested_repetitions <- as.integer(nrow(repetitions))
+    out$component_completed_repetitions <- stats::setNames(
+      as.integer(colSums(is.finite(repetitions))), labels)
+    out$completed_repetitions <- as.integer(sum(complete))
+    out$repetitions <- stats::setNames(rep(NA_real_, nrow(repetitions)), rownames(repetitions))
+    if (any(complete)) out$repetitions[complete] <- apply(
+      repetitions[complete, , drop = FALSE], 1L, function(x) log_sum(x + log(prior)))
+    if (sum(complete) >= 2L) out$logml_sd <- stats::sd(out$repetitions[complete])
+    out$numerical_status <- if (all(complete)) "complete" else
+      if (any(complete)) "partial" else "unavailable"
   }
   out
 }

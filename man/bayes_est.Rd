@@ -248,16 +248,6 @@ compare diagnostics and elapsed time for the application.
 An explicitly \code{NULL} control field delegates that field to CmdStan;
 \code{control = NULL} delegates all controls.}
 
-\item{backend}{Sampler backend: \code{"cmdstanr"} (default), or optional
-\code{"nutpie"}, which samples the identical installed Stan kernel using
-\pkg{nutpieR}/BridgeStan. Nutpie supports HMC/NUTS only.}
-
-\item{nutpie_options}{Named backend-specific options. Use
-\code{adaptation = "diag"} (default) or \code{"low_rank"}; CmdStan
-metrics such as \code{dense_e} have no implicit Nutpie translation.
-Chains, total iterations, warmup, cores, seed, target acceptance and depth
-retain the common \code{stan_options} controls.}
-
 \item{inference}{\code{"hmc"} (default) for NUTS sampling, or
 \code{"pathfinder"} for exploratory approximate draws. Pathfinder
 diagnostics do not establish HMC convergence or valid model evidence.}
@@ -303,6 +293,22 @@ a uniform prior.}
 \item{k_scope}{Legacy cutoff scope selector. Exact ordered-k uses one
 partition and one firm ranking for the complete market panel.}
 
+\item{backend}{Sampler backend: \code{"cmdstanr"} (default), or optional
+\code{"nutpie"}, which samples the identical installed Stan kernel using
+\pkg{nutpieR}/BridgeStan. Nutpie supports HMC/NUTS only.}
+
+\item{nutpie_options}{Named backend-specific options. Use
+\code{adaptation = "diag"} (default) or \code{"low_rank"}; CmdStan
+metrics such as \code{dense_e} have no implicit Nutpie translation.
+Chains, total iterations, warmup, cores, seed, target acceptance and depth
+retain the common \code{stan_options} controls.
+Expert debugging options include \code{store_divergences},
+\code{store_mass_matrix}, \code{store_unconstrained}, and
+\code{store_gradient}. Combine these with \code{save_warmup = TRUE} in
+\code{stan_options} to retain adaptation traces; these can substantially
+increase fit size. \code{mindepth}, \code{extra_doublings} and
+\code{max_energy_error} are backend-native controls, not automatic tuning.}
+
 \item{...}{Additional arguments (currently unused).}
 }
 \value{
@@ -319,9 +325,14 @@ New fits default to Gaussian share and margin residuals with collapsed,
 market-scoped quality and active residual correlation when both equations
 are present. Student-t residuals, sampled quality, and global quality remain
 available by setting the corresponding arguments explicitly. Collapsed fits
-retain normalized bridge evidence under CmdStanR; Nutpie bridge evidence is
-disabled pending executed target/evidence equivalence validation. Their
-observation-level predictive arrays are unavailable for LOO/WAIC.
+support normalized bridge evidence under either backend through
+\code{\link{bayes_compare}}. Nutpie evidence additionally requires the
+optional \pkg{bridgestan} R client and a compatible target library. If the
+saved library is unavailable, its target can be reconstructed from the
+exact matching installed Stan source and saved data in the external cache.
+Sampler diagnostics remain available for review and do not act as evidence
+permissions. Collapsed fits' observation-level predictive arrays remain
+unavailable for LOO/WAIC.
 
 Two demand models are supported:
 \describe{

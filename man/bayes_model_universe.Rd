@@ -25,6 +25,14 @@ states are represented by the canonical simultaneous MC, B, and C hypotheses;
 exact fringe and Stackelberg families must retain strictly interior states.
 Evidence for a restricted family is corrected by its posterior restriction
 mass divided by its recorded prior restriction mass.
+
+The resulting comparison table separates point-evidence availability from
+bridge repetition completeness. Its \code{status} attribute retains the
+complete-support contract; \code{numerical_status}, requested/completed
+repetition columns and \code{bridge_context_info} retain incomplete attempts.
+Finite estimates can yield probabilities with partial repetitions. Missing
+positive-prior evidence still withholds all probabilities. Sampler
+diagnostics remain in \code{backend_metadata}.
 }
 \examples{
 \donttest{

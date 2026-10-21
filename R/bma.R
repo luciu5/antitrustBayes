@@ -196,28 +196,9 @@ validate_comparison_contract <- function(fits) {
 }
 
 .bayes_comparison_backends <- function(fits, require_evidence = TRUE) {
-  backends <- vapply(fits, .bayes_comparison_backend, character(1))
-  if (isTRUE(require_evidence) && length(unique(backends)) > 1L) {
-    stop("Mixed-backend comparison is unavailable until normalized target ",
-         "and evidence equivalence have been validated; use fits from one ",
-         "backend for the complete candidate set.", call. = FALSE)
-  }
-  backends
-}
-
-## Enable only after the executed same-kernel target/evidence validation in
-## doc/validation/nutpie_evidence_design.md. Saved metadata cannot enable it.
-.bayes_nutpie_bridge_validated <- FALSE
-
-.bayes_require_nutpie_bridge <- function() {
-  if (!isTRUE(.bayes_nutpie_bridge_validated)) {
-    stop("Nutpie bridge evidence is unavailable: normalized BridgeStan ",
-         "target and marginal-likelihood equivalence with CmdStanR have not ",
-         "been validated. No model probabilities can be computed from this ",
-         "candidate set. See doc/validation/nutpie_evidence_design.md.",
-         call. = FALSE)
-  }
-  invisible(TRUE)
+  # A sampler is computational provenance, not part of a model hypothesis.
+  # Each fit still satisfies its own normalized-target/scientific contracts.
+  vapply(fits, .bayes_comparison_backend, character(1))
 }
 
 .bayes_bridge_data <- function(fit, fields = fit@metadata$stan_data_fields) {
@@ -236,27 +217,99 @@ validate_comparison_contract <- function(fits) {
   data
 }
 
-## Construct a normalized evaluator for validation without enabling public
-## Nutpie bridge evidence. Loading an existing shared library never samples
-## or compiles a model, downloads sources, or revives a serialized pointer.
-.bayes_nutpie_bridge_context <- function(fit, contract = NULL) {
-  if (is.null(contract)) contract <- .bayes_nutpie_evidence_contract(fit)
+## These two wrappers keep the restoration boundary testable without compiling
+## a model or loading a native library in ordinary tests.
+.bayes_nutpie_bridge_client_version <- function() {
   if (!requireNamespace("bridgestan", quietly = TRUE)) {
     stop("Nutpie bridge target evaluation requires the optional 'bridgestan' R package.",
          call. = FALSE)
   }
+  as.character(utils::packageVersion("bridgestan"))
+}
+
+.bayes_nutpie_bridge_model <- function(lib, data_file, seed) {
+  bridgestan::StanModel$new(lib, data_file, as.integer(seed))
+}
+
+.bayes_nutpie_bridge_library_alias <- function(lib, expected_hash) {
+  if (!is.character(expected_hash) || length(expected_hash) != 1L ||
+      is.na(expected_hash) || !grepl("^[0-9a-f]{64}$", expected_hash) ||
+      !identical(expected_hash, digest::digest(file = lib, algo = "sha256"))) {
+    stop("Nutpie evidence library changed before native loading.", call. = FALSE)
+  }
+  directory <- file.path(.nutpie_cache_base(), "bridge-evidence", "loaded", expected_hash)
+  if (!dir.exists(directory) && !dir.create(directory, recursive = TRUE, showWarnings = FALSE)) {
+    stop("Cannot create the Nutpie evidence loader cache: ", directory, call. = FALSE)
+  }
+  ## BridgeStan R resolves C symbols by DLL basename. Every library, including
+  ## a valid saved library, needs a content-specific name to avoid stale images.
+  ## Keep copies in the external cache; the source artifact may be read only.
+  alias <- file.path(directory, paste0("antitrustBayes_", expected_hash, ".", tools::file_ext(lib)))
+  if (!file.exists(alias)) {
+    staging <- tempfile("library-", tmpdir = directory)
+    on.exit(unlink(staging), add = TRUE)
+    if (!file.copy(lib, staging) ||
+        !identical(expected_hash, digest::digest(file = staging, algo = "sha256"))) {
+      stop("Cannot retain a verified Nutpie evidence library copy.", call. = FALSE)
+    }
+    if (!file.exists(alias) && !file.rename(staging, alias) && !file.exists(alias)) {
+      stop("Cannot publish the verified Nutpie evidence library copy in the external cache.",
+           call. = FALSE)
+    }
+  }
+  if (!identical(expected_hash, digest::digest(file = alias, algo = "sha256"))) {
+    stop("Nutpie evidence loader-cache library failed its integrity check.", call. = FALSE)
+  }
+  normalizePath(alias, mustWork = TRUE)
+}
+
+.bayes_nutpie_bridge_load <- function(lib, data_file, seed, client_version, expected_hash) {
+  alias <- .bayes_nutpie_bridge_library_alias(lib, expected_hash)
+  model <- .bayes_nutpie_bridge_model(alias, data_file, seed)
+  version <- model$model_version()
+  native_version <- paste(version$major, version$minor, version$patch, sep = ".")
+  if (!identical(native_version, client_version)) {
+    stop("Normalized Nutpie target evaluation requires a 'bridgestan' R package matching ",
+         "the restored model ABI (", native_version, "); installed client is ",
+         client_version, ".", call. = FALSE)
+  }
+  list(model = model, path = alias, hash = expected_hash, bridgestan_version = native_version,
+       model_info = tryCatch(model$model_info(), error = function(e) NA_character_))
+}
+
+## Rebuild through the ordinary external cache. Integrity/load failures use a
+## fresh cache namespace so nutpieR cannot return the rejected cached binary.
+.bayes_nutpie_bridge_rebuild <- function(kernel, fresh = FALSE) {
+  base <- file.path(.nutpie_cache_base(), "bridge-evidence")
+  if (!dir.exists(base) && !dir.create(base, recursive = TRUE, showWarnings = FALSE)) {
+    stop("Cannot create Nutpie evidence restoration cache: ", base, call. = FALSE)
+  }
+  if (fresh) base <- tempfile("rebuild-", tmpdir = base)
+  old <- options(antitrustBayes.nutpie_cache = base)
+  on.exit(options(old), add = TRUE)
+  compiled <- .nutpie_model_for_kernel(kernel)
+  lib <- compiled$metadata$lib_path
+  hash <- compiled$metadata$lib_hash
+  if (!is.character(lib) || length(lib) != 1L || is.na(lib) || !file.exists(lib) ||
+      !identical(hash, digest::digest(file = lib, algo = "sha256"))) {
+    stop("Reconstructed Nutpie evidence library failed its integrity check.", call. = FALSE)
+  }
+  compiled$metadata$compiled_lib_path <- lib
+  compiled
+}
+
+## Restore a normalized target from a verified binary, or reconstruct the same
+## installed Stan kernel when the saved artifact cannot be used. Source/data
+## validation always precedes native loading or compilation. No sampling occurs.
+.bayes_nutpie_bridge_context <- function(fit, contract = NULL) {
+  checked <- .bayes_nutpie_evidence_contract(fit)
+  if (!is.null(contract) && !identical(contract, checked)) {
+    stop("Supplied Nutpie evidence contract differs from current verified provenance.",
+         call. = FALSE)
+  }
+  contract <- checked
+  .nutpie_assert_fit(fit@stanfit, "hmc")
   native <- fit@stanfit$metadata
-  lib <- native$lib_path
-  if (!is.character(lib) || length(lib) != 1L || is.na(lib) ||
-      !file.exists(lib) || !grepl("\\.(so|dll|dylib)$", lib)) {
-    stop("The saved Nutpie BridgeStan shared library is unavailable; normalized target evaluation cannot be restored.",
-         call. = FALSE)
-  }
-  if (!identical(native$lib_hash,
-                 digest::digest(file = lib, algo = "sha256"))) {
-    stop("The Nutpie BridgeStan shared library hash differs from its saved provenance.",
-         call. = FALSE)
-  }
   data <- .bayes_bridge_data(fit)
   if (!identical(native$stan_data_hash, fit@metadata$stan_data_hash)) {
     stop("Nutpie draw provenance and saved Stan data hashes differ.",
@@ -276,17 +329,65 @@ validate_comparison_contract <- function(fits) {
       seed < 0 || seed > .Machine$integer.max || seed != as.integer(seed)) {
     stop("Nutpie fit has no valid saved model-construction seed.", call. = FALSE)
   }
-  model <- bridgestan::StanModel$new(lib, data_file, as.integer(seed))
-  version <- model$model_version()
-  native_version <- paste(version$major, version$minor, version$patch, sep = ".")
-  if (!identical(native_version, as.character(utils::packageVersion("bridgestan")))) {
-    stop("Normalized Nutpie target evaluation requires a 'bridgestan' R package matching ",
-         "the saved model ABI (", native_version, ").", call. = FALSE)
+  client_version <- .bayes_nutpie_bridge_client_version()
+  lib <- native$lib_path
+  usable_path <- is.character(lib) && length(lib) == 1L && !is.na(lib) &&
+    file.exists(lib) && grepl("\\.(so|dll|dylib)$", lib)
+  actual_hash <- if (usable_path) digest::digest(file = lib, algo = "sha256") else NA_character_
+  reason <- if (!usable_path) "saved_library_unavailable" else
+    if (!identical(native$lib_hash, actual_hash)) "saved_library_hash_mismatch" else
+      if (is.character(native$platform) && length(native$platform) == 1L &&
+          !is.na(native$platform) && !identical(native$platform, R.version$platform))
+        "saved_library_platform_mismatch" else NULL
+  original <- list(path = lib, expected_hash = native$lib_hash,
+    observed_hash = actual_hash, platform = native$platform,
+    bridgestan_version = native$bridgestan_version,
+    nutpieR_version = native$nutpie_version,
+    compile_args = native$compile_args, stanc_args = native$stanc_args)
+  loaded <- NULL
+  if (is.null(reason)) {
+    loaded <- tryCatch(.bayes_nutpie_bridge_load(lib, data_file, seed, client_version, native$lib_hash),
+      error = function(e) {
+        reason <<- paste0("saved_library_load_failed: ", conditionMessage(e))
+        NULL
+      })
   }
-  .bayes_nutpie_bridge_context_from_model(fit, model, contract)
+  rebuilt <- is.null(loaded)
+  artifact <- native
+  if (rebuilt) {
+    model <- .bayes_nutpie_bridge_rebuild(contract$kernel,
+      fresh = !identical(reason, "saved_library_unavailable"))
+    artifact <- model$metadata
+    rebuilt_lib <- artifact$lib_path
+    if (!identical(artifact$source_hash, contract$saved_hash) ||
+        !is.character(rebuilt_lib) || length(rebuilt_lib) != 1L ||
+        is.na(rebuilt_lib) || !file.exists(rebuilt_lib) ||
+        !identical(artifact$lib_hash, digest::digest(file = rebuilt_lib, algo = "sha256"))) {
+      stop("Reconstructed Nutpie evidence artifact failed source/library integrity checks.",
+           call. = FALSE)
+    }
+    loaded <- .bayes_nutpie_bridge_load(rebuilt_lib, data_file, seed, client_version, artifact$lib_hash)
+  }
+  context <- .bayes_nutpie_bridge_context_from_model(fit, loaded$model, contract,
+    verify_sampler_density = TRUE)
+  context$migration <- rebuilt
+  context$restoration <- list(method = if (rebuilt) "reconstructed" else "saved_library",
+    reason = if (rebuilt) reason else "saved_library_verified",
+    original_artifact = original,
+    restored_artifact = list(path = loaded$path,
+      compiled_path = artifact$compiled_lib_path %||% artifact$lib_path, hash = loaded$hash,
+      platform = R.version$platform, source_hash = artifact$source_hash,
+      bridgestan_version = loaded$bridgestan_version,
+      bridgestan_client_version = client_version, model_info = loaded$model_info,
+      nutpieR_version = artifact$nutpie_version,
+      nutpie_remote_sha = artifact$nutpie_remote_sha,
+      compile_args = artifact$compile_args, stanc_args = artifact$stanc_args,
+      compile_lookup_seconds = if (rebuilt) artifact$compile_time else NA_real_))
+  context
 }
 
-.bayes_nutpie_bridge_context_from_model <- function(fit, model, contract) {
+.bayes_nutpie_bridge_context_from_model <- function(fit, model, contract,
+                                                     verify_sampler_density = FALSE) {
   raw_names <- as.character(unlist(model$param_names(
     include_tp = FALSE, include_gq = FALSE), use.names = FALSE))
   ## BridgeStan uses dots for indices; retained draws use Stan bracket names.
@@ -341,12 +442,33 @@ validate_comparison_contract <- function(fits) {
     stop("Normalized BridgeStan density is non-finite at retained posterior draws.",
          call. = FALSE)
   }
+  sampler_check <- NULL
+  if (isTRUE(verify_sampler_density)) {
+    if (!"lp__" %in% columns) {
+      stop("Reconstructed Nutpie target requires saved sampler log densities for verification.",
+           call. = FALSE)
+    }
+    recorded <- as.numeric(draws[, , "lp__"])
+    evaluated <- vapply(seq_len(nrow(unconstrained)), function(i)
+      as.numeric(model$log_density(unconstrained[i, ], propto = TRUE, jacobian = TRUE)), numeric(1))
+    tolerance <- 1e-7 + 1e-9 * pmax(1, abs(recorded), abs(evaluated))
+    if (any(!is.finite(recorded)) || any(!is.finite(evaluated)) ||
+        any(abs(recorded - evaluated) > tolerance)) {
+      stop("Reconstructed Nutpie target disagrees with saved sampler log densities.",
+           call. = FALSE)
+    }
+    sampler_check <- list(points = length(recorded),
+      max_absolute_difference = max(abs(recorded - evaluated)),
+      tolerance = "1e-7 + 1e-9 * max(1, abs(saved), abs(restored))",
+      propto = TRUE, jacobian = TRUE)
+  }
   bounds <- stats::setNames(rep(Inf, length(unc_names)), unc_names)
   list(
     samples = unconstrained,
     bridge_args = list(log_posterior = log_posterior, data = NULL,
                        lb = -bounds, ub = bounds, cores = 1L),
     log_posterior = log_posterior,
+    sampler_density_verification = sampler_check,
     constrained_parameter_names = parameter_names,
     draw_index = data.frame(
       iteration = rep(seq_len(dim(draws)[[1L]]), dim(draws)[[2L]]),
@@ -360,7 +482,6 @@ validate_comparison_contract <- function(fits) {
 
 .bayes_bridge_restore_context <- function(fit, contract = NULL) {
   if (inherits(fit@stanfit, "NutpieFit")) {
-    .bayes_require_nutpie_bridge()
     return(.bayes_nutpie_bridge_context(fit, contract))
   }
   if (is.null(contract)) contract <- .bayes_cmdstan_evidence_contract(fit)
@@ -519,7 +640,9 @@ validate_comparison_contract <- function(fits) {
 #' @param bridge_maxiter Maximum iterations for bridge sampling.
 #'   Default 5000.
 #' @param bridge_repetitions Number of independently initialized bridge runs
-#'   per model. The reported log marginal likelihood is their median.
+#'   per model. The reported log marginal likelihood is the median of finite
+#'   repetitions. Every attempted repetition and its status are retained; SD
+#'   is unavailable with fewer than two finite repetitions.
 #' @param bridge_method Bridge-sampling estimator passed to
 #'   \code{\link[bridgesampling]{bridge_sampler}}: \code{"normal"} (default)
 #'   or \code{"warp3"}. \code{"warp3"} symmetrizes the posterior before
@@ -573,13 +696,26 @@ validate_comparison_contract <- function(fits) {
 #' LOO clusters must contain whole partition units; observation LOO and period
 #' LOO with a market-shared count are unsupported for fringe and Stackelberg.
 #'
-#' Nutpie HMC fits support predictive comparison through their generated
-#' log-likelihood draws where those predictive units are defined. Nutpie bridge
-#' evidence and posterior model probabilities are currently unavailable pending
-#' executed native target and marginal-likelihood validation against CmdStanR.
-#' The internal normalized BridgeStan evaluator does not enable public bridge
-#' comparison. Mixed-backend bridge comparison is also unavailable. Use
-#' \code{bridge = FALSE} for eligible predictive-only comparisons.
+#' CmdStanR and Nutpie HMC fits may be mixed in the same comparison. Each fit
+#' must independently satisfy its scientific, source, data and normalized-target
+#' contracts. Backend, adaptation, controls and diagnostics are retained in
+#' \code{attr(result, "backend_metadata")}; they do not define the model or
+#' impose R-hat, ESS or divergence thresholds on computation.
+#' Nutpie evidence requires the optional \pkg{bridgestan} R client. A verified
+#' saved library is used when available; otherwise the exact matching installed
+#' Stan source and saved data are reconstructed through the compatible optional
+#' toolchain in the external cache. Rebuilt artifact provenance is returned in
+#' \code{attr(result, "bridge_context_info")} without changing saved fit metadata.
+#'
+#' A finite estimate remains available if another numerical repetition fails.
+#' The result reports point-evidence availability separately from requested and
+#' completed repetitions. No posterior probabilities are formed if any
+#' positive-prior candidate has no finite evidence; candidates are never dropped.
+#' Bridge uncertainty and sampler diagnostics describe numerical reliability;
+#' a finite estimate alone does not establish accuracy or posterior convergence.
+#' Nutpie generated log-likelihood draws also support predictive comparison
+#' where the existing likelihood defines those units. Ordinary observation-level
+#' LOO/WAIC remains unavailable for collapsed quality fits.
 #'
 #' @examples
 #' \donttest{
@@ -666,7 +802,6 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
   if (!collapsed_quality) .bayes_comparison_units(fits, loo_unit)
   if (bridge) {
     .bayes_validate_bridge(fits)
-    if ("nutpie" %in% backends) .bayes_require_nutpie_bridge()
   }
 
   # Handle named and unnamed arguments
@@ -788,38 +923,60 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
       }
       if (is.null(bridge_context)) {
         bridge_list[[i]] <- rep(list(NULL), bridge_repetitions)
-        bridge_context_info[[i]] <- list(status = "incomplete",
-                                         backend = backends[[i]],
-                                         reason = bridge_error)
+        bridge_context_info[[i]] <- list(status = "unavailable",
+          requested_repetitions = bridge_repetitions, completed_repetitions = 0L,
+          backend = backends[[i]], reason = bridge_error,
+          repetitions = data.frame(repetition = seq_len(bridge_repetitions),
+            status = "not_attempted", logml = NA_real_, mcse_logml = NA_real_,
+            error = bridge_error, warnings = "", stringsAsFactors = FALSE))
       } else {
+        repetition_info <- vector("list", bridge_repetitions)
         bridge_list[[i]] <- lapply(seq_len(bridge_repetitions), function(rep_id) {
-          tryCatch(
-            do.call(bridgesampling::bridge_sampler, c(list(
-              samples = bridge_context$samples, repetitions = 1L,
-              method = bridge_method, silent = TRUE, maxiter = bridge_maxiter
-            ), bridge_context$bridge_args)),
+          failure <- ""; warnings <- character()
+          value <- tryCatch(
+            withCallingHandlers(
+              do.call(bridgesampling::bridge_sampler, c(list(
+                samples = bridge_context$samples, repetitions = 1L,
+                method = bridge_method, silent = TRUE, maxiter = bridge_maxiter
+              ), bridge_context$bridge_args)),
+              warning = function(w) warnings <<- c(warnings, conditionMessage(w))),
             error = function(e) {
+              failure <<- conditionMessage(e)
               warning("Bridge sampling failed for model ", nms[i],
                       ", repetition ", rep_id, ": ", conditionMessage(e))
               NULL
             }
           )
+          available <- is.list(value) && is.numeric(value$logml) &&
+            length(value$logml) == 1L && is.finite(value$logml)
+          scalar <- function(x) if (is.numeric(x) && length(x) == 1L) x else NA_real_
+          if (!available && !nzchar(failure)) failure <- "Bridge sampler returned no finite scalar log evidence."
+          repetition_info[[rep_id]] <<- data.frame(repetition = rep_id,
+            status = if (available) "available" else "failed",
+            logml = if (is.list(value)) scalar(value$logml) else NA_real_,
+            mcse_logml = if (is.list(value)) scalar(value$mcse_logml) else NA_real_,
+            error = failure, warnings = paste(warnings, collapse = "\n"), stringsAsFactors = FALSE)
+          value
         })
         bridge_context$cleanup()
         bridge_valid <- vapply(bridge_list[[i]], function(x) {
-          !is.null(x) && is.numeric(x$logml) &&
+          is.list(x) && is.numeric(x$logml) &&
             length(x$logml) == 1L && is.finite(x$logml)
         }, logical(1))
         bridge_context_info[[i]] <- list(
-          status = if (all(bridge_valid))
-            "validated" else "bridge_failed",
+          status = if (all(bridge_valid)) "complete" else
+            if (any(bridge_valid)) "partial" else "unavailable",
+          requested_repetitions = bridge_repetitions,
           completed_repetitions = sum(bridge_valid),
+          repetitions = do.call(rbind, repetition_info),
           backend = backends[[i]],
           source = bridge_context$source,
           kernel = bridge_context$kernel,
           saved_hash = bridge_context$saved_hash,
           current_hash = bridge_context$current_hash,
-          migration = bridge_context$migration
+          migration = bridge_context$migration,
+          restoration = bridge_context$restoration,
+          sampler_density_verification = bridge_context$sampler_density_verification
         )
       }
     }
@@ -903,7 +1060,8 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
   # Add bridge sampling results
   if (bridge && length(bridge_list) > 0L) {
     bridge_logml <- lapply(bridge_list, function(reps) {
-      vapply(reps, function(b) if (!is.null(b)) b$logml else NA_real_, numeric(1))
+      vapply(reps, function(b) if (is.list(b) && is.numeric(b$logml) &&
+        length(b$logml) == 1L) b$logml else NA_real_, numeric(1))
     })
     logml <- vapply(bridge_logml, function(x) {
       if (any(is.finite(x))) stats::median(x[is.finite(x)]) else NA_real_
@@ -914,18 +1072,23 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
 
     finite <- is.finite(logml)
     diff_logml <- bf_vs_best <- post_prob <- rep(NA_real_, length(logml))
-    if (all(finite)) {
-      max_logml <- max(logml)
-      diff_logml <- logml - max_logml
-      bf_vs_best <- exp(diff_logml)
-      unnorm <- exp(diff_logml) * prior_weights
-      if (sum(unnorm) > 0) {
-        post_prob <- unnorm / sum(unnorm)
-      }
+    required <- prior_weights > 0
+    if (all(finite[required])) {
+      max_logml <- max(logml[finite])
+      diff_logml[finite] <- logml[finite] - max_logml
+      bf_vs_best[finite] <- exp(diff_logml[finite])
+      log_weight <- logml[required] + log(prior_weights[required])
+      unnorm <- exp(log_weight - max(log_weight))
+      post_prob[] <- 0
+      post_prob[required] <- unnorm / sum(unnorm)
     }
 
     result$logml        <- logml
     result$logml_sd     <- logml_sd
+    result$evidence_status <- ifelse(is.finite(logml), "available", "unavailable")
+    result$numerical_status <- vapply(bridge_context_info, `[[`, character(1), "status")
+    result$requested_repetitions <- rep(bridge_repetitions, length(fits))
+    result$completed_repetitions <- vapply(bridge_context_info, `[[`, numeric(1), "completed_repetitions")
     result$bf_vs_best   <- bf_vs_best
     result$post_prob    <- post_prob
   }
@@ -943,6 +1106,15 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
          stan_kernel = fit@metadata$stan_kernel,
          stan_source_hash = fit@metadata$stan_source_hash,
          stan_data_hash = fit@metadata$stan_data_hash,
+         model_spec_version = fit@metadata$model_spec_version,
+         prior_manifest = fit@metadata$prior_manifest,
+         resolved_priors = fit@metadata$resolved_priors,
+         controls = fit@metadata$sampler_controls,
+         adaptation = fit@metadata$sampler_controls$adaptation,
+         native_controls = if (inherits(fit@stanfit, "NutpieFit"))
+           fit@stanfit$metadata$resolved_options else NULL,
+         diagnostics = tryCatch(.bayes_backend_diagnostic_summary(fit@stanfit),
+           error = function(e) list(status = "unavailable", reason = conditionMessage(e))),
          sampler = if (inherits(fit@stanfit, "NutpieFit")) {
            fit@stanfit$metadata$provenance
          } else list(cmdstanr = fit@metadata$backend_version,
@@ -993,8 +1165,8 @@ bayes_evidence_decomposition <- function(comparison, share_logml) {
 #' @param comp A data frame returned by \code{\link{bayes_compare}}.
 #' @param method Character: \code{"bridge"} (default) for posterior model
 #'   probabilities from bridge sampling, or \code{"stacking"} for LOO
-#'   stacking weights. Falls back to stacking if bridge results are
-#'   unavailable.
+#'   stacking weights. Bridge weighting requires finite probabilities for every
+#'   positive-prior candidate; it never substitutes stacking or drops a candidate.
 #'
 #' @return A named numeric vector of weights summing to 1.
 #'
@@ -1009,20 +1181,37 @@ bayes_evidence_decomposition <- function(comparison, share_logml) {
 bayes_weights <- function(comp, method = c("bridge", "stacking")) {
   method <- match.arg(method)
 
-  bridge_ok <- "post_prob" %in% names(comp) &&
-    any(is.finite(comp$post_prob) & comp$post_prob > 0)
-  if (method == "bridge" && bridge_ok) {
-    w <- comp$post_prob
-    w[!is.finite(w)] <- 0
-  } else {
-    if (method == "bridge" && !bridge_ok) {
-      message("Bridge sampling results not available; using stacking weights.")
+  if (method == "bridge") {
+    if (!"post_prob" %in% names(comp) || !is.numeric(comp$post_prob) ||
+        length(comp$post_prob) != nrow(comp)) {
+      stop("Bridge posterior model probabilities are unavailable; request method = 'stacking' explicitly for predictive weights.", call. = FALSE)
     }
+    w <- comp$post_prob
+    prior <- if ("model_prior" %in% names(comp)) comp$model_prior else
+      if ("prior_weight" %in% names(comp)) comp$prior_weight else attr(comp, "prior_weights")
+    if (is.null(prior)) prior <- rep(1 / nrow(comp), nrow(comp))
+    if (!is.numeric(prior) || length(prior) != nrow(comp) ||
+        any(!is.finite(prior)) || any(prior < 0) ||
+        abs(sum(prior) - 1) > 1e-6) {
+      stop("The comparison has no valid complete model-prior contract.", call. = FALSE)
+    }
+    if (any(!is.finite(w[prior > 0]))) {
+      stop("Every positive-prior model requires finite bridge posterior probability; no candidates can be dropped or replaced by stacking.", call. = FALSE)
+    }
+    if (any(is.finite(w[prior == 0]) & w[prior == 0] != 0)) {
+      stop("A zero-prior model cannot have positive posterior weight.", call. = FALSE)
+    }
+    w[prior == 0] <- 0
+    if (any(w < 0) || abs(sum(w) - 1) > 1e-6) {
+      stop("Bridge posterior probabilities must cover the complete model set and sum to one; survivor renormalization is unavailable.", call. = FALSE)
+    }
+  } else {
     w <- comp$weight_stacking
   }
 
   names(w) <- comp$model
-  if (any(!is.finite(w)) || any(w < 0) || sum(w) <= 0) {
+  if (!is.numeric(w) || length(w) != nrow(comp) || !length(w) ||
+      any(!is.finite(w)) || any(w < 0) || sum(w) <= 0) {
     stop("The requested model weights are not finite non-negative values.")
   }
   w / sum(w)

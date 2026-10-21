@@ -251,6 +251,75 @@ test_that("incomplete positive-prior evidence withholds all universe probabiliti
   expect_identical(inf$status, "incomplete_evidence")
 })
 
+test_that("partial source repetitions remain visible without suppressing finite universe probabilities", {
+  rows <- lapply(c("F", "G"), function(source) list(hypothesis = source, source = source,
+    kind = "atomic", supply_model = "bertrand", supply = "bertrand",
+    structure = "simultaneous", fingerprint = source, resolved = NULL))
+  evidence <- data.frame(model = c("F", "G"), logml = c(3, 2), logml_sd = c(.1, NA_real_))
+  context <- list(F = list(status = "complete", requested_repetitions = 3L,
+    completed_repetitions = 3L), G = list(status = "partial", requested_repetitions = 3L,
+    completed_repetitions = 1L, repetitions = data.frame(rep = 1:3,
+      status = c("complete", "failed", "failed"), logml = c(2, NA, NA))))
+  attr(evidence, "bridge_context_info") <- context
+  result <- .mu_result_from_evidence(rows, evidence, c(.3, .7))
+  expected <- exp(c(3, 2)) * c(.3, .7); expected <- expected / sum(expected)
+  expect_equal(result$table$posterior_probability, expected)
+  expect_identical(result$status, "complete")
+  expect_identical(result$numerical_status, "partial")
+  expect_identical(result$table$point_estimate_available, c(TRUE, TRUE))
+  expect_identical(result$table$numerical_status, c("complete", "partial"))
+  expect_identical(result$table$requested_repetitions, c(3L, 3L))
+  expect_identical(result$table$completed_repetitions, c(3L, 1L))
+  expect_true(is.na(result$table$logml_sd[2L]))
+  evidence$logml[2L] <- NA_real_
+  result <- .mu_result_from_evidence(rows, evidence, c(.3, .7))
+  expect_true(all(is.na(result$table$posterior_probability)))
+  expect_identical(result$status, "incomplete_evidence")
+  expect_identical(result$numerical_status, "unavailable")
+  no_metadata <- data.frame(model = c("F", "G"), logml = c(3, 2))
+  expect_identical(.mu_result_from_evidence(rows, no_metadata, c(.3, .7))$numerical_status, "unreported")
+})
+
+test_that("public universe result preserves mixed-backend repetition and sampler metadata", {
+  left <- make_model_universe_exact_fit(structure = "simultaneous")
+  right <- make_model_universe_exact_fit(structure = "simultaneous", supply_model = 3L)
+  attr(left@stan_data, "model_spec_version") <- 11L
+  attr(right@stan_data, "model_spec_version") <- 11L
+  descriptor <- bayes_model_universe(list(B = "left", C = "right"), c(B = .5, C = .5))
+  source <- data.frame(model = c("left", "right"), logml = c(-3, -4),
+    logml_sd = c(.1, NA_real_), backend = c("cmdstanr", "nutpie"))
+  context <- list(left = list(status = "complete", requested_repetitions = 3L,
+    completed_repetitions = 3L), right = list(status = "partial", requested_repetitions = 3L,
+    completed_repetitions = 1L, repetitions = data.frame(rep = 1:3,
+      status = c("complete", "failed", "failed"), logml = c(-4, NA, NA))))
+  sampler <- list(left = list(backend = "cmdstanr", divergences = 2L),
+    right = list(backend = "nutpie", divergences = 4L))
+  attr(source, "bridge_context_info") <- context
+  attr(source, "backend_metadata") <- sampler
+  testthat::local_mocked_bindings(bayes_compare = function(...) source, .package = "antitrustBayes")
+  result <- .bayes_compare_universe(list(left = left, right = right), descriptor,
+    bridge = TRUE, bridge_maxiter = 5000L, bridge_repetitions = 3L,
+    bridge_method = "normal", loo_unit = "market")
+  expect_identical(attr(result, "status"), "complete")
+  expect_identical(attr(result, "numerical_status"), "partial")
+  expect_identical(result$backend, c("cmdstanr", "nutpie"))
+  expect_identical(attr(result, "bridge_context_info"), context)
+  expect_identical(attr(result, "backend_metadata"), sampler)
+  expect_true(all(is.finite(result$post_prob)))
+})
+
+test_that("sampler provenance cannot create duplicate scientific universe hypotheses", {
+  left <- make_model_universe_exact_fit(structure = "simultaneous")
+  right <- left
+  left@metadata$backend <- "cmdstanr"
+  right@metadata$backend <- "nutpie"
+  right@metadata$seed <- 8271L
+  right@metadata$sampler <- list(adaptation = "low_rank", lib_hash = "other-binary")
+  expect_identical(.mu_fingerprint(left), .mu_fingerprint(right))
+  descriptor <- bayes_model_universe(list(first = "left", second = "right"), c(first = .5, second = .5))
+  expect_error(.mu_fit_descriptor_rows(list(left = left, right = right), descriptor), "duplicate")
+})
+
 test_that("matching statistical fingerprints govern duplicate detection", {
   a <- make_model_universe_exact_fit(structure = "simultaneous")
   b <- a

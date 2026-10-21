@@ -102,17 +102,25 @@ test_that("simulation summaries report failures without shifting draw IDs", {
     })
 })
 
-test_that("bayes_weights falls back cleanly after failed bridges", {
+test_that("bridge weights never replace missing evidence with predictive stacking", {
   comp <- data.frame(
     model = c("a", "b"),
     weight_stacking = c(0.25, 0.75),
     post_prob = c(NA_real_, NA_real_)
   )
-  expect_message(
-    weights <- bayes_weights(comp, "bridge"),
-    "using stacking"
-  )
-  expect_equal(weights, c(a = 0.25, b = 0.75))
+  expect_error(bayes_weights(comp, "bridge"), "Every positive-prior")
+  expect_equal(bayes_weights(comp, "stacking"), c(a = 0.25, b = 0.75))
+  comp$post_prob <- c(.3, NA_real_)
+  expect_error(bayes_weights(comp, "bridge"), "no candidates can be dropped")
+  comp$post_prob <- c(.3, .7)
+  expect_equal(bayes_weights(comp, "bridge"), c(a = .3, b = .7))
+  expect_error(bayes_weights(comp[1L, ], "bridge"), "complete model set")
+  comp$model_prior <- c(1, 0); comp$post_prob <- c(1, NA_real_)
+  expect_equal(bayes_weights(comp, "bridge"), c(a = 1, b = 0))
+  comp$post_prob <- c(.8, .2)
+  expect_error(bayes_weights(comp, "bridge"), "zero-prior")
+  comp$post_prob <- NULL
+  expect_error(bayes_weights(comp, "bridge"), "request method = 'stacking' explicitly")
 })
 
 make_contract_fit <- function(demand_model = "logit") {

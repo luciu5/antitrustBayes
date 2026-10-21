@@ -2,7 +2,7 @@
 
 Bayesian estimation of differentiated-products demand and supply models using CmdStanR, with posterior counterfactual analysis via the [antitrust](https://github.com/luciu5/antitrust) R package.
 
-CmdStanR remains the default. An optional experimental Nutpie backend evaluates the same
+CmdStanR remains the default. An optional Nutpie backend evaluates the same
 installed Stan programs through BridgeStan; it is an alternative NUTS sampler,
 with diagonal or low-rank adaptation. It does not change the economic model.
 
@@ -76,9 +76,14 @@ local environment checks and validation tiers.
 The [executed validation](doc/validation/nutpie_backend_results.md) covers 34
 sampler fits in 12 fixtures, all four Stan kernels and pooled C/CF/CS cases.
 Scored posterior/policy comparisons agree within the declared Monte Carlo
-tolerances. Divergences, several elevated R-hats and mixed ESS improvements
-support keeping Nutpie experimental and CmdStanR the default. Low-rank
-adaptation did not consistently improve on diagonal adaptation in these runs.
+tolerances. Nutpie diagonal is a validated same-target alternative in these
+fixtures and is worth trying for difficult hierarchical C/CF/CS fits. CmdStanR
+remains the default and mature fallback. Diagnostic concerns and CES policy-tail
+uncertainty remain explicit; these results do not establish general superiority.
+Low-rank remains an expert/experimental option and did not consistently improve
+on diagonal adaptation in the executed studies. The separate
+[qualification pilot](doc/validation/nutpie_certification_pilot_results.md)
+also found residual pooled mixing concerns and CES divergences on both samplers.
 
 A CmdStan-only installation does not need `nutpieR`, BridgeStan's R client,
 Python, or Rust. Request the optional sampler explicitly:
@@ -108,6 +113,22 @@ Unsupported controls fail explicitly. Its adaptation choice belongs in
 CmdStan `dense_e` is a different adaptation strategy and is never translated
 implicitly. Native diagnostics and the resolved controls are retained.
 
+Expert debugging can retain divergence states, gradients, unconstrained
+coordinates and warmup mass-matrix traces. These options can substantially
+increase fit size and are off by default:
+
+```r
+debug_options <- list(adaptation = "diag", store_divergences = TRUE,
+  store_mass_matrix = TRUE, store_unconstrained = TRUE, store_gradient = TRUE)
+# Pass nutpie_options = debug_options and
+# stan_options = list(..., save_warmup = TRUE) to bayes_est().
+# Inspect fit@stanfit$raw_diagnostics and fit@stanfit$warmup_diagnostics.
+```
+
+`mindepth`, `extra_doublings` and `max_energy_error` are additional native
+expert controls. The package does not tune them automatically. Python flow
+adaptation and `draw_diag` are not exposed by this interface.
+
 The adapter requires `nutpieR >= 1.9.1`. Prefer a compatible prebuilt package
 from the [official R-universe repository](https://andytimm.r-universe.dev):
 
@@ -128,26 +149,46 @@ Source installation needs Rust >= 1.85; supported prebuilt binaries avoid that
 requirement. Runtime Stan compilation needs a C++ toolchain. No Python or PyMC
 is used. Set `options(antitrustBayes.nutpie_cache = "/writable/cache")` for
 compiled artifacts; installed package files are never compiled in place.
+Bridge evidence also needs a BridgeStan R client matching the compiled target
+ABI. The executed stack used nutpieR 1.9.1 and BridgeStan 2.8.0; its client can
+be installed separately with
+`remotes::install_github("roualdes/bridgestan", ref = "v2.8.0", subdir = "R", upgrade = "never")`.
+Other toolchains must satisfy the runtime ABI, coordinate and density checks.
 Saved fits retain ordinary draw arrays, diagnostics, source/data SHA-256,
 model specification, resolved priors, versions and controls. Posterior and
 policy operations on a reloaded fit use those arrays without live native
-pointers. Evidence evaluation additionally needs the original compatible
-compiled library and its byte seal.
+pointers. Evidence evaluation additionally requires the optional `bridgestan`
+R client. A verified compatible saved library is reused; if it is missing or
+unusable, the exact matching installed Stan kernel and saved data are rebuilt
+in the external cache through the compatible optional toolchain. Changed
+source/data fail closed. Reconstruction records its own artifact provenance
+without rewriting the saved fit; the new binary need not match the old byte hash.
 CmdStanR's CSV precision remains unchanged (eight significant digits in the
 validated toolchain); CmdStan users can request `stan_options = list(sig_figs = 18)`
 for strict algebraic checks. Nutpie retains native double arrays.
 
 The [evidence experiment](doc/validation/nutpie_evidence_results.md) passed
-native target, bridge-uncertainty and model-probability checks. Certification
-remains inconclusive because all six evidence fits had divergences under a
-fixed protocol requiring zero. Nutpie bridge evidence remains disabled. `bayes_compare()`
-fails explicitly for Nutpie bridge evidence and mixed-backend evidence comparisons;
-adding a flag to fit metadata cannot enable it. Predictive scoring can use
-Nutpie `log_lik`, including mixed-backend predictive-only comparisons, through the common draw interface where the existing
-likelihood permits LOO/WAIC. The restriction on ordinary observation-level
-scoring for collapsed quality is preserved. Conditional-k call generation
-forwards `backend` and `nutpie_options`; all original components remain
-required for evidence-based family weights.
+native target, bridge-uncertainty and model-probability checks. Its historical
+zero-divergence qualification criterion remains recorded. Public `bayes_compare()`
+now supports Nutpie and mixed CmdStan/Nutpie evidence under the same scientific
+contracts. Sampler choice is computational provenance, retained model by model;
+it must not be selected to obtain a preferred policy result or model probability.
+
+Finite evidence, bridge repetition completeness and sampler diagnostics are
+reported separately. Every attempted repetition is retained; finite estimates
+survive other failed repetitions, with SD unavailable when fewer than two
+repetitions succeed. Every positive-prior candidate still requires finite
+evidence before model probabilities exist. `bayes_weights(comp, "bridge")`
+requires complete bridge probabilities and never substitutes stacking or
+renormalizes surviving candidates; request `"stacking"` explicitly for that
+predictive method. A finite estimate alone does not establish accuracy.
+
+Predictive scoring uses the common `log_lik` interface where the existing
+likelihood permits LOO/WAIC; collapsed-quality restrictions remain. Conditional-k
+call generation forwards `backend` and `nutpie_options`. Components may use
+different samplers, retain every original k state and restore the original k
+prior exactly once. No `backend_by_k` API is needed: edit separately scheduled
+component argument lists when different samplers are appropriate.
 
 See the [evidence contract](doc/validation/nutpie_evidence_design.md) and
 [paired validation runner](doc/validation/nutpie_backend_validation.R).

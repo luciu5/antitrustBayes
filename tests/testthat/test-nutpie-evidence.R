@@ -42,16 +42,19 @@ test_that("Nutpie source provenance uses the exact existing kernel and HMC", {
   expect_error(.bayes_evidence_contract(changed), "require HMC")
 })
 
-test_that("unvalidated Nutpie evidence fails closed and cannot be enabled by fit metadata", {
+test_that("backend choice does not restrict evidence and metadata cannot bypass target contracts", {
   fit <- make_nutpie_evidence_fixture()
   fit@metadata$bridge_validated <- TRUE
   fit@stanfit$metadata$bridge_validated <- TRUE
-  expect_error(.bayes_require_nutpie_bridge(), "have not been validated")
-  expect_error(.bayes_bridge_restore_context(fit), "have not been validated")
+  expect_identical(.bayes_evidence_contract(fit)$backend, "nutpie")
+  changed <- fit
+  changed@stanfit$metadata$source_hash <- strrep("0", 64L)
+  expect_error(.bayes_evidence_contract(changed), "source hashes differ")
   cmdstan <- fit
   cmdstan@stanfit <- NULL
   cmdstan@metadata$backend <- "cmdstanr"
-  expect_error(.bayes_comparison_backends(list(fit, cmdstan)), "Mixed-backend")
+  expect_identical(unname(.bayes_comparison_backends(list(fit, cmdstan))),
+                   c("nutpie", "cmdstanr"))
   expect_identical(unname(.bayes_comparison_backends(list(fit, cmdstan),
     require_evidence = FALSE)), c("nutpie", "cmdstanr"))
   expect_identical(unname(.bayes_comparison_backends(list(fit, fit))),

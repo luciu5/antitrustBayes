@@ -11,8 +11,8 @@ bayes_weights(comp, method = c("bridge", "stacking"))
 
 \item{method}{Character: \code{"bridge"} (default) for posterior model
 probabilities from bridge sampling, or \code{"stacking"} for LOO
-stacking weights. Falls back to stacking if bridge results are
-unavailable.}
+stacking weights. Bridge weighting requires finite probabilities for every
+positive-prior candidate; it never substitutes stacking or drops a candidate.}
 }
 \value{
 A named numeric vector of weights summing to 1.

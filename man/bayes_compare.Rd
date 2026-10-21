@@ -42,7 +42,9 @@ factor model comparison. If \code{FALSE}, only LOO/WAIC are computed.}
 Default 5000.}
 
 \item{bridge_repetitions}{Number of independently initialized bridge runs
-per model. The reported log marginal likelihood is their median.}
+per model. The reported log marginal likelihood is the median of finite
+repetitions. Every attempted repetition and its status are retained; SD
+is unavailable with fewer than two finite repetitions.}
 
 \item{bridge_method}{Bridge-sampling estimator passed to
 \code{\link[bridgesampling]{bridge_sampler}}: \code{"normal"} (default)
@@ -108,13 +110,26 @@ with an active, non-normalized HMT penalty is unsupported. Exact ordered-k
 LOO clusters must contain whole partition units; observation LOO and period
 LOO with a market-shared count are unsupported for fringe and Stackelberg.
 
-Nutpie HMC fits support predictive comparison through their generated
-log-likelihood draws where those predictive units are defined. Nutpie bridge
-evidence and posterior model probabilities are currently unavailable pending
-executed native target and marginal-likelihood validation against CmdStanR.
-The internal normalized BridgeStan evaluator does not enable public bridge
-comparison. Mixed-backend bridge comparison is also unavailable. Use
-\code{bridge = FALSE} for eligible predictive-only comparisons.
+CmdStanR and Nutpie HMC fits may be mixed in the same comparison. Each fit
+must independently satisfy its scientific, source, data and normalized-target
+contracts. Backend, adaptation, controls and diagnostics are retained in
+\code{attr(result, "backend_metadata")}; they do not define the model or
+impose R-hat, ESS or divergence thresholds on computation.
+Nutpie evidence requires the optional \pkg{bridgestan} R client. A verified
+saved library is used when available; otherwise the exact matching installed
+Stan source and saved data are reconstructed through the compatible optional
+toolchain in the external cache. Rebuilt artifact provenance is returned in
+\code{attr(result, "bridge_context_info")} without changing saved fit metadata.
+
+A finite estimate remains available if another numerical repetition fails.
+The result reports point-evidence availability separately from requested and
+completed repetitions. No posterior probabilities are formed if any
+positive-prior candidate has no finite evidence; candidates are never dropped.
+Bridge uncertainty and sampler diagnostics describe numerical reliability;
+a finite estimate alone does not establish accuracy or posterior convergence.
+Nutpie generated log-likelihood draws also support predictive comparison
+where the existing likelihood defines those units. Ordinary observation-level
+LOO/WAIC remains unavailable for collapsed quality fits.
 }
 \examples{
 \donttest{

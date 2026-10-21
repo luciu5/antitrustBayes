@@ -20,14 +20,21 @@ a missing component cannot redefine the hypothesis.}
 
 \item{k_prior}{Original k probabilities; defaults to uniform.}
 
-\item{repetitions}{Optional finite matrix with repetitions in rows and k
-states in columns, named in support order. The reported SD is bridge repeat
-variability, not a certificate of evidence accuracy.}
+\item{repetitions}{Optional numeric matrix with repetitions in rows and k
+states in columns, named in support order. Failed attempts may be
+\code{NA}; every original k column and every attempted row is retained.
+A combined repetition is available only when that row is finite for every
+k state. The reported SD uses complete rows and is unavailable with fewer
+than two; it measures bridge repeat variability, not evidence accuracy.}
 }
 \value{
 A list with \code{logml}, \code{posterior_k}, original \code{k_prior},
-and combined repetitions/\code{logml_sd} when supplied. This represents one
-scientific conduct hypothesis, not additional top-level model candidates.
+and combined repetitions/\code{logml_sd} when supplied. The original
+matrix is retained in \code{component_repetitions}; requested, joint
+completed and per-component completed repetition counts and
+\code{numerical_status} describe repetition availability separately from
+the finite point estimate. This represents one scientific conduct
+hypothesis, not additional top-level model candidates.
 }
 \description{
 Restores the original k prior exactly once: \eqn{Z = \sum_k \pi_k Z_k}.
