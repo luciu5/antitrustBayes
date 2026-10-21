@@ -1,7 +1,11 @@
 # Nutpie public-API closeout protocol
 
-Prepared implementation, 2026-10-20. No closeout inference or native
-recompilation has run. Execution awaits the reviewed production/API freeze.
+Prepared implementation, 2026-10-20. Executed after independent production/API
+review: all 42 tasks completed, with the numerical precision limits recorded in
+the [closeout summary](nutpie_closeout_summary.md). The protocol below remains
+the original frozen design. A separate [saved-row uncertainty audit](nutpie_closeout_uncertainty_results.md)
+accounts conservatively for shared latent-quality seeds without changing the
+fits, policy values or frozen results.
 
 The bounded protocol has 42 checkpointed tasks:
 

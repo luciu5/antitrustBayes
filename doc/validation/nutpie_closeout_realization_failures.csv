@@ -1,0 +1,11 @@
+"stage","category","count","k","backend","planned_states"
+"baseline_construction","bayes_finite_nonpositive_cost",30,0,"cmdstanr",4000
+"baseline_construction","bayes_finite_nonpositive_cost",34,0,"nutpie",4000
+"baseline_construction","bayes_finite_nonpositive_cost",484,1,"cmdstanr",4000
+"baseline_construction","bayes_finite_nonpositive_cost",518,1,"nutpie",4000
+"baseline_construction","bayes_finite_nonpositive_cost",10,2,"cmdstanr",4000
+"baseline_construction","bayes_finite_nonpositive_cost",8,2,"nutpie",4000
+"baseline_construction","bayes_finite_nonpositive_cost",60,3,"cmdstanr",4000
+"baseline_construction","bayes_finite_nonpositive_cost",69,3,"nutpie",4000
+"baseline_construction","bayes_finite_nonpositive_cost",44,4,"cmdstanr",4000
+"baseline_construction","bayes_finite_nonpositive_cost",34,4,"nutpie",4000

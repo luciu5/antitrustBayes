@@ -174,6 +174,14 @@ now supports Nutpie and mixed CmdStan/Nutpie evidence under the same scientific
 contracts. Sampler choice is computational provenance, retained model by model;
 it must not be selected to obtain a preferred policy result or model probability.
 
+The [public closeout validation](doc/validation/nutpie_closeout_summary.md)
+completed all 42 tasks, including fixed-k CF/CS evidence, a full conditional-k
+family with mixed backends, and exact-source reconstruction for all four kernels.
+Conditional merger/tariff means agree within the declared precision bounds.
+Some SD, tail and threshold comparisons remain precision-inconclusive at the
+fixed draw budget; their uncertainty and realization attrition remain explicit.
+This does not establish universal sampler quality or precise policy-tail equivalence.
+
 Finite evidence, bridge repetition completeness and sampler diagnostics are
 reported separately. Every attempted repetition is retained; finite estimates
 survive other failed repetitions, with SD unavailable when fewer than two

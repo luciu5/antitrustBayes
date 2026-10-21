@@ -1,15 +1,16 @@
 # Nutpie closeout regression checks
 
 Executed 2026-10-20 EDT / 2026-10-21 UTC against production candidate
-`e8e16f31cfe2374bc9e8d7ceedf3642a9e6e3ff5`, version `0.2.0.9006`.
+`413e6f0` (including the independently reviewed uncertainty-audit tests),
+version `0.2.0.9006`. Production R code is unchanged from `e8e16f3`.
 Later report-only changes do not alter the tested package source.
 
 | Tier | Passed assertions | Test blocks | Failures/errors | Existing test warnings | Skips |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Full development-source suite, optional native dependencies installed | 5,139 | 388 | 0 / 0 | 21 | 12 opt-in HMC |
-| Full development-source suite, Nutpie/BridgeStan unavailable | 5,132 | 388 | 0 / 0 | 21 | 13 |
+| Full development-source suite, optional native dependencies installed | 5,166 | 393 | 0 / 0 | 21 | 12 opt-in HMC |
+| Full development-source suite, Nutpie/BridgeStan unavailable | 5,159 | 393 | 0 / 0 | 21 | 13 |
 | Existing opt-in CmdStan regression filter | 590 | 28 | 0 / 0 | 9 | 0 |
-| Installed source-package tests during `R CMD check` | 4,938 | — | 0 / 0 | 21 | 23 |
+| Installed source-package tests during `R CMD check` | 4,938 | — | 0 / 0 | 21 | 28 |
 
 The installed package excludes repository-only research runners, accounting for
 its lower assertion count and extra skips. The CmdStan run executes the HMC
@@ -24,19 +25,32 @@ Examples, help cross-references, installation/loading, tests and vignette
 rebuilding passed. Dependency-index probes reported unavailable network access;
 the installed dependency checks completed successfully.
 
-The successful build used a clean `git archive` snapshot of the committed
-candidate so that large ignored native caches were excluded before directory
-traversal. An earlier direct-workspace build was interrupted during traversal;
-its log is retained separately and it supplied no validation result.
+The successful final build used a tracked candidate snapshot, excluding large
+ignored caches before traversal, with all four Stan source files copied byte
+for byte from the frozen working tree. Their installed SHA-256 hashes match
+the saved validation fits. This correction was necessary because `git archive`
+applied the checkout's `autocrlf` setting to the two LF CES files; the exact
+source-identity checks refused those converted files. No repository kernel or
+fit provenance was altered. Earlier archive-build and smoke attempts are
+retained separately, as is an interrupted direct-workspace traversal.
+
+A fresh installed-package smoke checked the version, CmdStan default, optional
+dependencies, help-page resolution and all four source hashes, then executed
+public Nutpie CES bridge sampling with one repetition: log evidence
+`-1.806063`, finite posterior model probability `1`, complete numerical status,
+and repetition SD correctly unavailable for a single repetition. This is a
+load/API/native-target smoke, not a new paired statistical comparison.
 
 Durable ignored evidence:
 
-- `.scratch/nutpie-closeout/ordinary-suite.{log,rds}`
-- `.scratch/nutpie-closeout/optional-free-suite.{log,rds}`
+- `.scratch/nutpie-closeout/ordinary-suite-final.log` and `ordinary-suite.rds`
+- `.scratch/nutpie-closeout/optional-free-suite-final.log` and
+  `optional-free-suite.rds`
 - `.scratch/nutpie-closeout/cmdstan-regressions/` and
   `.scratch/nutpie-closeout/cmdstan-regressions.log`
-- `.scratch/nutpie-closeout/package-check-staged.log` and
-  `.scratch/nutpie-closeout/package-check-staged/antitrustBayes.Rcheck/`
+- `.scratch/nutpie-closeout/exact-package-check.log` and
+  `.scratch/nutpie-closeout/exact-package-check/antitrustBayes.Rcheck/`
+- `.scratch/nutpie-closeout/installed-smoke-final.log` and `installed-smoke.rds`
 
 The selected runtime uses R `4.6.1`, CmdStan `2.39.0`, `nutpieR` `1.9.1`,
 BridgeStan R/client `2.8.0`, `bridgesampling` `1.2.1`, `antitrust` `0.99.42`,
