@@ -21,6 +21,8 @@ tmp_lib/
 /.scratch/nutpie-cache/
 /.scratch/nutpie-toolchain/
 /.scratch/nutpie-evidence-audit/
+/.scratch/nutpie-certification/
+/.scratch/nutpie-closeout/
 /doc/stackelberg/*
 *.bundle
 

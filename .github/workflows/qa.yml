@@ -8,10 +8,10 @@ on:
       antitrust_ref:
         description: "antitrust branch or commit SHA to install"
         required: true
-        default: "103c2491607d7f164f5e4e00fc21d6ea79331138"
+        default: "20f0923fc560295e04310aed5615c19dadf672cb"
         type: string
       run_stan_tests:
-        description: "Run the opt-in Stan sampling/parity tier"
+        description: "Run the opt-in CmdStan sampling/parity tier"
         required: true
         default: false
         type: boolean
@@ -24,23 +24,23 @@ permissions:
 env:
   R_VERSION: "4.6.1"
   ANTITRUST_REPO: "luciu5/antitrust"
-  ANTITRUST_REQUESTED_REF: ${{ inputs.antitrust_ref || '103c2491607d7f164f5e4e00fc21d6ea79331138' }}
+  ANTITRUST_REQUESTED_REF: ${{ inputs.antitrust_ref || '20f0923fc560295e04310aed5615c19dadf672cb' }}
+  COORDINATION_REPO: "luciu5/coordination"
+  COORDINATION_SHA: "6955c4845df0c1de98eb540423118b53732211e5"
+  TRADE_REPO: "luciu5/trade"
+  TRADE_SHA: "2826df0fc3530c01066000725f643b060e71d136"
+  CMDSTANR_SHA: "55342f4f6c9300f9a47046f107b4db9b5e468aa6"
+  _R_CHECK_FORCE_SUGGESTS_: "false"
+  ANTITRUSTBAYES_RUN_STAN_TESTS: "false"
 
 jobs:
   fast:
-    name: fast QA (antitrust ${{ inputs.antitrust_ref || '103c2491607d7f164f5e4e00fc21d6ea79331138' }})
+    name: optional-free QA
     runs-on: ubuntu-latest
-    env:
-      QA_TIER: fast
-    outputs:
-      antitrust_requested_ref: ${{ steps.provenance.outputs.antitrust_requested_ref }}
-      antitrust_sha: ${{ steps.provenance.outputs.antitrust_sha }}
-      antitrustbayes_sha: ${{ steps.provenance.outputs.antitrustbayes_sha }}
+    timeout-minutes: 45
     steps:
       - name: Check out antitrustBayes
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up R ${{ env.R_VERSION }}
         uses: r-lib/actions/setup-r@v2
@@ -48,11 +48,36 @@ jobs:
           r-version: ${{ env.R_VERSION }}
           use-public-rspm: true
 
-      - name: Resolve and record dependency provenance
-        id: provenance
+      # Explicit dependencies keep nutpieR/bridgestan out of the default tier.
+      # Structural packages are installed below from verified checkouts so
+      # coordination's moving Remotes field cannot replace the chosen pin.
+      - name: Install ordinary dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          cache: false
+          dependencies: 'c("Depends", "Imports", "LinkingTo")'
+          packages: |
+            any::BB
+            any::numDeriv
+            any::nleqslv
+            any::SQUAREM
+            any::bridgesampling
+            any::digest
+            any::posterior
+            any::loo
+            github::stan-dev/cmdstanr@${{ env.CMDSTANR_SHA }}
+            any::testthat
+            any::pkgload
+            any::knitr
+            any::rmarkdown
+            any::ggplot2
+            any::bayesplot
+            any::rcmdcheck
+
+      - name: Install and record verified structural dependencies
+        shell: bash
         run: |
           set -euo pipefail
-          bayes_sha="$(git rev-parse HEAD)"
           requested_ref="${ANTITRUST_REQUESTED_REF}"
           antitrust_sha="$(git ls-remote "https://github.com/${ANTITRUST_REPO}.git" "${requested_ref}" | awk 'NR == 1 { print $1 }')"
           if [[ -z "${antitrust_sha}" && "${requested_ref}" != refs/* ]]; then
@@ -65,97 +90,84 @@ jobs:
             echo "Could not resolve antitrust ref '${requested_ref}' to a commit SHA" >&2
             exit 1
           fi
-          echo "antitrust_requested_ref=${requested_ref}" >> "${GITHUB_OUTPUT}"
-          echo "antitrust_sha=${antitrust_sha}" >> "${GITHUB_OUTPUT}"
-          echo "antitrustbayes_sha=${bayes_sha}" >> "${GITHUB_OUTPUT}"
-          echo "ANTITRUST_SHA=${antitrust_sha}" >> "${GITHUB_ENV}"
-          {
-            echo "## Dependency provenance"
-            echo "- tier: `${QA_TIER}`"
-            echo "- requested antitrust ref: `${requested_ref}`"
-            echo "- resolved antitrust SHA: `${antitrust_sha}`"
-            echo "- antitrustBayes SHA: `${bayes_sha}`"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Install selected antitrust revision first
-        shell: bash
-        run: |
-          set -euo pipefail
-          checkout_dir="$(mktemp -d)"
-          git clone --no-checkout "https://github.com/${ANTITRUST_REPO}.git" "${checkout_dir}"
-          git -C "${checkout_dir}" fetch --depth 1 origin "${ANTITRUST_SHA}"
-          git -C "${checkout_dir}" checkout --detach "${ANTITRUST_SHA}"
-          checked_out_sha="$(git -C "${checkout_dir}" rev-parse HEAD)"
-          if [[ "${checked_out_sha}" != "${ANTITRUST_SHA}" ]]; then
-            echo "::error::Checked-out antitrust SHA ${checked_out_sha} does not match ${ANTITRUST_SHA}" >&2
-            exit 1
-          fi
-          echo "ANTITRUST_CHECKOUT_DIR=${checkout_dir}" >> "${GITHUB_ENV}"
-          Rscript --vanilla - "${checkout_dir}" <<'RSCRIPT'
+          printf 'ANTITRUST_SHA=%s\n' "${antitrust_sha}" >> "${GITHUB_ENV}"
+          printf '## Verified dependency sources\n' >> "${GITHUB_STEP_SUMMARY}"
+          printf -- '- antitrustBayes: `%s`\n' "$(git rev-parse HEAD)" >> "${GITHUB_STEP_SUMMARY}"
+          for dependency in antitrust coordination trade; do
+            if [[ "${dependency}" == antitrust ]]; then
+              repository="${ANTITRUST_REPO}"
+              expected_sha="${antitrust_sha}"
+            elif [[ "${dependency}" == coordination ]]; then
+              repository="${COORDINATION_REPO}"
+              expected_sha="${COORDINATION_SHA}"
+            else
+              repository="${TRADE_REPO}"
+              expected_sha="${TRADE_SHA}"
+            fi
+            checkout_dir="$(mktemp -d)"
+            git -C "${checkout_dir}" init --quiet
+            git -C "${checkout_dir}" fetch --depth 1 "https://github.com/${repository}.git" "${expected_sha}"
+            git -C "${checkout_dir}" checkout --detach FETCH_HEAD
+            test "$(git -C "${checkout_dir}" rev-parse HEAD)" = "${expected_sha}"
+            R CMD INSTALL --no-multiarch "${checkout_dir}"
+            Rscript --vanilla - "${checkout_dir}" "${dependency}" <<'RSCRIPT'
           args <- commandArgs(trailingOnly = TRUE)
-          desc <- read.dcf(file.path(args[[1]], "DESCRIPTION"))[1, ]
-          imports <- desc[["Imports"]]
-          if (!is.na(imports) && nzchar(imports)) {
-              packages <- trimws(strsplit(imports, ",", fixed = TRUE)[[1]])
-              packages <- sub("\\s*\\(.*$", "", packages)
-              packages <- packages[nzchar(packages)]
-              missing <- packages[!vapply(packages, requireNamespace, logical(1), quietly = TRUE)]
-              if (length(missing)) {
-                  install.packages(missing, repos = "https://cloud.r-project.org")
-              }
-          }
+          expected <- unname(read.dcf(file.path(args[[1L]], "DESCRIPTION"))[1L, "Version"])
+          actual <- as.character(utils::packageVersion(args[[2L]]))
+          stopifnot(identical(actual, expected), requireNamespace(args[[2L]], quietly = TRUE))
+          cat(args[[2L]], actual, find.package(args[[2L]]), "\n")
           RSCRIPT
-          R CMD INSTALL --no-multiarch "${checkout_dir}"
-          echo "antitrust installed from verified checkout SHA: ${checked_out_sha}" >> "${GITHUB_STEP_SUMMARY}"
+            printf -- '- %s: `%s`\n' "${dependency}" "${expected_sha}" >> "${GITHUB_STEP_SUMMARY}"
+          done
 
-      - name: Install remaining package dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          cache: false
-          extra-packages: any::rcmdcheck
+      - name: Verify optional-free installation and CmdStanR pin
+        shell: Rscript {0}
+        run: |
+          stopifnot(!requireNamespace("nutpieR", quietly = TRUE),
+                    !requireNamespace("bridgestan", quietly = TRUE),
+                    utils::packageVersion("antitrust") >= "0.99.41",
+                    utils::packageVersion("coordination") >= "0.0.0.9006",
+                    utils::packageVersion("trade") >= "0.8.9.9002",
+                    identical(utils::packageDescription("cmdstanr")$RemoteSha,
+                              Sys.getenv("CMDSTANR_SHA")))
+          for (package in c("antitrust", "coordination", "trade", "cmdstanr", "posterior")) {
+            cat(package, as.character(utils::packageVersion(package)), find.package(package), "\n")
+          }
 
-      - name: Reassert selected antitrust revision after dependency resolution
+      - name: Build and check without optional native backends
         shell: bash
-        run: |
-          set -euo pipefail
-          checked_out_sha="$(git -C "${ANTITRUST_CHECKOUT_DIR}" rev-parse HEAD)"
-          if [[ "${checked_out_sha}" != "${ANTITRUST_SHA}" ]]; then
-            echo "::error::Reasserted antitrust SHA ${checked_out_sha} does not match ${ANTITRUST_SHA}" >&2
-            exit 1
-          fi
-          R CMD INSTALL --no-multiarch "${ANTITRUST_CHECKOUT_DIR}"
-
-      - name: Verify selected antitrust remains installed
-        run: |
-          set -euo pipefail
-          checked_out_sha="$(git -C "${ANTITRUST_CHECKOUT_DIR}" rev-parse HEAD)"
-          test "${checked_out_sha}" = "${ANTITRUST_SHA}"
-          Rscript -e 'stopifnot(packageVersion("antitrust") >= "0.99.38")'
-
-      - name: Build package
         run: |
           set -euo pipefail
           R CMD build --no-manual .
           package_tarball="$(find . -maxdepth 1 -type f -name 'antitrustBayes_*.tar.gz' -print -quit)"
           test -n "${package_tarball}"
-          echo "PACKAGE_TARBALL=${package_tarball}" >> "${GITHUB_ENV}"
+          R CMD check --no-manual "${package_tarball}"
 
-      - name: R CMD check (Stan sampling tests opt out)
-        env:
-          ANTITRUSTBAYES_RUN_STAN_TESTS: "false"
-        run: R CMD check --no-manual "${PACKAGE_TARBALL}"
+      - name: Run source backend and policy-runner regressions
+        shell: Rscript {0}
+        run: |
+          stopifnot(requireNamespace("trade", quietly = TRUE))
+          testthat::test_local(
+            filter = "sampler-backend|nutpie|backend-policy-equivalence",
+            reporter = "summary"
+          )
+
+      - name: Preserve package-check results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optional-free-check
+          path: antitrustBayes.Rcheck
+          if-no-files-found: ignore
 
   stan:
-    name: Stan smoke tests (antitrust ${{ inputs.antitrust_ref || '103c2491607d7f164f5e4e00fc21d6ea79331138' }})
+    name: CmdStan smoke tests
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_stan_tests == true)
     runs-on: ubuntu-latest
-    env:
-      QA_TIER: stan
+    timeout-minutes: 90
     steps:
       - name: Check out antitrustBayes
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up R ${{ env.R_VERSION }}
         uses: r-lib/actions/setup-r@v2
@@ -163,11 +175,33 @@ jobs:
           r-version: ${{ env.R_VERSION }}
           use-public-rspm: true
 
-      - name: Resolve and record dependency provenance
-        id: provenance
+      - name: Install ordinary dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          cache: false
+          dependencies: 'c("Depends", "Imports", "LinkingTo")'
+          packages: |
+            any::BB
+            any::numDeriv
+            any::nleqslv
+            any::SQUAREM
+            any::bridgesampling
+            any::digest
+            any::posterior
+            any::loo
+            github::stan-dev/cmdstanr@${{ env.CMDSTANR_SHA }}
+            any::testthat
+            any::pkgload
+            any::knitr
+            any::rmarkdown
+            any::ggplot2
+            any::bayesplot
+            any::rcmdcheck
+
+      - name: Install and record verified structural dependencies
+        shell: bash
         run: |
           set -euo pipefail
-          bayes_sha="$(git rev-parse HEAD)"
           requested_ref="${ANTITRUST_REQUESTED_REF}"
           antitrust_sha="$(git ls-remote "https://github.com/${ANTITRUST_REPO}.git" "${requested_ref}" | awk 'NR == 1 { print $1 }')"
           if [[ -z "${antitrust_sha}" && "${requested_ref}" != refs/* ]]; then
@@ -180,96 +214,67 @@ jobs:
             echo "Could not resolve antitrust ref '${requested_ref}' to a commit SHA" >&2
             exit 1
           fi
-          echo "ANTITRUST_SHA=${antitrust_sha}" >> "${GITHUB_ENV}"
-          {
-            echo "## Dependency provenance"
-            echo "- tier: `${QA_TIER}`"
-            echo "- requested antitrust ref: `${requested_ref}`"
-            echo "- resolved antitrust SHA: `${antitrust_sha}`"
-            echo "- antitrustBayes SHA: `${bayes_sha}`"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Install selected antitrust revision first
-        shell: bash
-        run: |
-          set -euo pipefail
-          checkout_dir="$(mktemp -d)"
-          git clone --no-checkout "https://github.com/${ANTITRUST_REPO}.git" "${checkout_dir}"
-          git -C "${checkout_dir}" fetch --depth 1 origin "${ANTITRUST_SHA}"
-          git -C "${checkout_dir}" checkout --detach "${ANTITRUST_SHA}"
-          checked_out_sha="$(git -C "${checkout_dir}" rev-parse HEAD)"
-          if [[ "${checked_out_sha}" != "${ANTITRUST_SHA}" ]]; then
-            echo "::error::Checked-out antitrust SHA ${checked_out_sha} does not match ${ANTITRUST_SHA}" >&2
-            exit 1
-          fi
-          echo "ANTITRUST_CHECKOUT_DIR=${checkout_dir}" >> "${GITHUB_ENV}"
-          Rscript --vanilla - "${checkout_dir}" <<'RSCRIPT'
+          printf 'ANTITRUST_SHA=%s\n' "${antitrust_sha}" >> "${GITHUB_ENV}"
+          printf '## Verified dependency sources\n' >> "${GITHUB_STEP_SUMMARY}"
+          printf -- '- antitrustBayes: `%s`\n' "$(git rev-parse HEAD)" >> "${GITHUB_STEP_SUMMARY}"
+          for dependency in antitrust coordination trade; do
+            if [[ "${dependency}" == antitrust ]]; then
+              repository="${ANTITRUST_REPO}"
+              expected_sha="${antitrust_sha}"
+            elif [[ "${dependency}" == coordination ]]; then
+              repository="${COORDINATION_REPO}"
+              expected_sha="${COORDINATION_SHA}"
+            else
+              repository="${TRADE_REPO}"
+              expected_sha="${TRADE_SHA}"
+            fi
+            checkout_dir="$(mktemp -d)"
+            git -C "${checkout_dir}" init --quiet
+            git -C "${checkout_dir}" fetch --depth 1 "https://github.com/${repository}.git" "${expected_sha}"
+            git -C "${checkout_dir}" checkout --detach FETCH_HEAD
+            test "$(git -C "${checkout_dir}" rev-parse HEAD)" = "${expected_sha}"
+            R CMD INSTALL --no-multiarch "${checkout_dir}"
+            Rscript --vanilla - "${checkout_dir}" "${dependency}" <<'RSCRIPT'
           args <- commandArgs(trailingOnly = TRUE)
-          desc <- read.dcf(file.path(args[[1]], "DESCRIPTION"))[1, ]
-          imports <- desc[["Imports"]]
-          if (!is.na(imports) && nzchar(imports)) {
-              packages <- trimws(strsplit(imports, ",", fixed = TRUE)[[1]])
-              packages <- sub("\\s*\\(.*$", "", packages)
-              packages <- packages[nzchar(packages)]
-              missing <- packages[!vapply(packages, requireNamespace, logical(1), quietly = TRUE)]
-              if (length(missing)) {
-                  install.packages(missing, repos = "https://cloud.r-project.org")
-              }
-          }
+          expected <- unname(read.dcf(file.path(args[[1L]], "DESCRIPTION"))[1L, "Version"])
+          actual <- as.character(utils::packageVersion(args[[2L]]))
+          stopifnot(identical(actual, expected), requireNamespace(args[[2L]], quietly = TRUE))
+          cat(args[[2L]], actual, find.package(args[[2L]]), "\n")
           RSCRIPT
-          R CMD INSTALL --no-multiarch "${checkout_dir}"
-          echo "antitrust installed from verified checkout SHA: ${checked_out_sha}" >> "${GITHUB_STEP_SUMMARY}"
+            printf -- '- %s: `%s`\n' "${dependency}" "${expected_sha}" >> "${GITHUB_STEP_SUMMARY}"
+          done
 
-      - name: Install remaining package dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          cache: false
-          extra-packages: any::rcmdcheck
-
-      - name: Reassert selected antitrust revision after dependency resolution
-        shell: bash
+      - name: Verify optional-free installation and CmdStanR pin
+        shell: Rscript {0}
         run: |
-          set -euo pipefail
-          checked_out_sha="$(git -C "${ANTITRUST_CHECKOUT_DIR}" rev-parse HEAD)"
-          if [[ "${checked_out_sha}" != "${ANTITRUST_SHA}" ]]; then
-            echo "::error::Reasserted antitrust SHA ${checked_out_sha} does not match ${ANTITRUST_SHA}" >&2
-            exit 1
-          fi
-          R CMD INSTALL --no-multiarch "${ANTITRUST_CHECKOUT_DIR}"
+          stopifnot(!requireNamespace("nutpieR", quietly = TRUE),
+                    !requireNamespace("bridgestan", quietly = TRUE),
+                    utils::packageVersion("antitrust") >= "0.99.41",
+                    utils::packageVersion("coordination") >= "0.0.0.9006",
+                    utils::packageVersion("trade") >= "0.8.9.9002",
+                    identical(utils::packageDescription("cmdstanr")$RemoteSha,
+                              Sys.getenv("CMDSTANR_SHA")))
 
-      - name: Verify selected antitrust remains installed
+      - name: Install the frozen CmdStan toolchain
+        shell: Rscript {0}
         run: |
-          set -euo pipefail
-          checked_out_sha="$(git -C "${ANTITRUST_CHECKOUT_DIR}" rev-parse HEAD)"
-          test "${checked_out_sha}" = "${ANTITRUST_SHA}"
-          Rscript -e 'stopifnot(packageVersion("antitrust") >= "0.99.38")'
+          cmdstanr::install_cmdstan(version = "2.39.0", cores = 2L, quiet = TRUE)
+          stopifnot(as.character(cmdstanr::cmdstan_version()) == "2.39.0")
+          cat("CmdStan", as.character(cmdstanr::cmdstan_version()), cmdstanr::cmdstan_path(), "\n")
 
-      - name: Build package
-        run: |
-          set -euo pipefail
-          R CMD build --no-manual .
-          package_tarball="$(find . -maxdepth 1 -type f -name 'antitrustBayes_*.tar.gz' -print -quit)"
-          test -n "${package_tarball}"
-          echo "PACKAGE_TARBALL=${package_tarball}" >> "${GITHUB_ENV}"
-
-      - name: R CMD check (Stan sampling tests opt out)
-        env:
-          ANTITRUSTBAYES_RUN_STAN_TESTS: "false"
-        run: R CMD check --no-manual "${PACKAGE_TARBALL}"
-
-      - name: Install built package for targeted smoke tests
-        run: R CMD INSTALL --preclean "${PACKAGE_TARBALL}"
+      - name: Install current package
+        run: R CMD INSTALL --no-multiarch .
 
       - name: Run targeted Logit/CES Stan, pooling, and dispatch tests
         env:
           ANTITRUSTBAYES_RUN_STAN_TESTS: "true"
+        shell: Rscript {0}
         run: |
-          Rscript - <<'RSCRIPT'
           library(testthat)
+          stopifnot(as.character(cmdstanr::cmdstan_version()) == "2.39.0")
           testthat::test_dir(
             file.path("tests", "testthat"),
             filter = "rho-studentt|s0-information-ladder|s0-pooling|simulate-dispatch",
             reporter = "summary", package = "antitrustBayes",
             load_package = "installed"
           )
-          RSCRIPT

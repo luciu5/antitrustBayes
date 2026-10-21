@@ -1,0 +1,6 @@
+"fixture","kernel","backend","status","retained_draws","checked_policy_draws","exact_result_fields","optional_packages_available","missing_native_path_posterior_equal","merger_solves","tariff_solves","maximum_physical_cost_error","fit_sha256"
+"B","logit_supply","nutpie_diag","passed",4000,2,10,FALSE,TRUE,2,2,0,"e13ba965f39dfe9742ccdfb2ccfa5bb890025c526b35c47d24ab1c5839d6b1f2"
+"BS","logit_stackelberg","nutpie_diag","passed",4000,2,10,FALSE,TRUE,2,2,0,"d252a9d489a620aa1b6dbbb17ea4c9952ce1929f26af33f919590ec5d2dcbb30"
+"CES_B","ces_supply","nutpie_diag","passed",4000,2,10,FALSE,TRUE,2,2,0,"6fdd5346e5a697948f6da1e87dbfd2e85a795b0d291325806d38842d8ae97637"
+"CES_CS","ces_stackelberg","nutpie_diag","passed",4000,2,10,FALSE,TRUE,2,2,0,"a7cbbaff20a179f9d1fe84e1e122ffb2fde3f7a1501386199fd70831650d9dff"
+"CF_pooled","logit_stackelberg","nutpie_diag","passed",4000,2,10,FALSE,TRUE,2,2,0,"f4e51c1d056438a56f73169b059e32455c8fddf00feafa45b0d07e997f6076e7"

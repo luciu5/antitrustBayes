@@ -1,7 +1,7 @@
 # Development and evidence index
 
-Reviewed 2026-10-20 against baseline `fff419b` and the optional Nutpie backend
-work, package version `0.2.0.9005`.
+Reviewed 2026-10-20 against baseline `fff419b`, the optional Nutpie backend and
+the promotion follow-up starting at `8d6daa1`, package version `0.2.0.9005`.
 This is the current operational agenda and navigation entrypoint. Topic contracts
 and results remain the detailed sources; historical checklists do not select work.
 Update this index when a completed task changes a status or verification route.
@@ -18,7 +18,7 @@ do not retroactively change saved fits or establish universal HMC improvement.
 | Task | Start here | Smallest relevant test filter |
 | --- | --- | --- |
 | Estimation, controls, priors | [estimation](../R/estimate.R), [priors](../R/priors.R) | `stan-control-policy`, `hierarchical-sd-priors`, `market-intercept-sd-prior`, or `residual-sd-prior` |
-| Sampler backends and paired validation | [backend adapters](../R/sampler_backend.R), [Nutpie status/results](validation/nutpie_backend_results.md), [evidence contract](validation/nutpie_evidence_design.md) | `sampler-backend|nutpie|backend-policy-equivalence` |
+| Sampler backends and paired validation | [backend adapters](../R/sampler_backend.R), [Nutpie status/results](validation/nutpie_backend_results.md), [promotion follow-up](validation/nutpie_certification_protocol.md), [evidence contract](validation/nutpie_evidence_design.md) | `sampler-backend|nutpie|backend-policy-equivalence` |
 | Quality/intercept reconstruction | [quality](../R/posterior_quality.R), [collapse contract](market_intercept_collapse_plan.md) | `posterior-quality|market-intercept-collapse` |
 | Evidence and exact-k comparison | [comparison](../R/bma.R), [model universe](../R/model_universe.R), [conditional k](../R/conditional_k.R) | `bma|model-universe|restriction-comparison|conditional-k` |
 | Policy states and counterfactuals | [draw plans](../R/posterior_draw_contract.R), [usage](statistical_toolkit_usage.md), [tariff contract](tariff_posterior_reuse_plan.md) | `posterior-policy-models|latent-quality-simulation|simulate-dispatch` |
@@ -27,9 +27,13 @@ do not retroactively change saved fits or establish universal HMC improvement.
 `antitrust` owns common structural/counterfactual machinery; `coordination` owns
 fringe/Stackelberg models. Read [DESCRIPTION](../DESCRIPTION) for dependency
 minima and [CI](../.github/workflows/qa.yml) for the current development pin and
-canonical R version. CI pins `antitrust`; it does not pin `coordination`.
-The pin is version `0.99.39`, while `coordination` `0.0.0.9006` requires
-`antitrust >= 0.99.41`; those revisions cannot be assumed compatible together.
+canonical R version. CI now pins a verified compatible `antitrust` `0.99.42`,
+`coordination` `0.0.0.9006` and `trade` `0.8.9.9002` stack, with the validated
+CmdStanR revision. The former `antitrust` `0.99.39` pin was incompatible with
+current coordination. The ordinary tier explicitly excludes Nutpie/BridgeStan;
+the opt-in CmdStan tier installs its frozen toolchain before testing. These
+workflow edits passed local static/provenance checks; a hosted run and a clean
+native Nutpie CI route remain pending. See [CI readiness](validation/nutpie_ci_readiness.md).
 Check installed versions and library paths before interpreting integration skips
 or failures. The inspected default user library lacked the compatible stack;
 choose an existing compatible library explicitly rather than reinstalling blindly.
@@ -87,7 +91,7 @@ checklists in the historical umbrella and recovery notes below.
 | Sampler presets and diagnostic verdicts | Proposed, unimplemented; current controls remain explicit. | [proposal](sampler_usability_followup_plan.md) |
 | Prior-predictive diagnostics | Historical requested follow-up; no general public prior-predictive interface was found in this review. Scope separately before implementation. | [historical roadmap](statistical_toolkit_followup_plan.md), [inference contract](market_prediction_inference_design.md) |
 | Recovery and model discrimination | Current bounded CmdStanR gates exist; broad repeated-sample coverage and general conduct identification remain open. | [validation entrypoint](validation/README.md) |
-| Optional Nutpie sampler | Completed 34 fits plus the unchanged-fit CES policy replay: all 1,385 scored checks within declared MCSE tolerances; diagnostics, attrition and tail uncertainty retained. All 15 evidence tasks passed numerical checks, but divergences leave certification inconclusive and evidence/BMA disabled. CmdStanR remains default; Nutpie experimental. Opt-in CmdStan regressions: 590 assertions passed; focused runner: 61 passed. | [executed results](validation/nutpie_backend_results.md), [evidence results](validation/nutpie_evidence_results.md), [paired runner](validation/nutpie_backend_validation.R) |
+| Optional Nutpie sampler | Original 34 fits and corrected CES policy replay: all 1,385 scored checks within declared MCSE tolerances; evidence numerical checks pass but certification remains inconclusive. New nine-fit pilot completed: B/pooled CF had zero divergences, but pooled Nutpie mixing and CES divergences prevent general qualification. Five actual saved fits passed fresh-process posterior/policy checks with native dependencies unavailable. Compatible optional-free CI edits await a hosted run. CmdStanR remains default; Nutpie experimental and evidence/BMA disabled. Opt-in CmdStan regressions: 590 assertions passed. | [original results](validation/nutpie_backend_results.md), [evidence results](validation/nutpie_evidence_results.md), [promotion pilot results](validation/nutpie_certification_pilot_results.md), [saved-fit results](validation/nutpie_serialization_results.md), [CI readiness](validation/nutpie_ci_readiness.md) |
 
 ## Historical checkpoints
 
