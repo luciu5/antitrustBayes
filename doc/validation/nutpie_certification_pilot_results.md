@@ -1,5 +1,10 @@
 # Nutpie qualification pilot results, 2026-10-20
 
+> Closeout update, 2026-10-20: this stricter pilot remains historical sampler
+> quality evidence. Its diagnostic thresholds do not control public evidence
+> availability. Version `0.2.0.9006` supports Nutpie and mixed-backend bridge
+> calculations; see the [current closeout results](nutpie_closeout_results.md).
+
 The separately frozen nine-fit pilot completed from `nutpie` commit
 `8d6daa115bf2fb7888a26d1c3ca4ba6666355c64`, package `0.2.0.9005`.
 No backend/adaptation passed all three cases. General qualification and the

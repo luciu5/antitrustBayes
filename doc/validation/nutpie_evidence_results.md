@@ -1,5 +1,10 @@
 # Nutpie native-target and evidence validation
 
+> Closeout update, 2026-10-20: the historical evidence and verdict below are
+> unchanged. Version `0.2.0.9006` removes the global certification gate and
+> permits mixed-backend evidence while retaining target/provenance checks.
+> See the [current closeout results](nutpie_closeout_results.md).
+
 ## Execution status, 2026-10-20
 
 The fixed protocol completed against Git `6f7e7b7b0449e6c751ccfdd1869ff7a6b80b1aad`,

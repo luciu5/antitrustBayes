@@ -1,5 +1,10 @@
 # Pilot diagnostic availability: no-HMC precision audit
 
+> Closeout update, 2026-10-20: the audit below is retained as sampler-quality
+> evidence. It does not gate normalized evidence calculations. Public Nutpie
+> and mixed-backend bridge support is implemented in version `0.2.0.9006`;
+> see the [current closeout results](nutpie_closeout_results.md).
+
 Executed 2026-10-20 after all nine pilot workers completed. This audit changes
 the reference used to recognize exactly constant generated quantities; it
 does not change posterior draws, numerical diagnostics or diagnostic limits.

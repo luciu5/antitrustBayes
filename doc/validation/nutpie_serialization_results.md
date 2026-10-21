@@ -1,5 +1,11 @@
 # Nutpie saved-fit operation without native dependencies
 
+> Closeout update, 2026-10-20: the optional-free posterior/policy audit below
+> remains valid. Its missing/corrupt-library negative tests describe the old
+> evidence loader. Version `0.2.0.9006` can reconstruct an evidence library
+> from the exact matching installed source and saved data, retaining separate
+> restoration provenance; see the [current closeout results](nutpie_closeout_results.md).
+
 Executed 2026-10-20 from branch `nutpie`, Git
 `8d6daa115bf2fb7888a26d1c3ca4ba6666355c64`, package `0.2.0.9005`.
 The no-HMC audit started at 08:39:13 EDT and passed for five actual saved

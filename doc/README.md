@@ -1,7 +1,7 @@
 # Development and evidence index
 
-Reviewed 2026-10-20 against baseline `fff419b`, the optional Nutpie backend and
-the promotion follow-up starting at `8d6daa1`, package version `0.2.0.9005`.
+Reviewed 2026-10-20 against baseline `fff419b` and the Nutpie closeout starting
+at `8d6daa1`, package version `0.2.0.9006`.
 This is the current operational agenda and navigation entrypoint. Topic contracts
 and results remain the detailed sources; historical checklists do not select work.
 Update this index when a completed task changes a status or verification route.
@@ -18,7 +18,7 @@ do not retroactively change saved fits or establish universal HMC improvement.
 | Task | Start here | Smallest relevant test filter |
 | --- | --- | --- |
 | Estimation, controls, priors | [estimation](../R/estimate.R), [priors](../R/priors.R) | `stan-control-policy`, `hierarchical-sd-priors`, `market-intercept-sd-prior`, or `residual-sd-prior` |
-| Sampler backends and paired validation | [backend adapters](../R/sampler_backend.R), [Nutpie status/results](validation/nutpie_backend_results.md), [promotion follow-up](validation/nutpie_certification_protocol.md), [evidence contract](validation/nutpie_evidence_design.md) | `sampler-backend|nutpie|backend-policy-equivalence` |
+| Sampler backends and paired validation | [backend adapters](../R/sampler_backend.R), [closeout protocol](validation/nutpie_closeout_protocol.md), [closeout results](validation/nutpie_closeout_results.md), [original paired results](validation/nutpie_backend_results.md), [evidence contract](validation/nutpie_evidence_design.md) | `sampler-backend|nutpie|backend-policy-equivalence|evidence-availability` |
 | Quality/intercept reconstruction | [quality](../R/posterior_quality.R), [collapse contract](market_intercept_collapse_plan.md) | `posterior-quality|market-intercept-collapse` |
 | Evidence and exact-k comparison | [comparison](../R/bma.R), [model universe](../R/model_universe.R), [conditional k](../R/conditional_k.R) | `bma|model-universe|restriction-comparison|conditional-k` |
 | Policy states and counterfactuals | [draw plans](../R/posterior_draw_contract.R), [usage](statistical_toolkit_usage.md), [tariff contract](tariff_posterior_reuse_plan.md) | `posterior-policy-models|latent-quality-simulation|simulate-dispatch` |
@@ -91,7 +91,7 @@ checklists in the historical umbrella and recovery notes below.
 | Sampler presets and diagnostic verdicts | Proposed, unimplemented; current controls remain explicit. | [proposal](sampler_usability_followup_plan.md) |
 | Prior-predictive diagnostics | Historical requested follow-up; no general public prior-predictive interface was found in this review. Scope separately before implementation. | [historical roadmap](statistical_toolkit_followup_plan.md), [inference contract](market_prediction_inference_design.md) |
 | Recovery and model discrimination | Current bounded CmdStanR gates exist; broad repeated-sample coverage and general conduct identification remain open. | [validation entrypoint](validation/README.md) |
-| Optional Nutpie sampler | Original 34 fits and corrected CES policy replay: all 1,385 scored checks within declared MCSE tolerances; evidence numerical checks pass but certification remains inconclusive. New nine-fit pilot completed: B/pooled CF had zero divergences, but pooled Nutpie mixing and CES divergences prevent general qualification. Five actual saved fits passed fresh-process posterior/policy checks with native dependencies unavailable. Compatible optional-free CI edits await a hosted run. CmdStanR remains default; Nutpie experimental and evidence/BMA disabled. Opt-in CmdStan regressions: 590 assertions passed. | [original results](validation/nutpie_backend_results.md), [evidence results](validation/nutpie_evidence_results.md), [promotion pilot results](validation/nutpie_certification_pilot_results.md), [saved-fit results](validation/nutpie_serialization_results.md), [CI readiness](validation/nutpie_ci_readiness.md) |
+| Optional Nutpie sampler | Public normalized Nutpie evidence, mixed-backend comparison and exact-source cache reconstruction implemented; bounded fixed-k/full conditional-k/portability closeout is running. Original 34 fits and corrected CES replay: 1,385 scored posterior/policy checks within declared MCSE tolerances. Five saved fits passed optional-free posterior/policy checks. CmdStanR remains default; Nutpie diagonal is an alternative for the tested targets, low-rank an expert option. Pilot mixing/divergence warnings remain recorded and do not gate evidence. Ordinary suite: 5,139 assertions with native dependencies, 5,132 without; opt-in CmdStan: 590 passed. Hosted CI remains pending. | [closeout results](validation/nutpie_closeout_results.md), [original results](validation/nutpie_backend_results.md), [evidence results](validation/nutpie_evidence_results.md), [promotion pilot results](validation/nutpie_certification_pilot_results.md), [saved-fit results](validation/nutpie_serialization_results.md), [CI readiness](validation/nutpie_ci_readiness.md) |
 
 ## Historical checkpoints
 

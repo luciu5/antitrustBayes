@@ -1,5 +1,11 @@
 # Nutpie backend validation
 
+> Closeout update, 2026-10-20: the historical results below are preserved.
+> Version `0.2.0.9006` enables normalized Nutpie and mixed-backend evidence;
+> sampler diagnostics remain reported rather than acting as permission gates.
+> See the [current closeout results](nutpie_closeout_results.md) for executed
+> public-API checks and their remaining scope. CmdStanR remains the default.
+
 ## Executed benchmark: 2026-10-20
 
 The fixed 34-task protocol has completed on `nutpie` at

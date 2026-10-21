@@ -1,5 +1,12 @@
 # Nutpie evidence contract
 
+> Closeout update, 2026-10-20: the original design and implementation record
+> below describe the former gated route. Version `0.2.0.9006` publicly exposes
+> the same normalized target, allows mixed backends, retains partial bridge
+> repetitions and reconstructs missing native libraries from exact source/data.
+> See the [closeout protocol](nutpie_closeout_protocol.md) and
+> [executed results](nutpie_closeout_results.md) for the current contract.
+
 Execution update, 2026-10-20: all four native target checks and all 18
 economic-model bridge repetitions completed. Native targets agree to at most
 `1.101341e-13`; paired evidence and complete-universe probabilities satisfy

@@ -1,5 +1,12 @@
 # Nutpie promotion follow-up, 2026-10-20
 
+> Closeout update, 2026-10-20: this protocol and its original diagnostic rules
+> remain historical experiment evidence. Current public evidence availability
+> is independent of those thresholds; version `0.2.0.9006` enables normalized
+> Nutpie and mixed-backend comparison. See the
+> [closeout protocol](nutpie_closeout_protocol.md) and
+> [results](nutpie_closeout_results.md).
+
 Starting commit: `8d6daa1`. This is a new sampler-control experiment, separate
 from the completed [paired study](nutpie_backend_results.md) and
 [evidence study](nutpie_evidence_results.md). Those results and their manifests
