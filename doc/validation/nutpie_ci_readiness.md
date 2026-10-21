@@ -1,5 +1,25 @@
 # Nutpie CI readiness, 2026-10-20
 
+## Post-merge hosted run, 2026-10-20 EDT / 2026-10-21 UTC
+
+The first [hosted run on main at `ab5878a`](https://github.com/luciu5/antitrustBayes/actions/runs/39532459744)
+installed the pinned dependencies and passed the optional-free/provenance
+checks, then failed package tests because the Stan parsing prerequisite called
+`cmdstanr::cmdstan_path()` before handling an unconfigured CmdStan installation.
+The ordinary job intentionally does not install CmdStan. Its installed tests
+reported 4,927 passes, 21 existing warnings, 29 skips and this one error.
+
+The follow-up catches path-discovery errors and uses the existing explicit
+missing-toolchain skip. All source assertions and four actual parser checks
+are unchanged. Focused local verification passed 44 assertions with CmdStan
+2.39.0 and 40 assertions plus the intended single skip with path discovery
+mocked to throw the hosted error; neither route had warnings or failures.
+An independent reviewer found no blocker. Evidence is retained in
+`.scratch/nutpie-closeout/ci-prerequisite-check.log` and its RDS summary.
+No sampling was rerun and no production source was changed. A hosted rerun
+after pushing this fix remains pending; clean native Nutpie CI remains the
+separate future task below. The original readiness assessment follows.
+
 This follow-up starts from `nutpie` commit `8d6daa1`. It fixes dependency-stack
 reproducibility and adds explicit coverage of an installation without Nutpie.
 It does not establish statistical certification or enable evidence/BMA.

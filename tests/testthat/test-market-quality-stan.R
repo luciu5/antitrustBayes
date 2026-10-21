@@ -16,7 +16,9 @@ test_that("all production Stan programs expose the scoped quality contract", {
 
 test_that("scoped quality Stan sources parse", {
   testthat::skip_if_not_installed("cmdstanr")
-  cmdstan_path <- cmdstanr::cmdstan_path()
+  cmdstan_path <- tryCatch(
+    cmdstanr::cmdstan_path(), error = function(e) ""
+  )
   testthat::skip_if(!nzchar(cmdstan_path), "CmdStan must be installed to parse Stan sources")
   stanc <- file.path(
     cmdstan_path, "bin",

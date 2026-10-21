@@ -31,9 +31,11 @@ canonical R version. CI now pins a verified compatible `antitrust` `0.99.42`,
 `coordination` `0.0.0.9006` and `trade` `0.8.9.9002` stack, with the validated
 CmdStanR revision. The former `antitrust` `0.99.39` pin was incompatible with
 current coordination. The ordinary tier explicitly excludes Nutpie/BridgeStan;
-the opt-in CmdStan tier installs its frozen toolchain before testing. These
-workflow edits passed local static/provenance checks; a hosted run and a clean
-native Nutpie CI route remain pending. See [CI readiness](validation/nutpie_ci_readiness.md).
+the opt-in CmdStan tier installs its frozen toolchain before testing. The
+first hosted run passed installation/provenance checks, then exposed a missing-
+CmdStan prerequisite guard in the ordinary Stan parser test. The guard fix passes
+focused configured/unconfigured checks; a hosted rerun and a clean native Nutpie
+CI route remain pending. See [CI readiness](validation/nutpie_ci_readiness.md).
 Check installed versions and library paths before interpreting integration skips
 or failures. The inspected default user library lacked the compatible stack;
 choose an existing compatible library explicitly rather than reinstalling blindly.
@@ -91,7 +93,7 @@ checklists in the historical umbrella and recovery notes below.
 | Sampler presets and diagnostic verdicts | Proposed, unimplemented; current controls remain explicit. | [proposal](sampler_usability_followup_plan.md) |
 | Prior-predictive diagnostics | Historical requested follow-up; no general public prior-predictive interface was found in this review. Scope separately before implementation. | [historical roadmap](statistical_toolkit_followup_plan.md), [inference contract](market_prediction_inference_design.md) |
 | Recovery and model discrimination | Current bounded CmdStanR gates exist; broad repeated-sample coverage and general conduct identification remain open. | [validation entrypoint](validation/README.md) |
-| Optional Nutpie sampler | Public normalized evidence, mixed-backend BMA and exact-source cache reconstruction supported; 42/42 closeout tasks completed, 90/90 bridge repetitions finite, all four empty-cache rebuilds validated. Full conditional-k evidence/weights and policy means agree. Precision remains inconclusive for 1/21 evidence and 13/28 conservative policy comparisons; attrition/diagnostics stay visible. Original 34 fits and corrected CES replay: 1,385 scored posterior/policy checks within MCSE tolerances. CmdStanR remains default; Nutpie diagonal is a validated alternative for the tested targets, low-rank an expert option. Ordinary suite: 5,166 assertions with native dependencies, 5,159 without; CmdStan: 590 passed. Package check: zero errors/warnings, one existing NOTE. Hosted CI remains pending. | [closeout summary](validation/nutpie_closeout_summary.md), [uncertainty audit](validation/nutpie_closeout_uncertainty_results.md), [regressions](validation/nutpie_closeout_regressions.md), [original results](validation/nutpie_backend_results.md), [promotion pilot](validation/nutpie_certification_pilot_results.md), [saved-fit results](validation/nutpie_serialization_results.md), [CI readiness](validation/nutpie_ci_readiness.md) |
+| Optional Nutpie sampler | Public normalized evidence, mixed-backend BMA and exact-source cache reconstruction supported; 42/42 closeout tasks completed, 90/90 bridge repetitions finite, all four empty-cache rebuilds validated. Full conditional-k evidence/weights and policy means agree. Precision remains inconclusive for 1/21 evidence and 13/28 conservative policy comparisons; attrition/diagnostics stay visible. Original 34 fits and corrected CES replay: 1,385 scored posterior/policy checks within MCSE tolerances. CmdStanR remains default; Nutpie diagonal is a validated alternative for the tested targets, low-rank an expert option. Ordinary suite: 5,166 assertions with native dependencies, 5,159 without; CmdStan: 590 passed. Package check: zero errors/warnings, one existing NOTE. First hosted CI exposed a parser prerequisite guard; its focused fix passes locally and awaits a hosted rerun. | [closeout summary](validation/nutpie_closeout_summary.md), [uncertainty audit](validation/nutpie_closeout_uncertainty_results.md), [regressions](validation/nutpie_closeout_regressions.md), [original results](validation/nutpie_backend_results.md), [promotion pilot](validation/nutpie_certification_pilot_results.md), [saved-fit results](validation/nutpie_serialization_results.md), [CI readiness](validation/nutpie_ci_readiness.md) |
 
 ## Historical checkpoints
 

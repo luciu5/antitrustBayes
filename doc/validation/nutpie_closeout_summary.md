@@ -166,8 +166,11 @@ one pre-existing `tail` namespace NOTE; installed tests pass 4,938 assertions.
 All four installed Stan byte hashes match the frozen fits; installed Nutpie
 evidence and help/default-route smoke checks pass. Independent source and result
 reviews found no substantive scientific/code blocker; final native results
-passed and the reviewer recommends the scoped feature merge. Hosted CI and a
-clean native CI installation remain unrun.
+passed and the reviewer recommends the scoped feature merge. The first hosted
+ordinary CI run exposed an unconfigured-CmdStan parser
+prerequisite error. The focused guard fix passes configured/unconfigured checks;
+a hosted rerun and clean native Nutpie CI installation remain pending. See
+[CI readiness](nutpie_ci_readiness.md).
 
 The [original 34-fit benchmark](nutpie_backend_results.md) and
 [stricter nine-fit pilot](nutpie_certification_pilot_results.md) remain intact.
