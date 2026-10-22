@@ -1,0 +1,31 @@
+"task","stage","status","reason","warnings"
+"fit_C_M1T1_cmdstanr","fit","completed","",""
+"fit_C_M1T1_nutpie","fit","completed","",""
+"fit_C_M1T4_cmdstanr","fit","completed","",""
+"fit_C_M1T4_nutpie","fit","completed","",""
+"fit_C_M4T1_cmdstanr","fit","completed","",""
+"fit_C_M4T1_nutpie","fit","completed","",""
+"fit_C_M4T4_cmdstanr","fit","completed","",""
+"fit_C_M4T4_nutpie","fit","completed","",""
+"fit_CF_M1T1_cmdstanr","fit","completed","",""
+"fit_CF_M1T1_nutpie","fit","completed","",""
+"fit_CS_M1T1_cmdstanr","fit","completed","",""
+"fit_CS_M1T1_nutpie","fit","completed","",""
+"pair_C_M1T1","pair","completed","",""
+"pair_C_M1T4","pair","completed","","Loading a shared object '/mnt/d/Projects/antitrustBayes/.scratch/single-market-intercept/bridge-evidence/loaded/4e0bc932f5526a852ef40da0cd23774291e62eadbb00c0d7620e2edf96370270/antitrustBayes_4e0bc932f5526a852ef40da0cd23774291e62eadbb00c0d7620e2edf96370270.so' which is already loaded.
+If the file has changed since the last time it was loaded, this load may not update the library!"
+"pair_C_M4T1","pair","completed","","Loading a shared object '/mnt/d/Projects/antitrustBayes/.scratch/single-market-intercept/bridge-evidence/loaded/4e0bc932f5526a852ef40da0cd23774291e62eadbb00c0d7620e2edf96370270/antitrustBayes_4e0bc932f5526a852ef40da0cd23774291e62eadbb00c0d7620e2edf96370270.so' which is already loaded.
+If the file has changed since the last time it was loaded, this load may not update the library!"
+"pair_C_M4T4","pair","completed","","Loading a shared object '/mnt/d/Projects/antitrustBayes/.scratch/single-market-intercept/bridge-evidence/loaded/4e0bc932f5526a852ef40da0cd23774291e62eadbb00c0d7620e2edf96370270/antitrustBayes_4e0bc932f5526a852ef40da0cd23774291e62eadbb00c0d7620e2edf96370270.so' which is already loaded.
+If the file has changed since the last time it was loaded, this load may not update the library!"
+"pair_CF_M1T1","pair","completed","",""
+"pair_CS_M1T1","pair","completed","","Loading a shared object '/mnt/d/Projects/antitrustBayes/.scratch/single-market-intercept/bridge-evidence/loaded/4263e9e96971e9eb4e6871b734a25b03c9f2ea45a417d59b2255bf2ca6b5e165/antitrustBayes_4263e9e96971e9eb4e6871b734a25b03c9f2ea45a417d59b2255bf2ca6b5e165.so' which is already loaded.
+If the file has changed since the last time it was loaded, this load may not update the library!"
+"bridge_C_M1T1_cmdstanr","bridge","completed","",""
+"bridge_C_M1T1_nutpie","bridge","completed","",""
+"bridge_CF_M1T1_cmdstanr","bridge","completed","",""
+"bridge_CF_M1T1_nutpie","bridge","completed","",""
+"bridge_CS_M1T1_cmdstanr","bridge","completed","",""
+"bridge_CS_M1T1_nutpie","bridge","completed","",""
+"MC_intercept_prior","prior","completed","","Loading a shared object '/mnt/d/Projects/antitrustBayes/.scratch/single-market-intercept/bridge-evidence/loaded/4e0bc932f5526a852ef40da0cd23774291e62eadbb00c0d7620e2edf96370270/antitrustBayes_4e0bc932f5526a852ef40da0cd23774291e62eadbb00c0d7620e2edf96370270.so' which is already loaded.
+If the file has changed since the last time it was loaded, this load may not update the library!"

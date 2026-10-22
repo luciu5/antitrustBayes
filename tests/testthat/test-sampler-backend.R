@@ -173,7 +173,7 @@ test_that("saved Nutpie policy plans retain posterior rows and reject changed pr
       log(c(40, 30, 20)[[j]] / 90) + quality[, j]
   }
   stan_data <- list(quality_parameterization = 1L, N_group = 3L, group = 1:3)
-  attr(stan_data, "model_spec_version") <- 11L
+  attr(stan_data, "model_spec_version") <- 12L
   attr(stan_data, "group_levels") <- c("a", "b", "c")
   attr(stan_data, "quality_scope") <- "global"
   fit <- methods::new("BayesLogit", stanfit = native, stan_data = stan_data,
@@ -182,7 +182,7 @@ test_that("saved Nutpie policy plans retain posterior rows and reject changed pr
       year = "1", outside_price = 1), price_sd = 1, supply_model = 1L,
     demand_model = "logit", market_side = "input",
     metadata = list(backend = "nutpie", structure = "simultaneous",
-                    model_spec_version = 11L,
+                    model_spec_version = 12L,
                     quality_parameterization = "sampled"))
   plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 19L)
   expect_equal(unname(plan$quality_draws), quality[plan$draw_indices, , drop = FALSE])

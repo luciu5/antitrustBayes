@@ -16,7 +16,8 @@ testthat::test_that("CmdStan bridge evidence requires the exact current source",
   testthat::expect_false(contract$migration %||% FALSE)
 
   stale_metadata <- metadata
-  stale_metadata$stan_source_hash <- paste0("0", substr(source_hash, 2L, 64L))
+  replacement <- if (substr(source_hash, 1L, 1L) == "0") "1" else "0"
+  stale_metadata$stan_source_hash <- paste0(replacement, substr(source_hash, 2L, 64L))
   testthat::expect_error(
     .bayes_cmdstan_source_contract(stale_metadata, source_code),
     "source hashes differ"

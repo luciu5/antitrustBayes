@@ -1,5 +1,10 @@
 # Plan: integrate Gaussian market intercepts
 
+> Correction, 2026-10-21: the historical single-market zero-intercept statements
+> below are superseded by specification 12. A single Logit market now samples a
+> free `Normal(0,1)` intercept without a hierarchy SD. Multi-market analytical
+> integration is unchanged. See the [current normalization contract](single_market_utility_normalization.md).
+
 Status: implemented as an opt-in experiment; sampler promotion is still
 pending the frozen HMC comparison. The earlier geometry work and its failed
 runs are checkpointed in `b28384a`, following `64fc60c`. The implementation

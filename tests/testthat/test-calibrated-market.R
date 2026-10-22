@@ -77,9 +77,15 @@ test_that("calibrated Logit markets share one seeded geometry across conduct", {
       order(-market$truth$conditional_shares, seq_len(5L))
     ]
     expect_identical(unname(market$design$role_ranking), expected_rank)
-    expect_equal(market$truth$s0,
-                 stats::plogis(mean(log(market$truth$conditional_shares))),
+    expect_identical(market$truth$s0, 0.20)
+    expect_identical(market$design$outside_share, 0.20)
+    expect_equal(market$truth$market_intercept,
+                 mean(log(market$truth$conditional_shares)) - qlogis(.20),
                  tolerance = 1e-14)
+    expect_equal(sum(market$truth$centered_log_shares), 0, tolerance = 1e-14)
+    expect_equal(unname(market$truth$data$b),
+                 unname(market$truth$centered_log_shares +
+                          market$truth$market_intercept), tolerance = 1e-14)
     expect_equal(market$truth$s0_identity,
                  1 - sum(market$truth$shares), tolerance = 0)
     expect_equal(market$truth$s0, 1 - sum(market$truth$shares),
@@ -124,7 +130,7 @@ test_that("explicit primitives calibrate each conduct and re-solve with fixed al
   markets <- lapply(conducts, function(conduct) {
     bayes_calibrated_market(
       conduct = conduct, J = 7L, conditional_shares = r,
-      costs = costs, anchor_margin = .12,
+      costs = costs, anchor_margin = .12, outside_share = .35,
       k = if (conduct %in% c("BF", "CF", "BS", "CS")) 3L else NULL,
       seed = 101L)
   })
@@ -134,7 +140,21 @@ test_that("explicit primitives calibrate each conduct and re-solve with fixed al
     market <- markets[[i]]
     expect_identical(unname(market$truth$conditional_shares), r)
     expect_identical(unname(market$truth$costs), costs)
-    expect_equal(market$truth$s0, plogis(mean(log(r))), tolerance = 1e-14)
+    expect_identical(market$truth$s0, .35)
+    expected_score <- log((1 - .35) * r / .35)
+    expect_equal(unname(market$truth$data$b), expected_score, tolerance = 1e-14)
+    expect_equal(unname(market$truth$centered_log_shares),
+                 log(r) - mean(log(r)), tolerance = 1e-14)
+    expect_equal(market$truth$market_intercept,
+                 mean(log(r)) - qlogis(.35), tolerance = 1e-14)
+    if (conducts[[i]] == "A") {
+      expect_equal(unname(market$truth$meanval), expected_score, tolerance = 1e-12)
+      expect_equal(unname(market$truth$auction_value - market$truth$alpha * costs),
+                   expected_score, tolerance = 1e-12)
+    } else {
+      expect_equal(unname(market$truth$meanval - market$truth$alpha * market$truth$data$prices),
+                   expected_score, tolerance = 1e-12)
+    }
     expect_equal(unname(market$truth$margins[1L]), .12, tolerance = 1e-7)
     expect_true(market$truth$equilibrium$passed)
     if (conducts[[i]] %in% c("BF", "CF")) expect_length(market$truth$core, 3L)
@@ -160,10 +180,38 @@ test_that("explicit primitives calibrate each conduct and re-solve with fixed al
     expect_lt(solved$truth$equilibrium$max_cost_error, 2e-6)
     expect_lt(solved$truth$equilibrium$max_relative_error, 2e-6)
     expect_lt(solved$truth$equilibrium$max_share_error, 2e-6)
+    expect_equal(unname(solved$truth$data$b),
+                 unname(log(solved$truth$shares / solved$truth$s0)), tolerance = 1e-12)
+    expect_equal(solved$truth$market_intercept,
+                 mean(log(solved$truth$conditional_shares)) - qlogis(solved$truth$s0),
+                 tolerance = 1e-12)
   }
   expect_error(bayes_calibrated_market(conduct = "B", J = 7L,
     conditional_shares = rep(.1, 7), costs = costs, anchor_margin = .12),
     "conditional_shares")
+})
+
+test_that("outside share is an independent baseline primitive and remains endogenous after shocks", {
+  make_market <- function(s0) bayes_calibrated_market(
+    conduct = "B", J = 3L, conditional_shares = c(.5, .3, .2),
+    costs = c(.8, 1, 1.2), mode = "parameter", alpha = 3,
+    outside_share = s0, seed = 101L)
+  low <- make_market(.15)
+  high <- make_market(.40)
+  expect_identical(low$truth$conditional_shares, high$truth$conditional_shares)
+  expect_identical(low$truth$costs, high$truth$costs)
+  expect_identical(low$truth$alpha, high$truth$alpha)
+  expect_gt(max(abs(low$truth$shares - high$truth$shares)), .01)
+  expect_gt(max(abs(low$truth$data$prices - high$truth$data$prices)), .001)
+  shifted <- bayes_resolve_market(high, costs = unname(high$truth$costs),
+    meanval = unname(high$truth$meanval) + .30)
+  expect_lt(shifted$truth$s0, high$truth$s0)
+  expect_identical(shifted$design$outside_share, .40)
+  expect_equal(shifted$truth$s0, 1 - sum(shifted$truth$shares), tolerance = 1e-14)
+  for (invalid in list(NULL, NA_real_, NaN, Inf, -Inf, 0, 1, -.1, 1.1,
+                       c(.2, .3), ".2", TRUE)) {
+    expect_error(make_market(invalid), "outside_share.*finite scalar.*\\(0, 1\\)")
+  }
 })
 
 test_that("parameter-driven mode retains supplied alpha and one observed margin", {

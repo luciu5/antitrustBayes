@@ -119,7 +119,12 @@
 #'   intercept coordinates. The collapsed mode requires multiple markets,
 #'   Gaussian shares and margins, collapsed market-scoped quality, a joint
 #'   likelihood, and legacy/base s0 coordinates. It is an opt-in sampler
-#'   parameterization; single-market requests resolve to the existing no-op.
+#'   parameterization. A single Logit market always samples a free inside-market
+#'   intercept with a normalized Normal(0, 1) prior and no between-market SD;
+#'   requesting collapsed coordinates there leaves this sampled intercept in place.
+#'   Outside-good utility remains zero and product quality stays centered.
+#'   The intercept and outside-share log odds enter conditional demand additively;
+#'   their separate identification depends on supply information and the priors.
 #' @param quality_scope Quality incidence for the hierarchical quality effect:
 #'   \code{"market"} (default), which centers persistent quality separately
 #'   within each market while retaining the original \code{group} ownership
@@ -1050,6 +1055,8 @@ bayes_est <- function(prices, quantities, margins,
     partition_metadata$k_prior_by_unit
   metadata$firm_market_ranking <- attr(stan_data, "firm_market_ranking", exact = TRUE)
   metadata$resolved_priors <- priors
+  metadata$market_intercept_mean_prior <- if (demand_model == "logit" ||
+      stan_data$N_market > 1L) list(family = "normal", mean = 0, sd = 1) else NULL
   metadata$market_year_size <- market_year_size
   metadata$N_mt <- market_year_size$N_mt
   metadata$market_year_idx <- market_year_size$observation_to_market_year
@@ -1066,6 +1073,7 @@ bayes_est <- function(prices, quantities, margins,
   metadata$prior_normalization <- list(
     mode = "native_stan_normalized",
     model_spec_version = .antitrust_bayes_model_spec_version,
+    market_intercept_mean_prior = metadata$market_intercept_mean_prior,
     share_likelihood = likelihood_modes$share_likelihood,
     margin_likelihood = likelihood_modes$margin_likelihood,
     quality_parameterization = likelihood_modes$quality_parameterization,

@@ -65,3 +65,6 @@ tmp_lib/
 /doc/performance_audit/recovery/**/*.rds
 /doc/performance_audit/recovery/**/.artifacts/
 /doc/performance_audit/recovery/**/__pycache__/
+
+# Normalization-correction fits, native caches and raw validation evidence.
+/.scratch/single-market-intercept/

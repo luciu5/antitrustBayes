@@ -24,7 +24,7 @@ library(antitrustBayes)
     N_group = 3L,
     group = 1:3
   )
-  attr(stan_data, "model_spec_version") <- 11L
+  attr(stan_data, "model_spec_version") <- 12L
   attr(stan_data, "quality_scope") <- "global"
   attr(stan_data, "group_levels") <- c("a", "b", "c")
   methods::new(
@@ -37,7 +37,7 @@ library(antitrustBayes)
       posterior_draws = 2L,
       structure = "simultaneous",
       partition_prior = "cutoff",
-      model_spec_version = 11L
+      model_spec_version = 12L
     )
   )
 }

@@ -30,7 +30,14 @@
 }
 
 .bayes_calibrated_geometry <- function(J, concentration, inside_size,
-                                       conditional_shares = NULL) {
+                                       conditional_shares = NULL,
+                                       outside_share = 0.20) {
+  if (!is.numeric(outside_share) || length(outside_share) != 1L ||
+      !is.finite(outside_share) || outside_share <= 0 || outside_share >= 1) {
+    stop("'outside_share' must be a finite scalar strictly inside (0, 1).",
+         call. = FALSE)
+  }
+  outside_share <- as.numeric(outside_share)
   shape <- if (length(concentration) == 1L) {
     rep(concentration, J)
   } else {
@@ -48,29 +55,34 @@
     conditional_shares <- unname(as.numeric(conditional_shares))
   }
   mean_log_share <- mean(log(conditional_shares))
-  s0_formula <- stats::plogis(mean_log_share)
-  shares <- unname((1 - s0_formula) * conditional_shares)
+  shares <- unname((1 - outside_share) * conditional_shares)
   s0_identity <- 1 - sum(shares)
   if (any(!is.finite(conditional_shares)) ||
       any(conditional_shares <= 0) ||
-      any(!is.finite(shares)) || any(shares <= 0) ||
-      !is.finite(s0_formula) || s0_formula <= 0 || s0_formula >= 1) {
+      any(!is.finite(shares)) || any(shares <= 0)) {
     stop("Dirichlet draw did not retain positive finite shares; increase the concentration.",
          call. = FALSE)
   }
   prices <- rep(1, J)
   products <- paste0("product_", seq_len(J))
   names(prices) <- names(shares) <- names(conditional_shares) <- products
-  b <- log(conditional_shares) - mean_log_share
+  centered_log_shares <- log(conditional_shares) - mean_log_share
+  names(centered_log_shares) <- products
+  market_intercept <- mean_log_share - stats::qlogis(outside_share)
+  ## b is the structural baseline utility index, not a centered contrast.
+  ## Public constructors consume the intercept exactly once through this sum.
+  b <- log(shares / outside_share)
   names(b) <- products
   ranking <- order(-conditional_shares, seq_len(J))
   list(
     prices = prices,
     shares = shares,
     conditional_shares = conditional_shares,
-    s0 = s0_formula,
+    s0 = outside_share,
     s0_identity = s0_identity,
     mean_log_share = mean_log_share,
+    centered_log_shares = centered_log_shares,
+    market_intercept = market_intercept,
     b = b,
     quantities = unname(inside_size * conditional_shares),
     group = products,
@@ -346,9 +358,12 @@
 #' by the supplied conduct. It either calibrates the structural price
 #' coefficient from one observed margin or uses a supplied coefficient. The
 #' conditional inside shares are drawn from a `J`-dimensional Dirichlet with
-#' the required concentration parameter. Their geometric mean sets the
-#' outside share through `plogis(mean(log(r)))`; centered log shares are kept
-#' as the baseline quality coordinates.
+#' the required concentration parameter. The baseline outside share is supplied
+#' separately and defaults to 0.20. Centered log shares remain the quality
+#' contrasts; their common market intercept is
+#' `mean(log(r)) - qlogis(outside_share)`. The structural baseline utility
+#' index `truth$data$b = log((1 - outside_share) * r / outside_share)` includes
+#' that intercept exactly once.
 #' Calibration and equilibrium checks use the public `antitrust` or
 #' `coordination` model constructors. The returned estimation inputs keep
 #' only the highest-share anchor margin; every other margin is `NA`, while
@@ -370,6 +385,9 @@
 #'   length `J`, unless `conditional_shares` is supplied.
 #' @param conditional_shares Optional explicit positive inside-share vector
 #'   of length `J` summing to one. Supplying it skips the Dirichlet draw.
+#' @param outside_share Baseline outside-good share, a finite scalar strictly
+#'   inside `(0, 1)`, default 0.20. Subsequent calls to [bayes_resolve_market()]
+#'   let the outside share respond to changed costs and quality.
 #' @param anchor_margin Optional observed Lerner margin for the prespecified
 #'   highest-share product in calibrated mode. If omitted, `margin_range` is
 #'   required and supplies an open interval for a seeded draw.
@@ -409,7 +427,7 @@ bayes_calibrated_market <- function(
     inside_size = 10000, equilibrium_tolerance = 2e-6,
     costs = NULL, cost_rule = c("uniform", "common"),
     cost_level = 1, cost_range = c(0.7, 1.3),
-    conditional_shares = NULL) {
+    conditional_shares = NULL, outside_share = 0.20) {
   mode <- match.arg(mode)
   cost_rule <- match.arg(cost_rule)
   conduct <- match.arg(conduct)
@@ -556,7 +574,7 @@ bayes_calibrated_market <- function(
     rep(dirichlet_concentration, J)
   } else as.numeric(dirichlet_concentration)
   geometry <- .bayes_calibrated_geometry(
-    J, concentration, inside_size, conditional_shares
+    J, concentration, inside_size, conditional_shares, outside_share
   )
   if (identical(mode, "calibrated")) {
     if (is.null(anchor_margin)) {
@@ -634,6 +652,8 @@ bayes_calibrated_market <- function(
         cost_range else NULL,
       role_ranking = geometry$group[geometry$ranking],
       inside_size = inside_size,
+      outside_share = geometry$s0,
+      outside_share_rule = "fixed baseline target",
       seed = seed,
       fresh_design = "same generated market; re-solved from a perturbed start"
     ),
@@ -642,8 +662,9 @@ bayes_calibrated_market <- function(
       alpha = primary$alpha,
       s0 = geometry$s0,
       s0_identity = geometry$s0_identity,
+      market_intercept = geometry$market_intercept,
       conditional_shares = geometry$conditional_shares,
-      centered_log_shares = geometry$b,
+      centered_log_shares = geometry$centered_log_shares,
       shares = geometry$shares,
       margins = primary$margins,
       costs = primary$costs,
@@ -778,6 +799,7 @@ bayes_resolve_market <- function(market, costs = market$truth$costs,
   out$truth$shares <- shares
   out$truth$conditional_shares <- r
   out$truth$s0 <- out$truth$s0_identity <- s0
+  out$truth$market_intercept <- mean(log(r)) - stats::qlogis(s0)
   out$truth$margins <- margins
   out$truth$unit_markup <- stats::setNames(markup * alpha, labels)
   out$truth$absolute_margins <- stats::setNames(prices - costs, labels)
@@ -789,7 +811,7 @@ bayes_resolve_market <- function(market, costs = market$truth$costs,
   out$truth$data$conditional_shares <- unname(r)
   out$truth$data$quantities <- unname(market$design$inside_size * r)
   out$truth$data$margins <- unname(margins)
-  out$truth$data$b <- unname(out$truth$centered_log_shares)
+  out$truth$data$b <- unname(log(shares / s0))
   out$truth$equilibrium <- list(
     prices = prices, shares = shares, max_cost_error = cost_error,
     max_relative_error = price_error, max_share_error = share_error,

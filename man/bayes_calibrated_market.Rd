@@ -21,7 +21,8 @@ bayes_calibrated_market(
   cost_rule = c("uniform", "common"),
   cost_level = 1,
   cost_range = c(0.7, 1.3),
-  conditional_shares = NULL
+  conditional_shares = NULL,
+  outside_share = 0.2
 )
 }
 \arguments{
@@ -73,6 +74,10 @@ product. If omitted, costs are drawn independently of conduct.}
 
 \item{conditional_shares}{Optional explicit positive inside-share vector
 of length \code{J} summing to one. Supplying it skips the Dirichlet draw.}
+
+\item{outside_share}{Baseline outside-good share, a finite scalar strictly
+inside \code{(0, 1)}, default 0.20. Subsequent calls to \code{\link[=bayes_resolve_market]{bayes_resolve_market()}}
+let the outside share respond to changed costs and quality.}
 }
 \value{
 A list of class \code{bayes_calibrated_market} with primitive costs,
@@ -86,9 +91,12 @@ then sets each price to its physical cost plus the structural markup implied
 by the supplied conduct. It either calibrates the structural price
 coefficient from one observed margin or uses a supplied coefficient. The
 conditional inside shares are drawn from a \code{J}-dimensional Dirichlet with
-the required concentration parameter. Their geometric mean sets the
-outside share through \code{plogis(mean(log(r)))}; centered log shares are kept
-as the baseline quality coordinates.
+the required concentration parameter. The baseline outside share is supplied
+separately and defaults to 0.20. Centered log shares remain the quality
+contrasts; their common market intercept is
+\code{mean(log(r)) - qlogis(outside_share)}. The structural baseline utility
+index \code{truth$data$b = log((1 - outside_share) * r / outside_share)} includes
+that intercept exactly once.
 Calibration and equilibrium checks use the public \code{antitrust} or
 \code{coordination} model constructors. The returned estimation inputs keep
 only the highest-share anchor margin; every other margin is \code{NA}, while

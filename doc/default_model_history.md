@@ -1,5 +1,18 @@
 # Default-model history and promotion discipline
 
+## Single-market Logit utility correction (2026-10-21)
+
+Version `0.2.0.9007`, specification 12, removes the incorrect zero inside-market
+intercept in the two Logit kernels. The single-market intercept uses the existing
+proper population-mean `Normal(0,1)` prior directly; no hierarchy SD is introduced.
+Outside-good utility, centered product quality, price standardization, supply
+equations and outside-share pooling are unchanged. There is no legacy switch.
+Existing fits must be rerun before current comparison or simulation. CES kernels
+are unchanged. The calibrated-market API independently accepts `outside_share`
+(default `.20`) instead of deriving it from conditional-share geometry.
+See the [normalization contract](single_market_utility_normalization.md) and
+[executed correction checks](validation/single_market_intercept_results.md).
+
 ## Hierarchy SD prior defaults (2026-10-12)
 
 Version 0.2.0.9003 made the active alpha and outside-share hierarchy SD

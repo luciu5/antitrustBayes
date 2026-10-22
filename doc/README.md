@@ -1,7 +1,7 @@
 # Development and evidence index
 
-Reviewed 2026-10-20 against baseline `fff419b` and the Nutpie closeout starting
-at `8d6daa1`, package version `0.2.0.9006`.
+Reviewed 2026-10-21 for the single-market Logit normalization correction,
+starting at `55c6fdc`, package version `0.2.0.9007`, model specification 12.
 This is the current operational agenda and navigation entrypoint. Topic contracts
 and results remain the detailed sources; historical checklists do not select work.
 Update this index when a completed task changes a status or verification route.
@@ -17,6 +17,7 @@ do not retroactively change saved fits or establish universal HMC improvement.
 
 | Task | Start here | Smallest relevant test filter |
 | --- | --- | --- |
+| Single-market Logit utility normalization | [normalization contract](single_market_utility_normalization.md), [correction results](validation/single_market_intercept_results.md), [fresh native checks](validation/single_market_intercept_validation_results.md) | `single-market-intercept|market-intercept|s0-pooling|conditional-k` |
 | Estimation, controls, priors | [estimation](../R/estimate.R), [priors](../R/priors.R) | `stan-control-policy`, `hierarchical-sd-priors`, `market-intercept-sd-prior`, or `residual-sd-prior` |
 | Sampler backends and paired validation | [backend adapters](../R/sampler_backend.R), [closeout summary](validation/nutpie_closeout_summary.md), [closeout protocol](validation/nutpie_closeout_protocol.md), [original paired results](validation/nutpie_backend_results.md), [evidence contract](validation/nutpie_evidence_design.md) | `sampler-backend|nutpie|backend-policy-equivalence|evidence-availability` |
 | Quality/intercept reconstruction | [quality](../R/posterior_quality.R), [collapse contract](market_intercept_collapse_plan.md) | `posterior-quality|market-intercept-collapse` |
@@ -31,11 +32,12 @@ canonical R version. CI now pins a verified compatible `antitrust` `0.99.42`,
 `coordination` `0.0.0.9006` and `trade` `0.8.9.9002` stack, with the validated
 CmdStanR revision. The former `antitrust` `0.99.39` pin was incompatible with
 current coordination. The ordinary tier explicitly excludes Nutpie/BridgeStan;
-the opt-in CmdStan tier installs its frozen toolchain before testing. The
-first hosted run passed installation/provenance checks, then exposed a missing-
-CmdStan prerequisite guard in the ordinary Stan parser test. The guard fix passes
-focused configured/unconfigured checks; a hosted rerun and a clean native Nutpie
-CI route remain pending. See [CI readiness](validation/nutpie_ci_readiness.md).
+the opt-in CmdStan tier installs its frozen toolchain before testing. Hosted
+ordinary CI passed at baseline `55c6fdc` after its parser prerequisite guard
+fix ([executed run](https://github.com/luciu5/antitrustBayes/actions/runs/39570316189)).
+The current correction has separate local source/package/native checks; its
+hosted run follows publication. A clean native Nutpie CI route remains future
+work. See [CI readiness](validation/nutpie_ci_readiness.md).
 Check installed versions and library paths before interpreting integration skips
 or failures. The inspected default user library lacked the compatible stack;
 choose an existing compatible library explicitly rather than reinstalling blindly.
@@ -93,7 +95,8 @@ checklists in the historical umbrella and recovery notes below.
 | Sampler presets and diagnostic verdicts | Proposed, unimplemented; current controls remain explicit. | [proposal](sampler_usability_followup_plan.md) |
 | Prior-predictive diagnostics | Historical requested follow-up; no general public prior-predictive interface was found in this review. Scope separately before implementation. | [historical roadmap](statistical_toolkit_followup_plan.md), [inference contract](market_prediction_inference_design.md) |
 | Recovery and model discrimination | Current bounded CmdStanR gates exist; broad repeated-sample coverage and general conduct identification remain open. | [validation entrypoint](validation/README.md) |
-| Optional Nutpie sampler | Public normalized evidence, mixed-backend BMA and exact-source cache reconstruction supported; 42/42 closeout tasks completed, 90/90 bridge repetitions finite, all four empty-cache rebuilds validated. Full conditional-k evidence/weights and policy means agree. Precision remains inconclusive for 1/21 evidence and 13/28 conservative policy comparisons; attrition/diagnostics stay visible. Original 34 fits and corrected CES replay: 1,385 scored posterior/policy checks within MCSE tolerances. CmdStanR remains default; Nutpie diagonal is a validated alternative for the tested targets, low-rank an expert option. Ordinary suite: 5,166 assertions with native dependencies, 5,159 without; CmdStan: 590 passed. Package check: zero errors/warnings, one existing NOTE. First hosted CI exposed a parser prerequisite guard; its focused fix passes locally and awaits a hosted rerun. | [closeout summary](validation/nutpie_closeout_summary.md), [uncertainty audit](validation/nutpie_closeout_uncertainty_results.md), [regressions](validation/nutpie_closeout_regressions.md), [original results](validation/nutpie_backend_results.md), [promotion pilot](validation/nutpie_certification_pilot_results.md), [saved-fit results](validation/nutpie_serialization_results.md), [CI readiness](validation/nutpie_ci_readiness.md) |
+| Single-market Logit normalization | Corrected in both Logit kernels: one direct `Normal(0,1)` inside intercept, no single-market hierarchy SD; multi-market hierarchy, outside-share pooling and CES kernels unchanged. Deterministic 10%/20%/40% support and B/C/CF/CS posterior-policy identities pass. Full ordinary suite: 6,454 assertions; CmdStan: 590; package check: zero errors/warnings, one existing NOTE. Fresh validation: 25/25 tasks, 138 paired target states, 18/18 finite bridge repetitions; evidence differences agree within MC uncertainty, with all three precision caps inconclusive and actual mixing warnings retained. Existing fits require refitting under specification 12. | [contract](single_market_utility_normalization.md), [results](validation/single_market_intercept_results.md), [fresh native checks](validation/single_market_intercept_validation_results.md) |
+| Optional Nutpie sampler | Historical specification-11 validation: public normalized evidence, mixed-backend BMA and exact-source cache reconstruction supported; 42/42 closeout tasks completed, 90/90 bridge repetitions finite, all four empty-cache rebuilds validated. Full conditional-k evidence/weights and policy means agree. Precision remains inconclusive for 1/21 evidence and 13/28 conservative policy comparisons; attrition/diagnostics stay visible. Original 34 fits and corrected CES replay: 1,385 scored posterior/policy checks within MCSE tolerances. CmdStanR remains default; Nutpie diagonal is a validated alternative for the tested targets, low-rank an expert option. Ordinary suite: 5,166 assertions with native dependencies, 5,159 without; CmdStan: 590 passed. Package check: zero errors/warnings, one existing NOTE. Hosted ordinary CI passed after the parser prerequisite fix. Original timings and posterior checks describe the earlier target; see the normalization correction row for fresh specification-12 checks. | [closeout summary](validation/nutpie_closeout_summary.md), [uncertainty audit](validation/nutpie_closeout_uncertainty_results.md), [regressions](validation/nutpie_closeout_regressions.md), [original results](validation/nutpie_backend_results.md), [promotion pilot](validation/nutpie_certification_pilot_results.md), [saved-fit results](validation/nutpie_serialization_results.md), [CI readiness](validation/nutpie_ci_readiness.md) |
 
 ## Historical checkpoints
 

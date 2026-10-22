@@ -145,7 +145,12 @@ the reconstructed economic scales.}
 intercept coordinates. The collapsed mode requires multiple markets,
 Gaussian shares and margins, collapsed market-scoped quality, a joint
 likelihood, and legacy/base s0 coordinates. It is an opt-in sampler
-parameterization; single-market requests resolve to the existing no-op.}
+parameterization. A single Logit market always samples a free inside-market
+intercept with a normalized Normal(0, 1) prior and no between-market SD;
+requesting collapsed coordinates there leaves this sampled intercept in place.
+Outside-good utility remains zero and product quality stays centered.
+The intercept and outside-share log odds enter conditional demand additively;
+their separate identification depends on supply information and the priors.}
 
 \item{quality_scope}{Quality incidence for the hierarchical quality effect:
 \code{"market"} (default), which centers persistent quality separately

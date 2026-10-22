@@ -1,0 +1,13 @@
+"fixture","backend","b_market_max_error","gamma_market_max_error","c_effective_max_error","single_market_mu_max_error","serialization_tolerance","passed"
+"C_M1T1","cmdstanr",0,0,8.43977518982797e-08,0,1e-06,TRUE
+"C_M1T1","nutpie",0,0,0,0,1e-10,TRUE
+"C_M1T4","cmdstanr",0,7.19136337146153e-08,8.37871456660366e-08,0,1e-06,TRUE
+"C_M1T4","nutpie",0,4.44089209850063e-16,0,0,1e-10,TRUE
+"C_M4T1","cmdstanr",0,0,8.54166168906545e-08,NA,1e-06,TRUE
+"C_M4T1","nutpie",0,0,0,NA,1e-10,TRUE
+"C_M4T4","cmdstanr",0,7.12945775749318e-08,8.45554122275161e-08,NA,1e-06,TRUE
+"C_M4T4","nutpie",0,4.44089209850063e-16,0,NA,1e-10,TRUE
+"CF_M1T1","cmdstanr",0,0,1.20094454381103e-07,0,1e-06,TRUE
+"CF_M1T1","nutpie",0,0,0,0,1e-10,TRUE
+"CS_M1T1","cmdstanr",0,0,1.04729803052095e-07,0,1e-06,TRUE
+"CS_M1T1","nutpie",0,0,0,0,1e-10,TRUE

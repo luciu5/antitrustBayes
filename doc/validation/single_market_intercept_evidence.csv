@@ -1,0 +1,7 @@
+"task","fixture","backend","logml","uncertainty","requested","completed"
+"bridge_C_M1T1_cmdstanr","C_M1T1","cmdstanr",3.12499969231515,0.047147473323462,3,3
+"bridge_C_M1T1_nutpie","C_M1T1","nutpie",3.19147436170592,0.0444838184339253,3,3
+"bridge_CF_M1T1_cmdstanr","CF_M1T1","cmdstanr",0.693413116649222,0.0506916459123503,3,3
+"bridge_CF_M1T1_nutpie","CF_M1T1","nutpie",0.722020821248398,0.050815729201816,3,3
+"bridge_CS_M1T1_cmdstanr","CS_M1T1","cmdstanr",0.232990665960175,0.047386791789697,3,3
+"bridge_CS_M1T1_nutpie","CS_M1T1","nutpie",0.24642458429279,0.0502816817439578,3,3

@@ -1,0 +1,4 @@
+"conduct","true_s0","old_zero_intercept_s0","corrected_intercept","centered_quality_sum","max_demand_error","old_at_true_s0_max_error","public_price_error","public_share_error","public_margin_error","public_cost_error","public_alpha_error","public_meanval_error","public_equilibrium_passed"
+"C",0.2,0.0908512008087206,-0.916991402898777,4.44089209850063e-16,8.88178419700125e-16,0.916991402898778,0,0,0,0,0,0,TRUE
+"CF",0.2,0.0908512008087206,-0.916991402898777,3.10862446895044e-15,1.33226762955019e-15,0.916991402898778,0,0,0,0,0,0,TRUE
+"CS",0.2,0.0908512008087206,-0.916991402898777,8.88178419700125e-16,1.11022302462516e-15,0.916991402898778,0,0,0,0,0,0,TRUE

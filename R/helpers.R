@@ -130,7 +130,7 @@ safe_sd <- function(x, floor = 1e-8) {
 }
 
 ## Resolve the optional Gaussian market-intercept integration.  Code 1 is the
-## historical sampled/no-op path; code 2 removes the multi-market Gaussian
+## sampled path; code 2 removes the multi-market Gaussian
 ## intercept from the Stan target and reconstructs it after sampling.
 .resolve_market_intercept_parameterization <- function(
     market_intercept_parameterization = c("sampled", "collapsed"),
@@ -150,12 +150,13 @@ safe_sd <- function(x, floor = 1e-8) {
     stop("'N_market' must be a positive integer for intercept resolution.",
          call. = FALSE)
   }
-  ## A single market has no random market intercept in the existing model.
-  ## Preserve every current specification and record the request as a no-op.
+  ## A single Logit market samples its N(0,1) intercept directly, with no
+  ## between-market SD. Collapsing the hierarchy is therefore a coordinate no-op.
+  ## CES retains its existing single-market specification.
   if (as.integer(N_market) == 1L) {
     return(list(requested = requested, effective = "sampled", code = 1L,
                 no_op = identical(requested, "collapsed"),
-                coordinate_convention = "sampled_or_single_market_no_op"))
+                coordinate_convention = "sampled_single_market_coordinates"))
   }
   if (identical(requested, "sampled")) {
     return(list(requested = requested, effective = "sampled", code = 1L,
@@ -866,8 +867,9 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #'   \code{"sampled"} (default) or \code{"collapsed"} Gaussian
 #'   market-intercept coordinates. The collapsed mode requires multiple
 #'   markets, Gaussian shares and margins, collapsed market-scoped quality, a
-#'   joint likelihood, and legacy/base s0 coordinates. A single market resolves
-#'   to the existing sampled/no-op path.
+#'   joint likelihood, and legacy/base s0 coordinates. A single Logit market
+#'   samples its free Normal(0, 1) intercept directly without a hierarchy SD;
+#'   a collapsed-coordinate request leaves that sampled intercept in place.
 #' @param margin_likelihood Margin residual family: \code{"student_t"} or
 #'   \code{"gaussian"}; \code{NULL} (default) follows
 #'   \code{share_likelihood}, so the resolved default is Gaussian.
@@ -2120,7 +2122,7 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
 # Current fitted-object/model contract. Increment whenever the Stan likelihood
 # changes in a way that makes serialized fits unsuitable for comparison or
 # simulation under the current package.
-.antitrust_bayes_model_spec_version <- 11L
+.antitrust_bayes_model_spec_version <- 12L
 
 # Arithmetic mean of a logistic-normal random variable. The outside-share
 # prior is parameterized on the logit scale in Stan, while FOC prior
