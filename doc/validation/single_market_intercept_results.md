@@ -213,3 +213,451 @@ The directory also contains `prechange-diagnostic.json`, `ordinary-final-candida
 `installed-smoke.*`, and `merger-integration/`. Raw fits and native libraries are
 not committed. Historical Nutpie benchmarks describe specification 11 and
 must not be read as performance measurements of this corrected target.
+
+## 2026-10-21 follow-up: revised-paper Bertrand M1T1 cases
+
+Both authorized revised-paper Bertrand-truth cases, `share04_B_rep101_M1T1`
+and `share08_B_rep101_M1T1`, completed under specification 12 at commit
+`112c4480ff087e595dba10170a996b8d7ce28fe1` (version `0.2.0.9007`). These
+are **CmdStanR-only** results for one fixed rep101 economy at two measurement
+noise levels. They do not establish repeated-sample recovery or Nutpie speed.
+The complete archived master/economy hashes and policy-target objects match
+the revised `B_share04`/`B_share08` masters exactly, including the seven
+observations, margin masks, fixed merger, and 25% tariff definitions.
+
+The unchanged production profile fits MC/B/C/A and all six fixed-k components
+of each BF/CF/BS/CS family: **28 fits per case, 56 total**. MC and A each have
+prior probability 1/4; the other six candidates each have 1/12. Every rich
+family retains its full original k=1:6 support and uniform k prior, restored
+exactly once through the existing conditional-k evidence calculation.
+All fits use four chains and at most four sampling cores. MC/B/A retain
+2000 warmup and 2000 posterior draws per chain with `.99` acceptance,
+depth 14 and diagonal adaptation; C retains 4000/4000 with `.999`, depth 14
+and dense adaptation. Each rich-family component retains 2000/2000 with
+`.999`, depth 14 and dense adaptation. Seeds, raw inputs, exact calls,
+continuous priors, source/data hashes, and complete native chains were
+independently checked against the sealed manifest. All 56 resolved
+continuous-prior metadata hashes agree.
+
+All **168/168 requested normal bridge repetitions are finite** (84 per case;
+three per fitted atomic/component target, `maxiter=5000`). Independent
+log-sum-exp calculations reproduce every family evidence, posterior k weight,
+and eight-model probability. Exact values and repetition SDs are in
+[model comparison](single_market_intercept_bertrand_models.csv), with
+[family probabilities](single_market_intercept_bertrand_families.csv).
+
+| Scenario | Bertrand-family prior | B/BF/BS posterior | Atomic B posterior | MAP candidate |
+| --- | ---: | ---: | ---: | --- |
+| share04 | 25% | 60.067% | 20.631% | A, 21.379% |
+| share08 | 25% | 59.527% | 20.460% | A, 21.584% |
+
+The evidence increases total probability on the Bertrand family; it does not
+select atomic Bertrand as the most probable individual candidate.
+
+| Scenario | Divergences | Depth hits | Max R-hat | Min bulk ESS | Min tail ESS | End-to-end elapsed |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| share04 | 2 | 0 | 1.003512 | 1649.98 | 824.70 | 39m24s |
+| share08 | 3 | 0 | 1.005432 | 1881.54 | 850.06 | 36m58s |
+
+Elapsed times are controller start-to-finish times including worker startup,
+compilation/cache use, evidence and policies, not sampling-only timings.
+[Fit diagnostics and provenance](single_market_intercept_bertrand_fits.csv)
+retain all 56 source/data/prior/checkpoint hashes, actual controls, BFMI and
+per-fit elapsed times. Divergences remain disclosed. Raw execution logs also
+retain repeated unchanged-ownership/Logit-share adapter notices. Raw CmdStan
+CSVs were kept when the historical cleanup comparator could not confirm
+serialized function/source-reference object identity; independent exact
+source, data, prior, call and native-completion checks passed.
+
+Merger and tariff use the same posterior draw, k, quality and plan identities
+within every model. Each atomic candidate requests 200 states; each rich
+family requests 200 per k component. Both cases produced all 130 existing
+policy-summary rows. Selected market-basket price effects, in percent, are:
+
+| Scenario | Policy | Oracle | BMA mean | BMA SD | BMA 95% interval | B-only mean | MAP mean |
+| --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| share04 | Merger | 5.520 | 4.371 | 2.131 | [0, 8.087] | 5.315 | 3.100 |
+| share08 | Merger | 5.520 | 4.480 | 2.143 | [0, 8.386] | 5.392 | 3.347 |
+| share04 | Tariff 25% | 8.332 | 7.975 | .639 | [6.222, 8.940] | 8.272 | 7.867 |
+| share08 | Tariff 25% | 8.332 | 7.989 | .627 | [6.270, 8.933] | 8.278 | 7.872 |
+
+[Policy results](single_market_intercept_bertrand_policy.csv) retain all 20
+`price_pct` rows: five existing procedures, both policies and both cases,
+including threshold probabilities and explicit support/attrition fields.
+The equal-model-prior and joint-support sensitivity procedures remain
+separately labeled.
+
+CF retains three finite nonpositive-cost states in share04 (k1 draws
+2019/2495 and k3 draw 3227) and four in share08 (k1 draws 3424/3026/1413 and
+k2 draw 5514). They are the same states in both policies. CF has 1197/1200
+and 1196/1200 valid states respectively; all other candidates retain every
+requested state. Primary BMA summaries condition on successful draws within
+each model while retaining the original model probabilities, with original
+weighted negative-cost mass `9.853273e-6` and `6.286872e-6`. These omissions
+and the separate joint-support treatment remain visible; no candidate or k
+state was removed from evidence or model weighting.
+
+Raw fits, policies, warnings, manifests and controller receipts remain under
+ignored `.scratch/single-market-intercept/paper-bertrand-m1t1-20261021-v2/`;
+the earlier failed preflight-only attempt is preserved separately. No
+mergerBayes production source, selected analysis, DGP, or scientific/sampler
+setting was changed. Hosted ordinary CI passed at `112c448`
+([run 39710993394](https://github.com/luciu5/antitrustBayes/actions/runs/39710993394)).
+
+## 2026-10-21 follow-up: PNB 1960 M1T1
+
+The requested PNB cross section completed locally with fresh specification-12
+CmdStanR fits at `112c4480ff087e595dba10170a996b8d7ce28fe1`. The unchanged
+audited banking inputs contain 39 banks and 32 observed margins; the seven
+banks with missing margins remain in demand. The fixed merger joins target
+`889018` and acquirer `298816`. No Slurm job, banking-data rebuild, DGP change,
+or selected production-result replacement was performed.
+
+The seven-model universe is MC/B/C/BF/CF/BS/CS, with MC prior 1/3 and each
+other candidate 1/9. Thus MC, the Bertrand family and the Cournot family each
+start at 1/3. Auction is excluded by the existing banking design. Every rich
+fit uses the original native marginalized **uniform k=1:5** support, rather
+than the synthetic experiment's conditional-k decomposition over k=1:6.
+
+All seven fits retain the maintained banking controls: four chains, 1000
+warmup and 1000 retained draws per chain, seed 19091, initialization zero,
+diagonal metric, acceptance .99 and maximum depth 13. The likelihood is joint
+Gaussian with active correlation, input-market equations, collapsed market
+quality and sampled intercept. `s0_pooling="auto"` resolves to `"none"` in
+this cross section. No sampler control was tuned after inspecting outcomes.
+The existing paper script still pins specification 11 in its loader and
+sidecar contracts. The local research wrapper extracts its unchanged function
+definitions and fitting-argument expressions, records specification 12
+explicitly, and avoids those obsolete guards without impersonating version
+11. Updating the maintained downstream runner remains an integration task
+before production use; no mergerBayes source was edited here.
+
+All **21/21 requested normal bridge repetitions are finite** (three per
+model, `maxiter=5000`). The finalizer requires all seven finite evidences;
+independent probability reconstruction applies the original priors once.
+Complete values, bridge SDs, diagnostics and source/data/prior hashes are in
+[model comparison](single_market_intercept_pnb_models.csv).
+
+| Model | Prior | Posterior | Log marginal likelihood | Bridge repetition SD | Divergences |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| MC | 33.333% | 40.621% | -143.9828 | .004724 | 0 |
+| B | 11.111% | 12.527% | -144.0606 | .005029 | 0 |
+| C | 11.111% | 6.393% | -144.7332 | .006172 | 2 |
+| BF | 11.111% | 12.775% | -144.0410 | .003791 | 1 |
+| CF | 11.111% | 6.706% | -144.6855 | .006368 | 3 |
+| BS | 11.111% | 12.644% | -144.0513 | .007646 | 2 |
+| CS | 11.111% | 8.334% | -144.4682 | .011890 | 1 |
+
+[Family probabilities](single_market_intercept_pnb_families.csv) are
+**40.621% MC, 37.946% Bertrand and 21.433% Cournot**, from equal one-third
+priors. These are modest evidence differences, rather than decisive conduct
+identification. Diagnostics retain nine divergences, zero depth hits, maximum
+R-hat 1.004457, minimum bulk ESS 1159.10, minimum tail ESS 884.42 and minimum
+BFMI .84631. All seven fits and their evidence remain available for review.
+The controller ran 23:05:56–23:11:55 EDT (about six minutes), sequentially after
+the synthetic runs, using at most four sampling cores and their original
+shared absolute deadline. This elapsed time includes startup, evidence and
+policy calculations, not just HMC.
+
+The saved posterior directly retains the new nonzero inside-market intercept.
+For atomic B, its mean is -2.9631 with 95% interval [-3.8677, -2.0663]; the
+outside-share mean is .12039 with interval [.05334, .22918]. The complete
+[structural summaries](single_market_intercept_pnb_structural.csv) include
+the intercept, outside share and physical price sensitivity for every model;
+the original banking [parameter summaries](single_market_intercept_pnb_parameters.csv)
+retain noise and correlation estimates. These empirical data have no known
+true outside share, and freeing the intercept does not guarantee precise
+identification of outside share.
+
+All seven models retain 200/200 valid merger states, with no reported policy
+attrition. The maintained banking summary pools fractional deposit-rate
+changes across **banks and posterior draws, with equal bank weights**. Its
+mean is -1.285% for BMA, -1.893% for B alone and zero for MC; the corresponding
+pooled bank/draw SDs are 9.305, 7.535 and zero percentage points. These SDs
+are not posterior SDs of a market-basket aggregate. The maintained helper
+does not retain an aggregate posterior interval, so none is inferred here.
+[Policy summaries](single_market_intercept_pnb_policy.csv) preserve the exact
+fractional-unit results and explicitly labeled percent conversions. Tariffs
+are not part of this banking route.
+
+The active continuous priors match the synthetic M1T1 fits: in particular,
+`logit(s0) ~ Normal(-1.446786403764666, .456234014550216)` (outside-share prior
+mean .20, central 95% interval [.08778, .36527]), one `Normal(0,1)` inside
+intercept, and identical standardized price, quality, noise and correlation
+priors. Comparing the full resolved manifests finds only one differing
+entry: the market-intercept hierarchy SD family is Half-Normal(.5) in PNB
+and Gamma(shape=2, rate=5) in synthetic. That parameter is absent with one
+market. Identical standardized price priors imply different physical-unit
+priors when the empirical price SD differs. Model weights, k support and
+input/output-market economics therefore need explicit labels when comparing
+the two experiments.
+
+Sealed inputs, attempts, raw fits, native CSVs, bridge objects, diagnostic
+arrays, policy summaries and the reviewed wrappers remain under ignored
+`.scratch/single-market-intercept/pnb-m1t1-20261021/`. `summarize.R` performs
+only postprocessing and verifies the source/wrapper/data seals, all seven
+model probabilities, all saved fit seals and identical active prior settings.
+The pre-HMC contract tests passed 111 assertions in six blocks. No model was
+dropped, no prior mass was renormalized over survivors and no further HMC was
+launched during summarization.
+
+## 2026-10-22 follow-up: matched Nutpie PNB M1T1 rerun
+
+The authorized Nutpie rerun completed all seven PNB candidates under the same
+corrected specification 12 at `112c448`. It reused the sealed observed input
+from the preceding CmdStan run. Every fit has **identical full Stan data,
+Stan-source/data hashes, resolved priors, model specification and model prior**
+to its CmdStan counterpart. The original native uniform k=1:5 support remains
+in all rich models. The only fitting changes are the sampler backend, explicit
+Nutpie diagonal adaptation replacing CmdStan's `diag_e`, and removal of the
+CmdStan-specific CSV output option. Common controls remain four chains, 1000
+warmup plus 1000 retained draws per chain, seed 19091, initialization zero,
+acceptance .99, maximum depth 13 and at most four sampling cores. NutpieR
+1.9.1 and the BridgeStan 2.8.0 R client were selected from the existing library;
+both matching kernel libraries were already cached. No dependency was installed.
+
+All **21/21 normal bridge repetitions are finite**, using the same three-repeat
+and `maxiter=5000` budgets. No diagnostic threshold gates model evidence or
+probabilities. Every positive-prior candidate is retained. The maximum
+absolute log-evidence difference is .02133; all seven differences are within
+.720 of the conservative combined bridge uncertainty used here. That
+uncertainty is the square root of the sum of the two maximum squared
+within-repetition log-evidence MCSEs and the two squared repetition SDs; shared
+posterior draws within a backend are not treated as independent repetitions.
+The maximum individual model-probability difference is .576 percentage points.
+
+| Model | Prior | CmdStan posterior | Nutpie posterior | CmdStan divergences | Nutpie divergences |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| MC | 33.333% | 40.621% | 41.197% | 0 | 0 |
+| B | 11.111% | 12.527% | 12.428% | 0 | 0 |
+| C | 11.111% | 6.393% | 6.301% | 2 | 0 |
+| BF | 11.111% | 12.775% | 12.723% | 1 | 1 |
+| CF | 11.111% | 6.706% | 6.646% | 3 | 0 |
+| BS | 11.111% | 12.644% | 12.292% | 2 | 1 |
+| CS | 11.111% | 8.334% | 8.413% | 1 | 1 |
+
+[Full comparison](single_market_intercept_pnb_nutpie_comparison.csv) includes
+log evidence, MCSE, diagnostics, timings and exact source/data hashes;
+[bridge repetitions](single_market_intercept_pnb_nutpie_bridge_repetitions.csv)
+preserve all 42 estimates from the paired runs. Family posterior probabilities
+are **41.197% MC, 37.443% Bertrand and 21.360% Cournot** under Nutpie, compared
+with 40.621%, 37.946% and 21.433% under CmdStan, from equal one-third priors.
+See the [family comparison](single_market_intercept_pnb_nutpie_families.csv).
+
+The 42 paired means for outside share, intercept, physical price sensitivity,
+share/margin error scales and correlation differ by at most 2.902 combined
+mean MCSEs. [Posterior comparisons](single_market_intercept_pnb_nutpie_parameters.csv)
+also retain both medians, SDs and central 95% intervals. This bounded result
+supports agreement for this empirical cross section, rather than general
+recovery or universal sampler superiority.
+
+| Diagnostic | CmdStan | Nutpie diagonal |
+| --- | ---: | ---: |
+| Divergences, seven models combined | 9 | 3 |
+| Depth hits | 0 | 0 |
+| Maximum R-hat | 1.004457 | 1.016147 |
+| Minimum bulk ESS | 1159.10 | 469.09 |
+| Minimum tail ESS | 884.42 | 798.82 |
+| Minimum BFMI | .84631 | .82919 |
+
+Nutpie's weaker maximum R-hat/bulk ESS occurs in C's outside-share coordinate;
+its intercept has R-hat 1.01355 and bulk ESS 499.84. These mixing warnings
+remain visible despite fewer divergences. No tuning or additional sampling
+was performed after seeing them.
+
+The sum of CmdStan process elapsed times over seven fits is 115.27 seconds
+(111.68 seconds summing each fit's longest chain warmup-plus-sampling time).
+Nutpie reports 73.23 seconds of native warmup and sampling, including callbacks
+and native extraction; its complete seven `bayes_est()` calls total 78.54
+seconds. Nutpie's cache/compile checks total .268 seconds. These are sums of
+parallel-chain wall times across models, not CPU totals; backend timing scopes
+differ. The whole Nutpie run took 222.46 seconds including R preflight,
+evidence and policies. Its single R process avoids the eight worker startups
+in the earlier CmdStan orchestration, so the whole-run elapsed difference is
+not a pure sampler benchmark. Lower elapsed sampling time and fewer
+divergences here do not imply better ESS per second for every parameter.
+
+The unchanged PNB merger calculation retained **200/200 states per model**,
+with no reported attrition. BMA mean bank deposit-rate change is -1.27198%
+under Nutpie versus -1.28521% under CmdStan, a difference of .01324 percentage
+points. The pooled bank/draw SDs are 9.40463 and 9.30545 percentage points.
+[Policy comparison](single_market_intercept_pnb_nutpie_policy.csv) preserves
+the existing equal-bank-weight statistic and its units; these SDs are not
+posterior SDs of an aggregate policy effect, and no aggregate interval or
+policy MCSE is inferred from them. The samplers produce different posterior
+states; their 200-state policy calculations do not compare identical states.
+
+The frozen runner, manifest, exact paired-identity checks, raw fits, native
+diagnostics, all bridge attempts, warnings and execution receipt remain in
+ignored `.scratch/single-market-intercept/pnb-m1t1-nutpie-20261022/`. The
+outer four-hour process-group timeout was not approached. Cached-library
+reload warnings were retained and no binary/source identity changed. No
+mergerBayes source, scientific specification, selected result or production
+inference was modified. CmdStan remains the package default.
+
+## 2026-10-22 follow-up: Nutpie PNB acceptance .999
+
+The requested acceptance sensitivity rerun completed separately in
+`.scratch/single-market-intercept/pnb-m1t1-nutpie-delta999-20261022/`.
+This is **Nutpie diagonal**, not a new CmdStan run. A sealed comparison of all
+seven argument lists confirms that the only fitting change from the preceding
+Nutpie run is `stan_options$control$adapt_delta = .999` (translated to native
+`target_accept=.999`). Full Stan data, source/data hashes, model specification
+12, priors, uniform k=1:5 support, initialization, seed, chain/draw budgets,
+depth limit, libraries, adaptation mode and policy definitions are unchanged.
+The earlier runs and their evidence remain intact. No production sampler
+default or scientific specification was changed.
+
+All seven fits contain the requested four complete chains, each with 1000
+retained draws after 1000 warmup iterations. All **21/21 requested normal
+bridge repetitions are finite**. Every positive-prior candidate remains in
+the comparison. The [three-run comparison](single_market_intercept_pnb_nutpie_delta999_comparison.csv)
+retains the corrected CmdStan .99 reference, Nutpie .99 and Nutpie .999.
+Columns labeled `Nutpie` in these new tables refer to **.999**; `Nutpie99`
+refers to the preceding run. The [repetition table](single_market_intercept_pnb_nutpie_delta999_bridge_repetitions.csv)
+preserves all 63 bridge estimates and explicitly records target acceptance.
+
+| Diagnostic | CmdStan .99 | Nutpie .99 | Nutpie .999 |
+| --- | ---: | ---: | ---: |
+| Divergences, all seven models | 9 | 3 | 0 |
+| Depth hits | 0 | 0 | 0 |
+| Maximum R-hat | 1.004457 | 1.016147 | 1.007238 |
+| Minimum bulk ESS | 1159.10 | 469.09 | 679.72 |
+| Minimum tail ESS | 884.42 | 798.82 | 805.26 |
+| Minimum BFMI | .84631 | .82919 | .83954 |
+
+The C outside-share coordinate improves from R-hat 1.01615/bulk ESS 469.09
+to 1.00598/859.85. Improvements are not uniform: CF's minimum bulk ESS is
+679.72 versus 754.26 at .99, and BF's maximum R-hat is 1.00724 versus 1.00510.
+Zero observed divergences in this one run does not establish their absence
+in future runs or universal efficiency superiority.
+
+| Family | Prior, every run | CmdStan .99 | Nutpie .99 | Nutpie .999 |
+| --- | ---: | ---: | ---: | ---: |
+| MC | 33.333% | 40.621% | 41.197% | 40.473% |
+| Bertrand | 33.333% | 37.946% | 37.443% | 38.035% |
+| Cournot | 33.333% | 21.433% | 21.360% | 21.492% |
+
+[Family probabilities](single_market_intercept_pnb_nutpie_delta999_families.csv)
+and the full seven-model table retain the original priors. Maximum individual
+model-probability change from Nutpie .99 is .7245 percentage points. The
+maximum absolute log-evidence change is .02016 versus .99 and .02660 versus
+CmdStan, within .643 and .758 respectively of the same conservative combined
+bridge uncertainty defined in the preceding section. The 42 structural means
+change by at most 2.2784 combined mean MCSEs versus Nutpie .99 and 1.6902
+versus CmdStan. [Parameter comparisons](single_market_intercept_pnb_nutpie_delta999_parameters.csv)
+also retain all three means, SDs, medians and central intervals.
+
+All seven merger calculations retain **200/200 valid states**. The unchanged
+BMA mean bank deposit-rate change is -1.28198%, versus -1.27198% at Nutpie
+.99 and -1.28521% under CmdStan. The .999-minus-.99 change is -.01000
+percentage points. The .999 pooled bank/draw SD is 9.17446 percentage points;
+it is not an aggregate posterior SD. The [policy comparison](single_market_intercept_pnb_nutpie_delta999_policy.csv)
+retains the same equal-bank-weight estimand and all successful-state counts.
+No aggregate policy interval or MCSE is inferred from those pooled moments.
+
+Nutpie native warmup-plus-sampling time, summed over seven fits, increases
+from 73.226 to **111.878 seconds**, or 52.8%. Complete fitting calls total
+117.248 seconds; the whole run, including preflight, evidence and policies,
+takes 258.125 seconds. Backend timing scopes remain as described above;
+the earlier CmdStan reference was not rerun at .999. No additional tuning or
+sampling followed inspection of these outcomes.
+
+Independent review checked all 31 new RDS seals, exact paired targets and
+control changes, complete native draws, bridge medians/SDs, all model/family
+weights and BMA policy moments. No material issue was found. The recorded
+zero divergences and improved worst mixing come with greater computation,
+rather than establishing a general backend or acceptance recommendation.
+
+## 2026-10-22 follow-up: CmdStan PNB acceptance .999
+
+The requested **CmdStanR .999** rerun completed separately in
+`.scratch/single-market-intercept/pnb-m1t1-cmdstan-delta999-20261022/`.
+All seven call lists match the original corrected CmdStan .99 calls after
+changing only `adapt_delta` and the separate CSV output directory. The
+diagonal `diag_e` metric, four chains, 1000 warmup/1000 retained draws per
+chain, initialization zero, seed 19091, maximum depth 13, all scientific
+arguments, full native k=1:5 support, model priors and policy definitions
+remain unchanged. Direct checks against the saved Nutpie .999 fits confirm
+identical full Stan data, model specification, source/data hashes and resolved
+priors. This provides a matched .999 backend comparison under specification 12.
+
+All seven fits contain every requested native draw; **21/21 normal bridge
+repetitions are finite**, and all models retain **200/200 valid merger states**.
+No diagnostics threshold suppresses evidence, and no positive-prior model is
+dropped. The [model table](single_market_intercept_pnb_cmdstan_delta999_models.csv)
+retains all 28 model/configuration rows from CmdStan/Nutpie at .99/.999,
+including controls, diagnostics, elapsed times and source/data hashes. The
+[bridge table](single_market_intercept_pnb_cmdstan_delta999_bridge_repetitions.csv)
+retains all 84 repetition estimates across the four configurations.
+
+| Diagnostic | CmdStan .99 | Nutpie .99 | CmdStan .999 | Nutpie .999 |
+| --- | ---: | ---: | ---: | ---: |
+| Divergences, seven models combined | 9 | 3 | 0 | 0 |
+| Depth hits | 0 | 0 | 0 | 0 |
+| Maximum R-hat | 1.004457 | 1.016147 | 1.006629 | 1.007238 |
+| Minimum bulk ESS | 1159.10 | 469.09 | 976.57 | 679.72 |
+| Minimum tail ESS | 884.42 | 798.82 | 839.88 | 805.26 |
+| Summed warmup/sampling elapsed, seconds | 111.68 | 73.23 | 150.18 | 111.88 |
+
+CmdStan elapsed in the last row sums each fit's longest native chain
+warmup-plus-sampling time; Nutpie reports its native warmup/sampling total,
+including callbacks/extraction. These are parallel-chain wall times summed
+over models, not CPU totals, and backend timing scopes differ. CmdStan .999
+process elapsed totals 153.11 seconds; its whole run, including R preflight,
+evidence and policies, takes 331.45 seconds, compared with 258.13 seconds for
+the single-process Nutpie .999 run. Existing compiled models/caches were reused;
+CmdStan fits do not retain a separate compile-time measurement.
+
+Raising CmdStan acceptance removes the observed divergences in this run but
+does not improve every mixing metric. Its worst R-hat/bulk/tail summaries are
+slightly weaker than in its .99 run. Under matched .999 acceptance, Nutpie
+takes less measured sampling time while CmdStan retains more effective draws
+for some coordinates, particularly outside share. The 42 prespecified scalar
+structural/noise comparisons record direct bulk/tail ESS per native elapsed
+second: Nutpie has higher bulk ESS/sec in 30/42 and higher tail ESS/sec in 28/42,
+with median Nutpie/CmdStan ratios 1.296 and 1.182. Bulk ESS/sec ratios range
+from .426 to 2.330. These are descriptive single-run results with the stated
+timing scopes, not universal speed or efficiency guarantees.
+
+| Model | Prior | CmdStan .999 posterior | Nutpie .999 posterior |
+| --- | ---: | ---: | ---: |
+| MC | 33.333% | 41.030% | 40.473% |
+| B | 11.111% | 12.500% | 12.654% |
+| C | 11.111% | 6.245% | 6.307% |
+| BF | 11.111% | 12.800% | 12.812% |
+| CF | 11.111% | 6.603% | 6.667% |
+| BS | 11.111% | 12.431% | 12.570% |
+| CS | 11.111% | 8.390% | 8.518% |
+
+Family posteriors at .999 are **41.030% MC, 37.732% Bertrand, 21.238% Cournot**
+under CmdStan and 40.473%, 38.035%, 21.492% under Nutpie, from one-third priors.
+[Family probabilities](single_market_intercept_pnb_cmdstan_delta999_families.csv)
+retain every configuration. The [matched evidence comparison](single_market_intercept_pnb_cmdstan_delta999_comparison.csv)
+shows a maximum model-probability difference of .5576 percentage points and
+maximum absolute log-evidence difference of .02298. All seven log-evidence
+differences are within .729 of the conservative combined bridge uncertainty
+defined above. [Parameter comparisons](single_market_intercept_pnb_cmdstan_delta999_parameters.csv)
+retain both means, SDs, medians, intervals, mean MCSEs and direct R-hat/ESS
+values, including the ESS/sec measures. The largest of 42 paired mean
+differences is 2.2135 combined mean MCSEs.
+
+The .999 BMA mean bank deposit-rate change is **-1.29404% CmdStan versus
+-1.28198% Nutpie**, a difference of -.01206 percentage points. Their pooled
+bank/draw SDs are 9.48925 and 9.17446 percentage points. The
+[policy table](single_market_intercept_pnb_cmdstan_delta999_policy.csv)
+preserves all four configurations, the existing equal-bank-weight statistic
+and all successful-state counts. These pooled SDs are not aggregate posterior
+SDs; no aggregate interval or policy MCSE is inferred from them.
+
+All raw CmdStan CSVs and materialized posterior/diagnostic arrays are retained
+with sealed fits, manifests, bridge attempts and execution receipts. The
+original CmdStan .99 and both Nutpie runs remain intact. No mergerBayes
+production source, data, selected result or scientific setting was changed;
+no package production code or default sampler control was changed.
+
+Independent review verified all 38 new RDS seals, complete native chains and
+controls, all 21 bridge medians/SDs, model/family probabilities, BMA policy
+moments and the six compact comparison tables. No material issue was found;
+no additional fitting, bridge evaluation or policy calculation was performed
+for that review.
