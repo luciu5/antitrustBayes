@@ -1,8 +1,8 @@
 # Plan: integrate Gaussian market intercepts
 
-> Correction, 2026-10-21: the historical single-market zero-intercept statements
-> below are superseded by specification 12. A single Logit market now samples a
-> free `Normal(0,1)` intercept without a hierarchy SD. Multi-market analytical
+> Correction, 2026-10-22: the historical single-market zero-intercept statements
+> below are superseded by specification 12 (Logit) and 13 (CES). A single Logit
+> or CES market now samples a free `Normal(0,1)` intercept without a hierarchy SD. Multi-market analytical
 > integration is unchanged. See the [current normalization contract](single_market_utility_normalization.md).
 
 Status: implemented as an opt-in experiment; sampler promotion is still
@@ -14,8 +14,8 @@ Implemented scope: all four Logit/CES simultaneous and exact ordered-k Stan
 kernels, the public R data/API contract, conditional intercept-and-quality
 reconstruction, reusable policy draw plans, normalized market-level generated
 likelihoods, bridge migration guards, and specification version 11. A
-single-market request remains the historical zero-intercept model and is
-recorded as a no-op. The new path requires multiple markets, Gaussian shares
+single-market request was the historical zero-intercept model (superseded at
+specification 13 by a free sampled intercept) and is recorded as a no-op. The new path requires multiple markets, Gaussian shares
 and margins, collapsed market-scoped quality, the joint likelihood, and base
 (`legacy`) s0 coordinates.
 
@@ -70,8 +70,9 @@ posterior moments/draw algorithm for (b_m, q_m). Preserve approximately linear
 observation/group cost per market-state; dense matrices are small-fixture
 oracles only. No global covariance and no enumeration of K^M states.
 
-The single-market package fixes b_market to zero. Keep that path unchanged;
-do not introduce a random intercept or new hyperparameters there.
+(Superseded at specification 13.) The single-market package once fixed
+b_market to zero; it now samples one free Normal(0,1) intercept with no random
+effect or new hyperparameters.
 
 Existing reference evidence, rerun during planning:
 

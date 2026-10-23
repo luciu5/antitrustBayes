@@ -1,12 +1,20 @@
 # Shape-based conduct schedules and profiled distinguishability metrics.
 
+## Absolute tolerance on the aggregate feasibility condition
+## sum(q) <= 1 - s0. It absorbs floating-point error when q enumerates every
+## inside firm (sum(q) == 1 - s0) without admitting materially infeasible data.
+.conduct_share_tolerance <- 1e-8
+
 #' Conduct Schedule
 #'
 #' Evaluates the inverse-margin schedule \eqn{g_k(q,s_0)} used by the package.
 #' For Logit, inverse absolute margins are \eqn{alpha g_k}.  The CES schedules
 #' are returned on their natural inverse-Lerner scale.
 #'
-#' @param q Numeric vector of unconditional firm shares.
+#' @param q Numeric vector of unconditional firm shares. The vector may describe
+#'   a subset of the market's firms, but the shares must be jointly feasible:
+#'   \code{sum(q) <= 1 - s0} (up to a small numerical tolerance), with equality
+#'   when \code{q} enumerates every inside firm.
 #' @param model Conduct model name.
 #' @param s0 Outside quantity share for Logit schedules and outside revenue
 #'   share for CES schedules.
@@ -26,8 +34,9 @@ conduct_schedule <- function(q, model, s0 = 0.2,
   if (length(s0) != 1L || !is.finite(s0) || s0 <= 0 || s0 >= 1) {
     stop("'s0' must be a finite scalar strictly between zero and one.")
   }
-  if (any(q > 1 - s0 + 1e-10)) {
-    stop("Firm shares cannot exceed the total inside share 1 - s0.")
+  if (sum(q) > 1 - s0 + .conduct_share_tolerance) {
+    stop("Firm shares must satisfy sum(q) <= 1 - s0; they cannot exceed ",
+         "the total inside share.")
   }
   if (length(bargaining_power) != 1L || !is.finite(bargaining_power) ||
       bargaining_power < 0 || bargaining_power >= 1) {
@@ -82,6 +91,8 @@ conduct_local_slopes <- function(s0 = 0.2) {
 #' optionally, its outside share.
 #'
 #' @param q Numeric vector of unconditional firm shares under \code{model_k}.
+#'   It may describe a subset of the firms. A profiled outside share must keep
+#'   \code{sum(q) <= 1 - s0}, so it is bounded above by \code{1 - sum(q)}.
 #' @param model_k,model_l Conduct model names.
 #' @param alpha_k Scale for the data-generating schedule.
 #' @param s0_k Outside share for the data-generating schedule.
@@ -90,7 +101,9 @@ conduct_local_slopes <- function(s0 = 0.2) {
 #' @param demand_model \code{"logit"} or \code{"ces"}.
 #' @param gamma CES elasticity when \code{demand_model = "ces"}.
 #' @param profile_s0 Logical; profile the comparison model over \code{s0}.
-#' @param s0_bounds Two-element admissible interval for profiled outside share.
+#' @param s0_bounds Two-element admissible interval for profiled outside share,
+#'   further truncated above at \code{1 - sum(q)}. Ignored when
+#'   \code{profile_s0 = FALSE}.
 #' @param bargaining_power_k,bargaining_power_l Bargaining weights when used.
 #' @return A list containing the minimized distance and profiled parameters.
 #' @export
@@ -126,15 +139,17 @@ conduct_distance <- function(q, model_k, model_l, alpha_k = 1, s0_k = 0.2,
     q, model_k, s0_k, demand_model = demand_model, gamma = gamma,
     bargaining_power = bargaining_power_k
   )
-  upper_s0 <- min(s0_bounds[2], 1 - max(q) - 1e-8)
-  if (upper_s0 <= s0_bounds[1]) {
+  ## Unconditional shares of any subset of firms must fit in the inside share:
+  ## sum(q) <= 1 - s0, so the profiled s0 is bounded by 1 - sum(q), not by the
+  ## largest single share. q need not enumerate every firm.
+  upper_s0 <- min(s0_bounds[2], 1 - sum(q))
+  if (profile_s0 && upper_s0 <= s0_bounds[1]) {
     stop("The profiled outside-share interval is incompatible with 'q'.")
   }
 
   objective <- function(par) {
     alpha_l <- exp(par[1])
     s0_l <- if (profile_s0) stats::plogis(par[2]) else s0_k
-    if (s0_l < s0_bounds[1] || s0_l > upper_s0) return(1e100)
     fitted <- alpha_l * conduct_schedule(
       q, model_l, s0_l, demand_model = demand_model, gamma = gamma,
       bargaining_power = bargaining_power_l
@@ -142,15 +157,19 @@ conduct_distance <- function(q, model_k, model_l, alpha_k = 1, s0_k = 0.2,
     0.5 * sum(weights * ((target - fitted) / sigma_margin)^2)
   }
 
-  start_s0 <- min(max(s0_k, s0_bounds[1] + 1e-8), upper_s0 - 1e-8)
+  start_s0 <- if (profile_s0) {
+    min(max(s0_k, s0_bounds[1] + 1e-8), upper_s0 - 1e-8)
+  } else s0_k
   start_schedule <- conduct_schedule(
     q, model_l, start_s0, demand_model = demand_model, gamma = gamma,
     bargaining_power = bargaining_power_l
   )
   start_alpha <- sum(weights * target) / sum(weights * start_schedule)
-  start <- c(log(max(start_alpha, 1e-8)), stats::qlogis(start_s0))
-  lower <- c(log(1e-8), stats::qlogis(s0_bounds[1]))
-  upper <- c(log(1e8), stats::qlogis(upper_s0))
+  ## With s0 fixed the second coordinate is inert; give it harmless bounds.
+  start <- c(log(max(start_alpha, 1e-8)),
+             if (profile_s0) stats::qlogis(start_s0) else 0)
+  lower <- c(log(1e-8), if (profile_s0) stats::qlogis(s0_bounds[1]) else -1)
+  upper <- c(log(1e8), if (profile_s0) stats::qlogis(upper_s0) else 1)
   fit <- stats::optim(
     start, objective, method = "L-BFGS-B", lower = lower, upper = upper
   )

@@ -7,11 +7,12 @@ log_sum_exp_r <- function(x) {
 
 profile_schedule_fit <- function(y, q, model, sigma_margin, profile_s0,
                                  s0_start, bargaining_power = 0.5) {
-  upper_s0 <- min(0.95, 1 - max(q) - 1e-8)
+  ## Feasibility requires sum(q) <= 1 - s0 for the enumerated firms.
+  upper_s0 <- min(0.95, 1 - sum(q))
   objective <- function(par) {
     alpha <- exp(par[1])
-    s0 <- if (profile_s0) stats::plogis(par[2]) else s0_start
-    if (s0 <= 0.001 || s0 >= upper_s0) return(1e100)
+    s0 <- if (profile_s0) min(stats::plogis(par[2]), upper_s0) else s0_start
+    if (s0 <= 0.001) return(1e100)
     mu <- alpha * conduct_schedule(
       q, model, s0 = s0, bargaining_power = bargaining_power
     )
@@ -84,7 +85,8 @@ conduct_validation <- function(
     misspecified = list(q = c(0.03, 0.07, 0.12, 0.20, 0.28), s0 = 0.25,
                         sigma = 0.08, profile_s0 = TRUE)
   )
-  if (any(spec$q > 1 - spec$s0)) stop("Internal design has infeasible shares.")
+  if (sum(spec$q) > 1 - spec$s0 + .conduct_share_tolerance)
+    stop("Internal design has infeasible shares.")
 
   true_mu <- conduct_schedule(
     spec$q, true_model, spec$s0, bargaining_power = bargaining_power

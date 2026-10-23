@@ -14,7 +14,8 @@ the effective rotation indicator, and the coordinate convention in fit
 metadata. Encode legacy/rotated as 1/2 in Stan data. The existing selected
 `s0_pooling`, likelihoods, priors, and conduct remain unchanged.
 
-All single-market specifications normalize `b_market` to zero. The requested
+(Superseded at specification 13: a single market now has a free intercept.)
+Historically, single-market specifications normalized `b_market` to zero. The requested
 rotation is then a no-op, with the original sampling dimensions and names.
 For multiple markets, directly sampled outside levels use `c_s0 = v + b`.
 Noncentered outside hierarchies use the standardized rotated coordinate
@@ -65,7 +66,7 @@ standardized coefficient, and elasticity transformation.
 `gamma_market` in Logit and `b_market_rot` in CES are presently derived
 diagnostics, not sampling coordinates. Preserve their historical convention:
 multi-period markets use `b_market + mean(logit(s0_prob))`; one-period markets
-use `b_market`; single-market normalization gives zero. New diagnostic sums
+use `b_market`; single-market normalization gave zero before specification 13 (it now reports the intercept). New diagnostic sums
 have distinct names.
 
 ## Validation contract

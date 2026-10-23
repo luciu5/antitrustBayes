@@ -154,6 +154,10 @@ separation comes from the shape of $g_k$:
 When $s_0$ is uncertain, `conduct_distance()` profiles the comparison model
 over both its scale and outside share. The resulting Gaussian/KL information
 distance predicts when sparse equilibrium data can and cannot learn conduct.
+Shares are unconditional firm shares and must be jointly feasible,
+$\sum_j q_j \le 1 - s_0$ (to a numerical tolerance of $10^{-8}$). `q` may list
+only a subset of the market's firms, so the profiled outside share is bounded
+above by $1 - \sum_j q_j$ rather than by the largest single share.
 Use `conduct_information_matrix()` to inspect pairwise separation and
 `conduct_validation()` for targeted weak-separation, strong-separation,
 Cournot-separation, outside-share, bargaining, and misspecification designs.

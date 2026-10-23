@@ -21,7 +21,9 @@ conduct_distance(
 )
 }
 \arguments{
-\item{q}{Numeric vector of unconditional firm shares under \code{model_k}.}
+\item{q}{Numeric vector of unconditional firm shares under \code{model_k}.
+It may describe a subset of the firms. A profiled outside share must keep
+\code{sum(q) <= 1 - s0}, so it is bounded above by \code{1 - sum(q)}.}
 
 \item{model_k, model_l}{Conduct model names.}
 
@@ -35,7 +37,9 @@ conduct_distance(
 
 \item{profile_s0}{Logical; profile the comparison model over \code{s0}.}
 
-\item{s0_bounds}{Two-element admissible interval for profiled outside share.}
+\item{s0_bounds}{Two-element admissible interval for profiled outside share,
+further truncated above at \code{1 - sum(q)}. Ignored when
+\code{profile_s0 = FALSE}.}
 
 \item{demand_model}{\code{"logit"} or \code{"ces"}.}
 

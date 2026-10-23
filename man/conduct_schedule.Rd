@@ -14,7 +14,10 @@ conduct_schedule(
 )
 }
 \arguments{
-\item{q}{Numeric vector of unconditional firm shares.}
+\item{q}{Numeric vector of unconditional firm shares. The vector may describe
+a subset of the market's firms, but the shares must be jointly feasible:
+\code{sum(q) <= 1 - s0} (up to a small numerical tolerance), with equality
+when \code{q} enumerates every inside firm.}
 
 \item{model}{Conduct model name.}
 

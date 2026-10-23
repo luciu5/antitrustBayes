@@ -1,5 +1,20 @@
 # Default-model history and promotion discipline
 
+## Single-market CES utility correction (2026-10-22)
+
+Version `0.2.0.9008`, specification 13, applies the single-market inside-market
+intercept correction to `ces_supply.stan` and `ces_stackelberg.stan`. One market
+now samples a free `Normal(0,1)` intercept (no hierarchy SD) with outside-good
+utility zero and sum-to-zero qualities; multi-market hierarchy, CES revenue
+versus quantity outside shares, outside-price handling and supply FOCs are
+unchanged. There is no legacy switch. Because the specification guard is one
+global integer, specification-12 Logit fits are also rejected until refit
+although the Logit kernels did not change. See the
+[normalization contract](single_market_utility_normalization.md).
+`conduct_schedule()` and `conduct_distance()` also now use the aggregate
+feasibility bound `sum(q) <= 1 - s0`, and the CmdStan model cache tolerates
+concurrent first-use of a new kernel hash.
+
 ## Single-market Logit utility correction (2026-10-21)
 
 Version `0.2.0.9007`, specification 12, removes the incorrect zero inside-market
@@ -8,7 +23,7 @@ proper population-mean `Normal(0,1)` prior directly; no hierarchy SD is introduc
 Outside-good utility, centered product quality, price standardization, supply
 equations and outside-share pooling are unchanged. There is no legacy switch.
 Existing fits must be rerun before current comparison or simulation. CES kernels
-are unchanged. The calibrated-market API independently accepts `outside_share`
+were corrected the next day (see the 2026-10-22 entry above). The calibrated-market API independently accepts `outside_share`
 (default `.20`) instead of deriving it from conditional-share geometry.
 See the [normalization contract](single_market_utility_normalization.md) and
 [executed correction checks](validation/single_market_intercept_results.md).

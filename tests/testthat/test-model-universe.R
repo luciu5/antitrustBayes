@@ -70,7 +70,7 @@ make_model_universe_exact_fit <- function(markets = c("m1", "m2"),
       share_likelihood = share_likelihood, margin_likelihood = margin_likelihood,
       quality_parameterization = quality_parameterization, quality_scope = "global",
       likelihood = "joint", posterior_draws = 2L,
-      prior_normalization = list(mode = "native_stan_normalized", model_spec_version = 12L)
+      prior_normalization = list(mode = "native_stan_normalized", model_spec_version = 13L)
     )
   )
 }
@@ -283,8 +283,8 @@ test_that("partial source repetitions remain visible without suppressing finite 
 test_that("public universe result preserves mixed-backend repetition and sampler metadata", {
   left <- make_model_universe_exact_fit(structure = "simultaneous")
   right <- make_model_universe_exact_fit(structure = "simultaneous", supply_model = 3L)
-  attr(left@stan_data, "model_spec_version") <- 12L
-  attr(right@stan_data, "model_spec_version") <- 12L
+  attr(left@stan_data, "model_spec_version") <- 13L
+  attr(right@stan_data, "model_spec_version") <- 13L
   descriptor <- bayes_model_universe(list(B = "left", C = "right"), c(B = .5, C = .5))
   source <- data.frame(model = c("left", "right"), logml = c(-3, -4),
     logml_sd = c(.1, NA_real_), backend = c("cmdstanr", "nutpie"))

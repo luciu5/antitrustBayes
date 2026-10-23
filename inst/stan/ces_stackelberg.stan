@@ -520,7 +520,8 @@ transformed data {
 }
 
 parameters {
-  vector[is_single_market == 0 ? 1 : 0] mu_b_market_vec;
+  // A single market still has an inside-versus-outside utility intercept.
+  vector[1] mu_b_market_vec;
   vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;
   vector[(is_single_market == 0 && market_intercept_parameterization == 1)
            ? N_market : 0] b_market_raw;
@@ -620,13 +621,12 @@ transformed parameters {
   }
   if (rho_active == 1) rho = 0.95 * tanh(rho_raw[1]);
 
-  // Reconstruct the unchanged market effect before applying the outside-share
-  // rotation. Single-market fits retain the historical zero normalization.
+  // Reconstruct inside-market utility relative to the normalized outside good.
+  // A single market uses the population intercept without a redundant random effect.
   if (is_single_market == 1) {
-    market_intercept_location = rep_vector(0.0, N_market);
-    b_market = rep_vector(0.0, market_intercept_parameterization == 1
-      ? N_market : 0);
-    b_market_rot = rep_vector(0.0, N_market);
+    market_intercept_location = rep_vector(mu_b_market_vec[1], N_market);
+    b_market = rep_vector(mu_b_market_vec[1],
+      market_intercept_parameterization == 1 ? N_market : 0);
   } else if (market_intercept_parameterization == 2) {
     market_intercept_location = rep_vector(mu_b_market_vec[1], N_market);
     b_market = rep_vector(0.0, 0);
@@ -709,12 +709,10 @@ transformed parameters {
   }
   for (m in 1:N_market) {
     mean_logit_s0_market[m] /= n_mky_per_market[m];
-    if (is_single_market == 0) {
-      if (n_mky_per_market[m] > 1) {
-        b_market_rot[m] = market_intercept_location[m]
-          + mean_logit_s0_market[m];
-      } else b_market_rot[m] = market_intercept_location[m];
-    }
+    if (n_mky_per_market[m] > 1) {
+      b_market_rot[m] = market_intercept_location[m]
+        + mean_logit_s0_market[m];
+    } else b_market_rot[m] = market_intercept_location[m];
   }
 
   if (is_single_market == 1 || use_alpha_market_pool == 0) {
@@ -773,8 +771,9 @@ model {
     if (use_centered_alpha == 1) target += normal_lpdf(log_a_market_pool | mu_log_a, sigma_log_a);
     else target += std_normal_lpdf(r_market_a_raw);
   }
+  // Exactly one normalized proper prior for the population/single-market intercept.
+  target += normal_lpdf(mu_b_market_vec | 0, 1);
   if (is_single_market == 0) {
-    target += normal_lpdf(mu_b_market_vec | 0, 1);
     if (prior_sigma_b_market_family == 1) {
       target += normal_lpdf(sigma_b_market_vec | 0, prior_sigma_b_market_scale)
         - num_elements(sigma_b_market_vec) * normal_lccdf(0 | 0, prior_sigma_b_market_scale);

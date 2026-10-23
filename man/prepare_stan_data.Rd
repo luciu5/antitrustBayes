@@ -142,7 +142,7 @@ requires Gaussian shares, collapsed quality, and a common residual scale.}
 \code{"sampled"} (default) or \code{"collapsed"} Gaussian
 market-intercept coordinates. The collapsed mode requires multiple
 markets, Gaussian shares and margins, collapsed market-scoped quality, a
-joint likelihood, and legacy/base s0 coordinates. A single Logit market
+joint likelihood, and legacy/base s0 coordinates. A single market (Logit or CES)
 samples its free Normal(0, 1) intercept directly without a hierarchy SD;
 a collapsed-coordinate request leaves that sampled intercept in place.}
 

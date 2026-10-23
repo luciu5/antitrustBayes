@@ -150,9 +150,8 @@ safe_sd <- function(x, floor = 1e-8) {
     stop("'N_market' must be a positive integer for intercept resolution.",
          call. = FALSE)
   }
-  ## A single Logit market samples its N(0,1) intercept directly, with no
-  ## between-market SD. Collapsing the hierarchy is therefore a coordinate no-op.
-  ## CES retains its existing single-market specification.
+  ## A single market (Logit or CES) samples its N(0,1) intercept directly, with
+  ## no between-market SD. Collapsing the hierarchy is therefore a coordinate no-op.
   if (as.integer(N_market) == 1L) {
     return(list(requested = requested, effective = "sampled", code = 1L,
                 no_op = identical(requested, "collapsed"),
@@ -867,7 +866,7 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #'   \code{"sampled"} (default) or \code{"collapsed"} Gaussian
 #'   market-intercept coordinates. The collapsed mode requires multiple
 #'   markets, Gaussian shares and margins, collapsed market-scoped quality, a
-#'   joint likelihood, and legacy/base s0 coordinates. A single Logit market
+#'   joint likelihood, and legacy/base s0 coordinates. A single market (Logit or CES)
 #'   samples its free Normal(0, 1) intercept directly without a hierarchy SD;
 #'   a collapsed-coordinate request leaves that sampled intercept in place.
 #' @param margin_likelihood Margin residual family: \code{"student_t"} or
@@ -2122,7 +2121,7 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
 # Current fitted-object/model contract. Increment whenever the Stan likelihood
 # changes in a way that makes serialized fits unsuitable for comparison or
 # simulation under the current package.
-.antitrust_bayes_model_spec_version <- 12L
+.antitrust_bayes_model_spec_version <- 13L
 
 # Arithmetic mean of a logistic-normal random variable. The outside-share
 # prior is parameterized on the logit scale in Stan, while FOC prior

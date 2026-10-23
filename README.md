@@ -260,17 +260,21 @@ model probabilities. Use `likelihood = "share"` and `likelihood = "margin"`
 fits with `bayes_evidence_decomposition()` when you want to report how much
 evidence comes from each block.
 
-## Logit utility normalization
+## Logit and CES utility normalization
 
-Every Logit market has a free inside-market utility intercept, including one
+Every Logit or CES market has a free inside-market utility intercept, including one
 market observed in one or several periods. Outside-good utility remains zero,
 product qualities stay centered, and prices retain their standardization. A
 single-market intercept has a proper `Normal(0, 1)` prior with no hierarchy SD;
 multiple markets retain the existing hierarchical specification.
 
-Version `0.2.0.9007` corrects the former single-market zero-intercept restriction,
-which incorrectly tied the outside share to the geometric mean of conditional
-inside shares. Earlier fits require refitting under model specification 12.
+Version `0.2.0.9007` corrected the former single-market zero-intercept restriction
+for Logit, and `0.2.0.9008` applies the same correction to the CES kernels; the
+restriction incorrectly tied the outside share to the geometric mean of conditional
+inside shares. The model specification is a single global integer, now 13, so
+every earlier Logit *and* CES fit requires refitting under it, including Logit
+fits whose kernels did not change; downstream runners that pin specification 12
+must update the pin.
 The intercept and outside-share log odds enter conditional demand as a sum;
 supply information and priors determine their separate identification. See the
 [normalization and identification contract](doc/single_market_utility_normalization.md).
