@@ -1,3 +1,8 @@
+> Since specification 14 (`0.2.0.9009`), the default is the
+> [relative-share likelihood](relative_share_likelihood.md), which derives an
+> intercept per market-year without an intercept prior. The free-intercept
+> specification described below remains available as `share_basis = "absolute"`.
+
 # Logit and CES inside-market utility intercept
 
 Version `0.2.0.9007`, model specification 12, corrected the single-market

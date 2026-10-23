@@ -1,8 +1,8 @@
 # Experimental policy simulation and model universe
 
-The observed-share simulation and likelihood defaults are unchanged. These
-examples use existing fitted objects; changing a policy does not require
-refitting the statistical model.
+The observed-share policy anchor remains the default. Specification14 changes
+the estimation default to relative conditional-share contrasts; use current fits
+under a common share basis. Changing a policy does not require another fit.
 
 ## Reuse posterior latent states across policies
 
@@ -28,20 +28,21 @@ latent_cost <- bayes_sim(
 )
 ```
 
-The plan selects common posterior draws, one global firm-quality vector per
+The plan selects common posterior draws, one persistent quality vector per quality block and
 draw, and the conditional market-level ordered-k state where applicable.
 Reuse the plan to hold these states fixed across policies and periods.
 Input Logit is supported using the native positive dollar markdown and held-fixed
-value primitive. Input CES, auction/bargaining conduct, and unsupported
-full-quality rho conditioning are explicitly rejected. For input Logit, an
+value primitive. Input CES and unsupported conduct/likelihood combinations fail explicitly.
+Relative Gaussian fits support active-rho quality reconstruction. For input Logit, an
 antitrust `costs` counterfactual changes the value primitive; it is not a tariff
 pass-through calculation.
 
 The latent baseline projects relative fitted quality to shares while retaining
 the outside-share draw at reference prices. It preserves the costs recovered
 under the observed-share anchor, then solves its own baseline equilibrium.
-Baseline prices can therefore differ from recorded prices. This normalization
-does not turn the transformed-log-share likelihood into a simplex likelihood.
+Baseline prices can therefore differ from recorded prices. Relative-share fits derive one intercept per market-year from the same quality
+state. Their observation measure is the orthonormal log-ratio coordinate space;
+absolute-share fits retain the raw log-share working likelihood.
 
 ## Compare disjoint economic hypotheses through bayes_compare
 

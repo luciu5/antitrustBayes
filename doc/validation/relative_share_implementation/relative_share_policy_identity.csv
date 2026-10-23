@@ -1,0 +1,15 @@
+"case","backend","historical_identity_verified","current_source_verified","identity_verified","plan_fingerprint","posterior_draw_count","n_paired","attrition_fraction","max_cost_identity_error","plan_and_saved_summary_verified"
+"logit_C","cmdstanr",TRUE,TRUE,TRUE,"553f2db59ee0014e",2000,1997,0.00149999999999995,0,TRUE
+"logit_C","nutpie",TRUE,TRUE,TRUE,"188b2bf2351fba4d",2000,2000,0,0,TRUE
+"logit_CF","cmdstanr",TRUE,TRUE,TRUE,"c045d9239b00fe07",2000,1937,0.0315,0,TRUE
+"logit_CF","nutpie",TRUE,TRUE,TRUE,"835933f0881d12a5",2000,1922,0.039,0,TRUE
+"logit_CS","cmdstanr",TRUE,TRUE,TRUE,"2d54ac3f30496612",2000,1997,0.00149999999999995,0,TRUE
+"logit_CS","nutpie",TRUE,TRUE,TRUE,"f83d78f4c7a69279",2000,1998,0.001,0,TRUE
+"logit_CF_k1","cmdstanr",TRUE,TRUE,TRUE,"513c52d339881933",2000,1806,0.097,0,TRUE
+"logit_CF_k1","nutpie",TRUE,TRUE,TRUE,"b9df0b939c624223",2000,1832,0.084,0,TRUE
+"logit_CF_k3","cmdstanr",TRUE,TRUE,TRUE,"c07e267a2c8aea07",2000,1987,0.00649999999999995,0,TRUE
+"logit_CF_k3","nutpie",TRUE,TRUE,TRUE,"7985741af3597496",2000,1990,0.005,0,TRUE
+"ces_C","cmdstanr",TRUE,TRUE,TRUE,"20a0e05d1860eef6",2000,2000,0,0,TRUE
+"ces_C","nutpie",TRUE,TRUE,TRUE,"0fcd2be69ba03c49",2000,2000,0,0,TRUE
+"ces_CS","cmdstanr",TRUE,TRUE,TRUE,"b9b7f1bf36c6cef0",2000,2000,0,0,TRUE
+"ces_CS","nutpie",TRUE,TRUE,TRUE,"9c54bb359b1a1aee",2000,2000,0,0,TRUE

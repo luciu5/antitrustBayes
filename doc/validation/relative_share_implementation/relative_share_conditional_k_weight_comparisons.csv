@@ -1,0 +1,7 @@
+"reference_scenario","alternative_scenario","k","reference_probability","alternative_probability","difference","status","reason"
+"cmdstanr","nutpie",1,0.0513841524267776,0.052160052366023,0.000775899939245393,"descriptive_probability_difference","Three bridge repetitions share posterior draws; no rigorously propagated posterior-k MCSE."
+"cmdstanr","nutpie",2,0.321818848743041,0.331034460838241,0.00921561209519917,"descriptive_probability_difference","Three bridge repetitions share posterior draws; no rigorously propagated posterior-k MCSE."
+"cmdstanr","nutpie",3,0.62679699883018,0.616805486795736,-0.00999151203444459,"descriptive_probability_difference","Three bridge repetitions share posterior draws; no rigorously propagated posterior-k MCSE."
+"cmdstanr","mixed",1,0.0513841524267776,0.0526409142039161,0.00125676177713853,"descriptive_probability_difference","Three bridge repetitions share posterior draws; no rigorously propagated posterior-k MCSE."
+"cmdstanr","mixed",2,0.321818848743041,0.324867289141573,0.00304844039853114,"descriptive_probability_difference","Three bridge repetitions share posterior draws; no rigorously propagated posterior-k MCSE."
+"cmdstanr","mixed",3,0.62679699883018,0.622491796654511,-0.00430520217566888,"descriptive_probability_difference","Three bridge repetitions share posterior draws; no rigorously propagated posterior-k MCSE."

@@ -1,0 +1,9 @@
+"errors","warnings","notes","note"
+0,0,1,"checking R code for possible problems ... NOTE
+.cmdstan_assert_fit : <anonymous>: no visible global function
+  definition for ‘tail’
+Undefined global functions or variables:
+  tail
+Consider adding
+  importFrom(""utils"", ""tail"")
+to your NAMESPACE file."

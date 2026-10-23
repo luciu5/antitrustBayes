@@ -1,0 +1,14 @@
+"case","source_data_prior_equal","both_manifest_identities_verified","historical_identity_equal","current_source_verified","identity_equal"
+"logit_MC",TRUE,TRUE,TRUE,TRUE,TRUE
+"logit_B",TRUE,TRUE,TRUE,TRUE,TRUE
+"logit_C",TRUE,TRUE,TRUE,TRUE,TRUE
+"logit_BF",TRUE,TRUE,TRUE,TRUE,TRUE
+"logit_CF",TRUE,TRUE,TRUE,TRUE,TRUE
+"logit_BS",TRUE,TRUE,TRUE,TRUE,TRUE
+"logit_CS",TRUE,TRUE,TRUE,TRUE,TRUE
+"logit_CF_k1",TRUE,TRUE,TRUE,TRUE,TRUE
+"logit_CF_k3",TRUE,TRUE,TRUE,TRUE,TRUE
+"ces_C",TRUE,TRUE,TRUE,TRUE,TRUE
+"ces_CS",TRUE,TRUE,TRUE,TRUE,TRUE
+"logit_C_M4T4",TRUE,TRUE,TRUE,TRUE,TRUE
+"ces_C_M4T4",FALSE,FALSE,FALSE,TRUE,FALSE

@@ -1,0 +1,4 @@
+"scenario","logml","repetition_sd","within_mcse","uncertainty","requested_repetitions","completed_repetitions","prior_restored_once","status"
+"cmdstanr",-12.4476388310689,0.011070756958142,0.0350859970119127,0.0367911517344347,3,3,TRUE,"complete"
+"nutpie",-12.447890050815,0.00593046181120945,0.0424075235446013,0.0428201871840856,3,3,TRUE,"complete"
+"mixed",-12.4570667832092,0.00734390969549759,0.0425363335034783,0.0431656423273737,3,3,TRUE,"complete"

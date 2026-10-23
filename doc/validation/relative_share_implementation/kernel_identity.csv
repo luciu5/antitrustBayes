@@ -1,0 +1,5 @@
+"kernel","sha256"
+"inst/stan/ces_stackelberg.stan","272c0e3419c1d8197617cbabcb0cdeb389395d067cab5a7434fcacc2b01473c5"
+"inst/stan/ces_supply.stan","38f92b2fad3e0c1cccb0eca57e223c6f2240794528f9b79d35ac5d08c0a1b88e"
+"inst/stan/logit_stackelberg.stan","0ab051af0c257448a50158190a0ca49d3a9d7718911eead592d3c58a29ac0bdb"
+"inst/stan/logit_supply.stan","f06f42aee6f99946cc5e4ab0e3004c6e12dfacac4a8ebe92bcb183e4d6f46fb3"

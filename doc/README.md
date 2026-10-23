@@ -1,8 +1,10 @@
 # Development and evidence index
 
-Reviewed 2026-10-22 for the single-market Logit and CES normalization
-corrections, starting at `55c6fdc`, package version `0.2.0.9008`, model
-specification 13 (Logit corrected at specification 12).
+Implementation validated 2026-10-23: relative-share Option B for Logit/CES,
+package version `0.2.0.9009`, model specification 14. See the bounded
+[implementation results](validation/relative_share_implementation/README.md),
+including the preserved incomplete noiseless CES panel stress attempt.
+The previous committed baseline is `01e5a22` (version `0.2.0.9008`, specification 13).
 This is the current operational agenda and navigation entrypoint. Topic contracts
 and results remain the detailed sources; historical checklists do not select work.
 Update this index when a completed task changes a status or verification route.
@@ -18,7 +20,8 @@ do not retroactively change saved fits or establish universal HMC improvement.
 
 | Task | Start here | Smallest relevant test filter |
 | --- | --- | --- |
-| Single-market Logit and CES utility normalization | [normalization contract](single_market_utility_normalization.md), [correction results](validation/single_market_intercept_results.md), [fresh native checks](validation/single_market_intercept_validation_results.md) | `single-market-intercept|market-intercept|s0-pooling|conditional-k` |
+| Relative-share likelihood, reconstruction and evidence | [mathematical contract](relative_share_likelihood.md), [executed results](validation/relative_share_implementation/README.md), [native target runner](validation/relative_share_target_checks.R), [paired sampling runner](validation/relative_share_backend_validation.R) | `relative-share` |
+| Absolute-share Logit and CES utility normalization | [normalization contract](single_market_utility_normalization.md), [correction results](validation/single_market_intercept_results.md), [fresh native checks](validation/single_market_intercept_validation_results.md) | `single-market-intercept|market-intercept|s0-pooling|conditional-k` |
 | Estimation, controls, priors | [estimation](../R/estimate.R), [priors](../R/priors.R) | `stan-control-policy`, `hierarchical-sd-priors`, `market-intercept-sd-prior`, or `residual-sd-prior` |
 | Sampler backends and paired validation | [backend adapters](../R/sampler_backend.R), [closeout summary](validation/nutpie_closeout_summary.md), [closeout protocol](validation/nutpie_closeout_protocol.md), [original paired results](validation/nutpie_backend_results.md), [evidence contract](validation/nutpie_evidence_design.md) | `sampler-backend|nutpie|backend-policy-equivalence|evidence-availability` |
 | Quality/intercept reconstruction | [quality](../R/posterior_quality.R), [collapse contract](market_intercept_collapse_plan.md) | `posterior-quality|market-intercept-collapse` |
@@ -86,7 +89,7 @@ checklists in the historical umbrella and recovery notes below.
 
 | Topic | Recorded status and next decision | Detailed source |
 | --- | --- | --- |
-| Relative-share demand (Option B) | Isolated specification-12 M1T1 MC/B/C prototype completed: 54 deterministic checks, eight matched-control fits, 24 finite bridge repetitions and 200/200 merger states per fit. MC outside-share posterior equals its prior; joint/collapsed native implementation, rich families, panels and full BMA remain unfinished. Sampled-quality mixing warnings and 19/29 noiseless Cournot divergences retained. Production Logit estimation remains Option A. | [executed prototype, design and compact tables](validation/option_b_relative_shares/README.md) |
+| Relative-share demand (Option B) | Implemented as the Gaussian default for Logit/CES, including rho, sampled/collapsed persistent quality, derived market-year intercepts, policy reconstruction and normalized evidence. Bounded validation: 5,903 native checks; 1,092 actual M4T4 structural/policy checks; 26 complete paired-backend fits and 78 finite bridge repetitions across the original complete cases and a separately labeled finite-error CES panel. Original noiseless CES M4T4 stress remains incomplete. Full opt-in suite: 7,619 passing expectations, no failures/errors/skips, 30 retained warnings. Package check: no errors/warnings, one existing NOTE. Broad recovery and downstream paper adoption remain separate. | [contract](relative_share_likelihood.md), [executed results and limitations](validation/relative_share_implementation/README.md), [production validation runner](validation/relative_share_backend_validation.R), [earlier prototype](validation/option_b_relative_shares/README.md) |
 | Market/outside-share rotation | Implemented experimental coordinates with bounded sampler evidence; scaling and broader equivalence remain incomplete. | [rotation results](market_s0_rotation_results.md) |
 | Latent-quality policies | Implemented; frozen observed/latent benchmark completed. Broader statistical coverage is unestablished. | [policy results](latent_quality_policy_results.md), [usage](statistical_toolkit_usage.md) |
 | Hybrid margins | Frozen seven-fixture benchmark completed; outlier/predictive evidence remains pending. | [hybrid results](collapsed_gaussian_hybrid_results.md) |

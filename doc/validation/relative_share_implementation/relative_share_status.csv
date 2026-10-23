@@ -1,0 +1,2 @@
+"manifest_status","expected_fit_count","saved_fit_count","sampling_complete","evidence_complete","historical_sampling_complete","historical_evidence_complete","posterior_extraction_complete","diagnostics_complete","collector_operations_complete","required_policy_artifacts_complete","historical_policy_artifacts_complete","current_source_matches_manifest","artifact_status","status"
+"incomplete_attempts",26,24,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,TRUE,TRUE,TRUE,"incomplete_saved_validation","incomplete_saved_validation"

@@ -1,5 +1,24 @@
 # Default-model history and promotion discipline
 
+## Relative-share likelihood (2026-10-22; validation completed 2026-10-23)
+
+Version `0.2.0.9009`, specification 14, introduces the approved default
+`share_basis = "relative"` for Gaussian Logit and CES. Each market-year
+contributes J-1 orthonormal quantity-share contrasts; rho and persistent centered
+quality use the correctly transformed joint Gaussian likelihood. Market-year
+intercepts are derived from each realized quality/conduct/outside-share state,
+with no intercept prior. Outside-share pooling and the supply equations are
+unchanged. Explicit `share_basis = "absolute"` retains the prior free-intercept
+specification, including its robust likelihood options. CmdStanR remains the
+default backend. See the [mathematical contract](relative_share_likelihood.md)
+and [executed implementation validation](validation/relative_share_implementation/README.md).
+The bounded checks pass for native normalized targets, actual Logit/CES M4T4
+reconstruction/policies, mixed-backend evidence and complete conditional-k.
+The original noiseless CES M4T4 stress attempt remains incomplete; a separate
+finite-error CES panel passes. Sampler warnings and policy attrition are
+retained. These results do not establish broad repeated-sample recovery.
+
+
 ## Single-market CES utility correction (2026-10-22)
 
 Version `0.2.0.9008`, specification 13, applies the single-market inside-market
@@ -114,6 +133,7 @@ The historical model remains explicit:
 
 ```r
 bayes_est(...,
+  share_basis = "absolute",
   share_likelihood = "student_t",
   margin_likelihood = "student_t",
   quality_parameterization = "sampled",

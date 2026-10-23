@@ -1,0 +1,13 @@
+table,kernel,checks,failures,configurations,maximum_absolute_error
+final-relative-native-targets,ces_stackelberg,2008,0,120,1.49213974509621e-12
+final-relative-native-targets,ces_supply,549,0,39,1.02318153949454e-12
+final-relative-native-targets,logit_stackelberg,2008,0,120,1.13686837721616e-12
+final-relative-native-targets,logit_supply,556,0,40,1.36424205265939e-12
+final-relative-native-invariants,ces_supply,7,0,,4.2632564145606e-14
+final-relative-native-invariants,logit_supply,3,0,,1.4210854715202e-14
+final-absolute-native-preservation,logit_stackelberg,10,0,,0.0
+final-absolute-native-preservation,logit_supply,10,0,,0.0
+final-relative-native-scales-v2,ces_stackelberg,272,0,32,9.09494701772928e-13
+final-relative-native-scales-v2,ces_supply,104,0,16,9.66338120633736e-13
+final-relative-native-scales-v2,logit_stackelberg,272,0,32,7.105427357601e-13
+final-relative-native-scales-v2,logit_supply,104,0,16,7.95807864051312e-13

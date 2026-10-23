@@ -1,3 +1,12 @@
+> Specification 14 (`0.2.0.9009`) defaults to relative shares. The current
+> focused route is [the native target checks](relative_share_target_checks.R)
+> followed by [paired backend validation](relative_share_backend_validation.R),
+> including Logit/CES M4T4. [Executed implementation results](relative_share_implementation/README.md)
+> retain the incomplete noiseless CES panel stress attempt separately from the
+> completed finite-error panel. The earlier recovery gate and numeric results below
+> concern older absolute-share specifications; their identification and
+> intercept assumptions do not certify the new likelihood.
+
 # Current CmdStanR statistical validation
 
 Run the known-truth recovery gate after installing the current package and

@@ -209,10 +209,10 @@ nutpie_validation_policy_chains <- function(records, shape) {
   matrix(ordered, nrow = shape[1L], ncol = shape[2L])
 }
 
-nutpie_validation_policy <- function(fit) {
+nutpie_validation_policy <- function(fit, seed = 491871L) {
   draw_shape <- dim(antitrustBayes:::.bayes_backend_draws(fit@stanfit, "lp__", "draws_array"))[1:2]
   n_draws <- prod(draw_shape)
-  plan <- antitrustBayes::posterior_policy_draws(fit, n_draws = n_draws, seed = 491871L)
+  plan <- antitrustBayes::posterior_policy_draws(fit, n_draws = n_draws, seed = seed)
   prepared <- suppressWarnings(antitrustBayes::posterior_policy_models(fit, draw_plan = plan,
     market = "m1", year = "t1", insideSize = 1000, demand_anchoring = "latent_quality"))
   data <- fit@data[fit@data$market == "m1" & fit@data$year == "t1", ]

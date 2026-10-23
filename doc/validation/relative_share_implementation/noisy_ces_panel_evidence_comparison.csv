@@ -1,0 +1,2 @@
+"reference","alternative","difference","reference_minus_alternative","combined_mcse","tolerance","reference_minus_alternative_combined_mcse","identity_equal","reference_completed_repetitions","alternative_completed_repetitions","status"
+210.611551897588,210.828344414454,0.216792516865326,-0.216792516865326,0.24134773142571,0.965390925702842,-0.898257943361099,TRUE,3,3,"within_mcse_tolerance"
