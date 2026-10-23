@@ -22,7 +22,10 @@ outside-share, standardized price-coefficient, and margin-noise priors by
 one half and two, respectively.
 }
 \details{
-Every Logit or CES market has a free inside-versus-outside utility
+With the default relative-share basis, market-year utility intercepts
+are derived calibration quantities without priors. The intercept prior
+entries below apply only to explicit absolute-share fits.
+In that basis every Logit or CES market has a free inside-versus-outside utility
 intercept (the outside good has utility zero).
 A single market uses a normalized Normal(0, 1) prior directly, with no
 hierarchy SD. Multiple markets retain the same Normal(0, 1) population-mean

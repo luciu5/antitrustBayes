@@ -91,7 +91,7 @@ test_that("fixed and estimated df fits compile and produce finite draws", {
   d <- make_rho_smoke_data()
   fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 1)
 
-  fit_fixed <- suppressWarnings(bayes_est(
+  fit_fixed <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
@@ -128,7 +128,7 @@ test_that("fixed and estimated df fits compile and produce finite draws", {
     tolerance = 1e-5
   )
 
-  fit_est <- suppressWarnings(bayes_est(
+  fit_est <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
@@ -146,7 +146,7 @@ test_that("rho is never instantiated when no margins are observed", {
   skip_unless_rho_stan_tests()
   d <- make_rho_smoke_data()
   fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 1)
-  fit <- suppressWarnings(bayes_est(
+  fit <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
@@ -167,7 +167,7 @@ test_that("log_lik matches an independent Student-t computation for share/margin
   fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 1)
   draw_idx <- 1L
 
-  fit_share <- suppressWarnings(bayes_est(
+  fit_share <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
@@ -187,7 +187,7 @@ test_that("log_lik matches an independent Student-t computation for share/margin
   expect_equal(actual_ll, expected_ll, tolerance = 1e-6)
   expect_equal(actual_ll, draws$log_lik_share_marginal[draw_idx, ], tolerance = 1e-8)
 
-  fit_margin <- suppressWarnings(bayes_est(
+  fit_margin <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
@@ -215,7 +215,7 @@ test_that("CES rho and Student-t log_lik agree with independent calculations", {
   d <- make_rho_smoke_data(seed = 321, N = 12)
   stan_options <- list(chains = 1, iter = 80, warmup = 40, refresh = 0, seed = 19)
 
-  fit <- suppressWarnings(bayes_est(
+  fit <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
@@ -265,7 +265,7 @@ test_that("CES rho and Student-t log_lik agree with independent calculations", {
 
   # With rho disabled and no observed margin equation, Stan uses a zero-length
   # rho_raw parameter and the transformed correlation is exactly zero.
-  fit_inactive <- suppressWarnings(bayes_est(
+  fit_inactive <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
@@ -284,7 +284,7 @@ test_that("predicted shares distinguish conditional and unconditional identities
   d <- make_rho_smoke_data(N = 8)
   fast_opts <- list(chains = 1, iter = 60, warmup = 30, refresh = 0, seed = 7,
                     sig_figs = 18L)
-  fit <- suppressWarnings(bayes_est(
+  fit <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
@@ -339,7 +339,7 @@ test_that("share-only likelihood does not use the equilibrium-margin information
   margins_b <- runif(N, 0.5, 0.9)
   opts <- list(chains = 2, iter = 300, warmup = 150, refresh = 0, seed = 11)
 
-  fit_share_a <- suppressWarnings(bayes_est(
+  fit_share_a <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = prices, quantities = quantities, margins = margins_a,
@@ -348,7 +348,7 @@ test_that("share-only likelihood does not use the equilibrium-margin information
     df = 5, likelihood = "share",
     stan_options = opts
   ))
-  fit_share_b <- suppressWarnings(bayes_est(
+  fit_share_b <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = prices, quantities = quantities, margins = margins_b,
@@ -357,7 +357,7 @@ test_that("share-only likelihood does not use the equilibrium-margin information
     df = 5, likelihood = "share",
     stan_options = opts
   ))
-  fit_joint_a <- suppressWarnings(bayes_est(
+  fit_joint_a <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = prices, quantities = quantities, margins = margins_a,
@@ -366,7 +366,7 @@ test_that("share-only likelihood does not use the equilibrium-margin information
     df = 5, likelihood = "joint",
     stan_options = opts
   ))
-  fit_joint_b <- suppressWarnings(bayes_est(
+  fit_joint_b <- suppressWarnings(bayes_est(share_basis = "absolute",
     share_likelihood = "student_t", margin_likelihood = "student_t",
     quality_parameterization = "sampled", quality_scope = "global",
     prices = prices, quantities = quantities, margins = margins_b,

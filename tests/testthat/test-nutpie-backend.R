@@ -144,7 +144,7 @@ test_that("only documented zero-prior partition scores may be negative infinite"
 test_that("Nutpie enumerates each frozen kernel data universe without compilation", {
   for (kernel in c("logit_supply", "ces_supply", "logit_stackelberg", "ces_stackelberg")) {
     fields <- .nutpie_stan_data_fields(kernel)
-    expect_identical(fields[[1L]], "N")
+    expect_true(all(c("N", "share_basis") %in% fields))
     expect_true(all(c("price", "market", "N_market", "prior_lkj") %in% fields))
     expect_identical(anyDuplicated(fields), 0L)
     expect_false(any(c("b_strat", "log_lik", "lp__") %in% fields))

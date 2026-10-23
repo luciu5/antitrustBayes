@@ -25,8 +25,9 @@ selected without replacement. The default uses all available draws.}
 conditional quality simulation. The prior random-number state is restored
 after the function returns.}
 
-\item{draws}{Optional list containing numeric \code{share_mean} (draws by
-observations), \code{sigma_share}, and the economic quality scale
+\item{draws}{Optional list containing numeric \code{share_mean} for
+absolute-share fits or \code{relative_share_predictor} for relative-share
+fits (draws by observations), \code{sigma_share}, and the economic quality scale
 \code{sigma_b_strat_economic} (or historical \code{sigma_b_strat}). Under
 \code{quality_scale_parameterization = "total_fraction"}, unrestricted
 Stan extraction supplies the economic alias; a restricted raw extraction
@@ -58,6 +59,11 @@ mixture posterior means and SDs by scoped unit (including both common-
 parameter and conditional quality uncertainty). \code{$realized_k} records
 exact market states when applicable, and \code{$metadata} records whether
 moments are conditional on a realized state.
+Relative-share results additionally contain
+\code{$derived_market_year_intercept_draws} and
+\code{$derived_market_year_labels}; these are calibration levels computed
+from the same recovered quality draw and outside-share state, with no
+independent intercept prior.
 }
 \description{
 Reconstruct conditional group quality after a collapsed Gaussian fit
@@ -67,11 +73,18 @@ The quality vector is the centered group-level quality in the collapsed Stan
 model. Global fits retain one block across groups; market fits have one
 persistent block for every market and use the same economic group labels in
 the separate ownership/ranking map. For each common-parameter draw this
-function conditions that prior on the observed \code{log_shareIn} and, with
-active Gaussian rho, the matched margins. Exact market ordered-k fits first
+function conditions that prior on the observed \code{log_shareIn} under
+\code{share_basis = "absolute"}, or its orthonormal within-market-year
+contrasts under \code{share_basis = "relative"}. The relative conditional
+projects out every market-year level, including when matched Gaussian
+margins are observed and rho is active. Exact market ordered-k fits first
 realize one existing component state per market and use its FOC margin mean.
 The returned quality draw is generated
 after the conditioning step, so HMC does not need to sample quality
-coordinates. Computation is linear in the number of observations and groups
-and never constructs a dense group covariance matrix.
+coordinates. Reconstruction avoids a dense group covariance matrix.
+Relative-share fits derive one calibration intercept per market-year only
+after drawing this same conditional quality state. Their native collapsed
+\code{pred_shareIn} is a zero-quality reference composition, not a recovered
+posterior quality realization; use the returned quality state or a reusable
+policy draw plan for posterior reconstruction and prediction.
 }

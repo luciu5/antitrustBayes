@@ -63,7 +63,7 @@ test_that("explicit legacy likelihood and global scope remain available", {
     margins = c(0.20, 0.30, 0.25, 0.15),
     market = c(1, 1, 2, 2), year = rep(1, 4), group = c(1, 2, 1, 2),
     supply_model = 1L, market_side = "input", use_rho = FALSE,
-    share_likelihood = "student_t", quality_parameterization = "sampled",
+    share_basis = "absolute", share_likelihood = "student_t", quality_parameterization = "sampled",
     quality_scope = "global"
   )
   d <- do.call(prepare_stan_data, f)

@@ -67,7 +67,7 @@ test_that("market s0 rotation resolver distinguishes requested and active modes"
 
 test_that("helpers record rotation mode and keep one-market NC pooling a no-op", {
   d <- rotation_fixture()
-  args <- list(
+  args <- list(share_basis = "absolute",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
     market = d$market, year = d$year, group = d$group,
     supply_model = 1L, use_rho = FALSE, use_s0_market_pool = TRUE,
@@ -94,7 +94,7 @@ test_that("helpers record rotation mode and keep one-market NC pooling a no-op",
 
 test_that("multi-market helpers activate the rotated contract for both demand models", {
   d <- rotation_fixture(multi_market = TRUE)
-  args <- list(
+  args <- list(share_basis = "absolute",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
     market = d$market, year = d$year, group = d$group,
     supply_model = 1L, use_rho = FALSE, use_s0_market_pool = TRUE,
@@ -117,7 +117,7 @@ test_that("multi-market helpers activate the rotated contract for both demand mo
 
 test_that("multi-market helpers expose the narrow joint orthogonal contract", {
   d <- rotation_fixture(multi_market = TRUE)
-  args <- list(
+  args <- list(share_basis = "absolute",
     prices = d$prices, quantities = d$quantities, margins = d$margins,
     market = d$market, year = d$year, group = d$group,
     supply_model = 1L, use_rho = FALSE, use_s0_market_pool = TRUE,
@@ -203,7 +203,7 @@ test_that("all four Stan kernels retain rotation diagnostics and economic equati
       expect_match(flat, "supply_model == 3", fixed = TRUE)
     }
     expect_match(flat,
-                 "share_mean[i] = logit(s0_prob[mky]) + market_intercept_location[m]",
+                 "? logit(s0_prob[mky]) + market_intercept_location[m] + relative_share_predictor[i]",
                  fixed = TRUE)
   }
 

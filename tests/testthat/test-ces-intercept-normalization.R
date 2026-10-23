@@ -30,7 +30,7 @@
     supply_model = supply, use_cutoff = FALSE, use_rho = FALSE, use_hmt = FALSE,
     priors = list(), quality_parameterization = "sampled", quality_scope = "market",
     share_likelihood = "gaussian", margin_likelihood = "gaussian",
-    outside_price = outside_price, structure = structure)
+    outside_price = outside_price, structure = structure, share_basis = "absolute")
   if (!identical(structure, "simultaneous")) {
     args$partition_prior <- "ordered_k"; args$k_support <- k; args$k_prior <- 1
   }
@@ -63,16 +63,15 @@ test_that("CES single-market utility normalization is a sampled free intercept i
   for (kernel in c("ces_supply", "ces_stackelberg")) {
     code <- paste(readLines(.ab_test_path("inst", "stan", paste0(kernel, ".stan")),
                            warn = FALSE), collapse = "\n")
-    expect_match(code, "vector[1] mu_b_market_vec;", fixed = TRUE)
+    expect_match(code, "vector[share_basis == 2 ? 1 : 0] mu_b_market_vec;", fixed = TRUE)
     expect_match(code, "market_intercept_location = rep_vector(mu_b_market_vec[1], N_market);",
                  fixed = TRUE)
-    expect_false(grepl("market_intercept_location = rep_vector(0.0, N_market)",
-                       code, fixed = TRUE))
+    expect_match(code, "if (share_basis == 1) {\n    market_intercept_location = rep_vector(0.0, N_market);", fixed = TRUE)
     expect_length(gregexpr("normal_lpdf(mu_b_market_vec | 0, 1)", code,
                           fixed = TRUE)[[1L]], 1L)
     expect_match(code, "target += normal_lpdf(mu_b_market_vec | 0, 1);\n  if (is_single_market == 0)",
                  fixed = TRUE)
-    expect_match(code, "vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;",
+    expect_match(code, "vector<lower=0>[(share_basis == 2 && is_single_market == 0) ? 1 : 0] sigma_b_market_vec;",
                  fixed = TRUE)
     ## The reported rotated intercept now includes the single-market intercept.
     expect_false(grepl("if (is_single_market == 0) {\n      if (n_mky_per_market[m] > 1)",
@@ -98,20 +97,20 @@ test_that("all four Stan programs still parse after the CES normalization", {
   }
 })
 
-test_that("specification 13 rejects earlier fits, including Logit and CES single-market fits", {
-  expect_identical(.antitrust_bayes_model_spec_version, 13L)
+test_that("specification 14 rejects earlier fits, including Logit and CES single-market fits", {
+  expect_identical(.antitrust_bayes_model_spec_version, 14L)
   for (demand in c("logit", "ces")) {
-    prepared <- if (demand == "ces") .ces_panel_data() else prepare_stan_data(
+    prepared <- if (demand == "ces") .ces_panel_data() else prepare_stan_data(share_basis = "absolute",
       .ces_p, 1000 * .ces_r, rep(.3, 7), rep("m1", 7), rep(1, 7), paste0("f", 1:7),
       supply_model = 1L, market_side = "output", use_rho = FALSE)
-    expect_identical(attr(prepared, "model_spec_version"), 13L)
+    expect_identical(attr(prepared, "model_spec_version"), 14L)
     fit <- methods::new("BayesLogit", stan_data = prepared, supply_model = 1L,
       demand_model = demand, market_side = "output", price_sd = 1,
       call = quote(identity()))
     expect_invisible(validate_fit_spec(fit))
     old <- fit
     attr(old@stan_data, "model_spec_version") <- 12L
-    expect_error(validate_fit_spec(old), "current specification is 13.*Refit it with bayes_est")
+    expect_error(validate_fit_spec(old), "current specification is 14.*Refit it with bayes_est")
   }
   stale <- list(prior_normalization = list(mode = "native_stan_normalized",
                                            model_spec_version = 12L))
@@ -119,7 +118,7 @@ test_that("specification 13 rejects earlier fits, including Logit and CES single
     demand_model = "ces", market_side = "output", price_sd = 1,
     call = quote(identity()), metadata = stale))
   expect_error(antitrustBayes:::.bayes_validate_bridge(fits), "native normalized")
-  fits[[1L]]@metadata$prior_normalization$model_spec_version <- 13L
+  fits[[1L]]@metadata$prior_normalization$model_spec_version <- 14L
   expect_invisible(antitrustBayes:::.bayes_validate_bridge(fits))
 })
 
@@ -130,7 +129,7 @@ test_that("the single-market flag that selects the free intercept reaches both S
     sample = function(data, ...) { captured <<- data; stop("captured before HMC") }),
     .package = "antitrustBayes")
   for (demand in c("logit", "ces")) {
-    expect_error(bayes_est(prices = .ces_p, quantities = 1000 * .ces_r, margins = rep(.3, 7),
+    expect_error(bayes_est(share_basis = "absolute", prices = .ces_p, quantities = 1000 * .ces_r, margins = rep(.3, 7),
       market = rep("m1", 7), year = rep(1, 7), group = paste0("f", 1:7),
       supply_model = "bertrand", demand_model = demand, market_side = "output",
       use_rho = FALSE), "captured before HMC")
@@ -165,7 +164,7 @@ test_that("the single-market flag that selects the free intercept reaches both S
   data <- data.frame(prices = price, quantities = quantities, margins = lerner,
     market = "single", year = "period", group = letters[1:4],
     outside_price = outside_price, margin_observed = TRUE)
-  stan_data <- prepare_ces_stan_data(data$prices, data$quantities, data$margins,
+  stan_data <- prepare_ces_stan_data(share_basis = "absolute", data$prices, data$quantities, data$margins,
     data$market, data$year, data$group, supply_model = supply, use_cutoff = FALSE,
     use_rho = FALSE, use_hmt = FALSE, priors = list(), outside_price = outside_price,
     structure = structure,
@@ -177,7 +176,7 @@ test_that("the single-market flag that selects the free intercept reaches both S
   log_price_sd <- stan_data$log_price_sd
   z <- (log(price) - mean(log(price))) / log_price_sd
   intercept <- mean(log(conditional)) - stats::qlogis(outside_share) - gamma * log(outside_price)
-  quality <- log(conditional) - mean(log(conditional)) + (gamma - 1 + log_price_sd) * z
+  quality <- log(conditional) - mean(log(conditional)) + (gamma * log_price_sd) * z
   quality <- quality - mean(quality)
   values <- c(`a_market[1]` = (gamma - 1) * log_price_sd, `s0_prob[1]` = outside_share,
     `mu_b_market_vec[1]` = intercept + shift, `b_market[1]` = intercept + shift,

@@ -105,6 +105,10 @@ bayes_est_conditional_k <- function(..., k_support, k_prior = NULL,
 #'   A combined repetition is available only when that row is finite for every
 #'   k state. The reported SD uses complete rows and is unavailable with fewer
 #'   than two; it measures bridge repeat variability, not evidence accuracy.
+#' @param component_fits Optional fits named in original k order. When supplied,
+#'   verifies singleton k identity, common observations, priors and share basis.
+#'   Sampler backends may differ. With bare numeric evidence the caller must
+#'   establish these scientific contracts before combining it.
 #' @return A list with \code{logml}, \code{posterior_k}, original \code{k_prior},
 #'   and combined repetitions/\code{logml_sd} when supplied. The original
 #'   matrix is retained in \code{component_repetitions}; requested, joint
@@ -114,11 +118,42 @@ bayes_est_conditional_k <- function(..., k_support, k_prior = NULL,
 #'   hypothesis, not additional top-level model candidates.
 #' @export
 bayes_combine_conditional_k <- function(logml, k_support,
-                                       k_prior = NULL, repetitions = NULL) {
+                                       k_prior = NULL, repetitions = NULL,
+                                       component_fits = NULL) {
   if (!is.numeric(k_support) || !length(k_support) || any(!is.finite(k_support)) ||
       any(k_support != floor(k_support)) || anyDuplicated(k_support) || any(k_support < 0))
     stop("Supply the complete original integer k_support.", call. = FALSE)
   labels <- as.character(k_support)
+  if (!is.null(component_fits)) {
+    if (!is.list(component_fits) || !identical(names(component_fits), labels) ||
+        !all(vapply(component_fits, methods::is, logical(1), "BayesLogit")))
+      stop("component_fits must contain every original k fit in named support order.", call. = FALSE)
+    invisible(lapply(component_fits, validate_fit_spec))
+    validate_comparison_contract(component_fits)
+    family_state <- function(fit) {
+      # k varies; normalized continuous target and conduct family do not.
+      coordinate_fields <- c("grainsize", "quality_parameterization",
+        "quality_scale_parameterization", "market_intercept_parameterization",
+        "market_s0_parameterization", "use_centered_alpha", "use_centered_s0_pool")
+      k_fields <- c("partition_component_k", "partition_unit_k_min", "partition_unit_k_max")
+      fields <- setdiff(names(fit@stan_data), c(coordinate_fields, k_fields))
+      list(demand_model = fit@demand_model, supply_model = fit@supply_model,
+           stan = fit@stan_data[fields])
+    }
+    reference_family <- family_state(component_fits[[1L]])
+    for (i in seq_along(component_fits)) {
+      fit <- component_fits[[i]]
+      if (!isTRUE(all.equal(family_state(fit), reference_family,
+                            check.attributes = FALSE)))
+        stop("Conditional-k components must share one conduct family and continuous scientific specification.",
+             call. = FALSE)
+      support <- fit@metadata$k_support
+      prior_component <- fit@metadata$k_prior
+      if (!.bayes_is_exact_ordered_k(fit) || length(support) != 1L ||
+          !isTRUE(support == k_support[[i]]) || !isTRUE(prior_component == 1))
+        stop("Each component fit must use its matching singleton k and unit component prior.", call. = FALSE)
+    }
+  }
   if (!is.numeric(logml) || !identical(names(logml), labels) ||
       length(logml) != length(labels) || any(!is.finite(logml)))
     stop("Every original k state requires finite named conditional evidence.", call. = FALSE)
@@ -133,6 +168,10 @@ bayes_combine_conditional_k <- function(logml, k_support,
     completed_repetitions = 0L,
     component_completed_repetitions = stats::setNames(integer(length(labels)), labels),
     numerical_status = "unreported")
+  if (!is.null(component_fits)) {
+    out$share_basis <- .share_basis_from_fit(component_fits[[1L]])
+    out$component_backends <- vapply(component_fits, .bayes_comparison_backend, character(1))
+  }
   if (!is.null(repetitions)) {
     if (!is.matrix(repetitions) || !is.numeric(repetitions) || nrow(repetitions) < 1L ||
         !identical(colnames(repetitions), labels) ||

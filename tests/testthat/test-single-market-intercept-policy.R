@@ -20,7 +20,7 @@
   data <- data.frame(prices = price, quantities = 1000 * conditional_share,
     margins = markup / price, market = "single", year = "period",
     group = letters[1:4], outside_price = 1, margin_observed = TRUE)
-  stan_data <- prepare_stan_data(data$prices, data$quantities, data$margins,
+  stan_data <- prepare_stan_data(share_basis = "absolute", data$prices, data$quantities, data$margins,
     data$market, data$year, data$group, supply_model = supply,
     market_side = "output", use_rho = FALSE, structure = structure,
     partition_prior = if (structure == "simultaneous") "cutoff" else "ordered_k",
@@ -132,7 +132,7 @@ test_that("collapsed quality conditions on the single sampled intercept without 
   fixture <- .single_intercept_policy_fixture()
   fit <- fixture$fit
   fit@data$group <- c("a", "a", "b", "c")
-  fit@stan_data <- prepare_stan_data(fit@data$prices, fit@data$quantities, fit@data$margins,
+  fit@stan_data <- prepare_stan_data(share_basis = "absolute", fit@data$prices, fit@data$quantities, fit@data$margins,
     fit@data$market, fit@data$year, fit@data$group, supply_model = 1L,
     market_side = "output", use_rho = FALSE, quality_parameterization = "collapsed",
     quality_scope = "market", share_likelihood = "gaussian", margin_likelihood = "gaussian")

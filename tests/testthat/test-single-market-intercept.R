@@ -2,16 +2,15 @@ test_that("Logit kernels retain one proper inside-market intercept in a single m
   for (kernel in c("logit_supply", "logit_stackelberg")) {
     code <- paste(readLines(.ab_test_path("inst", "stan", paste0(kernel, ".stan")),
                            warn = FALSE), collapse = "\n")
-    expect_match(code, "vector[1] mu_b_market_vec;", fixed = TRUE)
+    expect_match(code, "vector[share_basis == 2 ? 1 : 0] mu_b_market_vec;", fixed = TRUE)
     expect_match(code, "market_intercept_location = rep_vector(mu_b_market_vec[1], N_market);",
                  fixed = TRUE)
-    expect_false(grepl("market_intercept_location = rep_vector(0.0, N_market)",
-                       code, fixed = TRUE))
+    expect_match(code, "if (share_basis == 1) {\n    market_intercept_location = rep_vector(0.0, N_market);", fixed = TRUE)
     expect_length(gregexpr("normal_lpdf(mu_b_market_vec | 0, 1)", code,
                           fixed = TRUE)[[1L]], 1L)
     expect_match(code, "target += normal_lpdf(mu_b_market_vec | 0, 1);\n  if (is_single_market == 0)",
                  fixed = TRUE)
-    expect_match(code, "vector<lower=0>[is_single_market == 0 ? 1 : 0] sigma_b_market_vec;",
+    expect_match(code, "vector<lower=0>[(share_basis == 2 && is_single_market == 0) ? 1 : 0] sigma_b_market_vec;",
                  fixed = TRUE)
   }
 })
@@ -28,6 +27,7 @@ test_that("intercept estimation preserves market flags, quality blocks and outsi
       year = rep(rep(seq_len(T), each = 7L), M),
       group = rep(paste0("p", 1:7), M * T), supply_model = families[[family]],
       market_side = "output", structure = structure, use_cutoff = FALSE,
+    share_basis = "absolute",
       partition_prior = if (structure == "simultaneous") "cutoff" else "ordered_k")
     if (structure != "simultaneous") {
       args$k_support <- 3L
@@ -43,7 +43,7 @@ test_that("intercept estimation preserves market flags, quality blocks and outsi
       expect_identical(sampled$N_quality_block, M)
       expect_identical(sampled$use_s0_market_pool, as.integer(pool == "market"))
       expect_identical(sampled$use_s0_market_year_pool, as.integer(pool == "market_year"))
-      expect_identical(attr(sampled, "model_spec_version"), 13L)
+      expect_identical(attr(sampled, "model_spec_version"), 14L)
       if (M == 1L) {
         collapsed <- do.call(prepare_stan_data,
           c(args, list(market_intercept_parameterization = "collapsed")))

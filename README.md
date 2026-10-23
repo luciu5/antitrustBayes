@@ -246,38 +246,54 @@ comp <- bayes_compare(
 )
 ```
 
-The primary share outcome is the log conditional inside quantity share,
-`log_shareIn`. New fits default to Gaussian share and margin residuals,
-analytically collapsed persistent quality centered within each market, and
-`use_rho = TRUE`. Quality persists across periods for each firm-market group.
-The share-margin residual correlation is estimated only for a joint fit with
-at least one observed margin; otherwise it is structurally fixed at zero and
-is not sampled. The historical specification remains available with
-`share_likelihood = "student_t"`, `margin_likelihood = "student_t"`,
-`quality_parameterization = "sampled"`, and `quality_scope = "global"`.
-Shared proper priors are required for bridge-sampling
-model probabilities. Use `likelihood = "share"` and `likelihood = "margin"`
-fits with `bayes_evidence_decomposition()` when you want to report how much
-evidence comes from each block.
+The default `share_basis = "relative"` observes J-1 orthonormal contrasts of
+log conditional inside **quantity** shares in each market-year. Gaussian share
+and margin errors retain their correctly projected correlation (`use_rho = TRUE`).
+Persistent product quality is centered within each market and, by default,
+analytically integrated. It remains shared across periods, including M4T4 panels.
+Outside-share pooling is a separate choice and is unchanged.
+
+The relative-share likelihood contains no aggregate inside-market attractiveness
+observation. Supply equations and the outside-share prior identify market
+penetration. In monopolistic competition this can leave the outside-share
+posterior equal to its prior; precise recovery is not promised in weakly
+identified cases. After a quality/conduct/outside-share draw, the package derives
+an intercept **per market-year** so its complete demand system reproduces that
+outside share at the reference prices. No intercept prior is applied.
+
+Use `share_basis = "absolute"` for the previous absolute log-share likelihood,
+with its sampled or collapsed market intercept. Student-t and hybrid likelihoods
+currently require this explicit basis. For example:
+
+```r
+fit <- bayes_est(..., share_basis = "relative")
+absolute <- bayes_est(..., share_basis = "absolute")
+robust <- bayes_est(..., share_basis = "absolute",
+                    share_likelihood = "student_t",
+                    quality_parameterization = "sampled")
+```
+
+Both sampler backends use the same maintained Stan source and normalized target.
+Bridge/BMA and conditional-k comparisons require a common share basis; raw
+marginal-likelihood levels from the two bases describe different observations.
+Relative shares do not provide observation-level LOO; supported scoring units
+must contain complete market-year cells and whole shared-k partition units.
+Existing collapsed-quality predictive-scoring restrictions remain.
 
 ## Logit and CES utility normalization
 
-Every Logit or CES market has a free inside-market utility intercept, including one
-market observed in one or several periods. Outside-good utility remains zero,
-product qualities stay centered, and prices retain their standardization. A
-single-market intercept has a proper `Normal(0, 1)` prior with no hierarchy SD;
-multiple markets retain the existing hierarchical specification.
+Outside-good utility is zero and product qualities retain their symmetric
+sum-to-zero normalization. The relative-share basis removes the share-level
+intercept/outside-share ridge. Its derived intercept is
+`-qlogis(s0) - logsumexp(v)` for each market-year, using the same quality draw
+as the policy state. CES retains quantity outside shares and the separate
+quantity-to-revenue conversion in supply equations.
 
-Version `0.2.0.9007` corrected the former single-market zero-intercept restriction
-for Logit, and `0.2.0.9008` applies the same correction to the CES kernels; the
-restriction incorrectly tied the outside share to the geometric mean of conditional
-inside shares. The model specification is a single global integer, now 13, so
-every earlier Logit *and* CES fit requires refitting under it, including Logit
-fits whose kernels did not change; downstream runners that pin specification 12
-must update the pin.
-The intercept and outside-share log odds enter conditional demand as a sum;
-supply information and priors determine their separate identification. See the
-[normalization and identification contract](doc/single_market_utility_normalization.md).
+Version `0.2.0.9009`, model specification 14, introduces this basis. Earlier fits
+require refitting before current comparison or simulation. The explicit
+absolute-share basis retains the free-intercept correction introduced in
+`0.2.0.9007` (Logit) and `0.2.0.9008` (CES). See the
+[relative-share likelihood contract](doc/relative_share_likelihood.md).
 
 `bayes_calibrated_market(..., outside_share = 0.20)` now accepts the outside
 share as an independent baseline primitive (default 20%), while preserving the
@@ -285,6 +301,9 @@ chosen conditional-share geometry. Subsequent equilibrium shocks may change
 the outside share.
 
 ## Market-intercept SD prior
+
+These priors apply to `share_basis = "absolute"`. Relative-share fits have
+no sampled market intercept or market-intercept hierarchy.
 
 For multiple markets, select the prior through `bayes_est(..., priors = ...)`:
 
@@ -294,7 +313,7 @@ priors <- list(
   prior_sigma_b_market_shape = 2,
   prior_sigma_b_market_rate = 5
 )
-# fit <- bayes_est(..., priors = priors)
+# fit <- bayes_est(..., share_basis = "absolute", priors = priors)
 ```
 
 Gamma uses shape and **rate** and is the default from version 0.2.0.9004.

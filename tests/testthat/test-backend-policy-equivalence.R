@@ -4,7 +4,7 @@
   data <- data.frame(prices = c(1.1, 1.2, 1.3), quantities = c(40, 30, 20),
     margins = c(.5, .4, .3), market = "m1", year = "t1",
     group = c("a", "b", "c"), outside_price = 1, margin_observed = TRUE)
-  stan_data <- prepare_stan_data(data$prices, data$quantities, data$margins,
+  stan_data <- prepare_stan_data(share_basis = "absolute", data$prices, data$quantities, data$margins,
     data$market, data$year, data$group, supply_model = conduct,
     market_side = "output", use_rho = FALSE, structure = structure,
     partition_prior = if (structure == "simultaneous") "cutoff" else "ordered_k",

@@ -30,10 +30,12 @@ reconstruction. The prior R random state is restored after a seeded call.}
 
 \item{allow_experimental}{Explicitly allow exploratory Pathfinder draws.}
 
-\item{share_conditioning}{\code{"replicate"} (default) draws new log-share
-outcomes. \code{"observed"} fixes log shares at their observed values and
-draws margins conditional on their residuals. The latter requires the
-joint likelihood (\code{likelihood_mode = 1}).}
+\item{share_conditioning}{\code{"replicate"} (default) draws new share
+outcomes under the fitted observation basis. \code{"observed"} fixes
+observed shares and draws conditional margins. Absolute-share fits use
+raw log-share residuals; relative-share fits use within-market-year
+contrasts and their dense Gaussian conditional margin covariance.
+The latter requires the joint likelihood (\code{likelihood_mode = 1}).}
 }
 \value{
 A \code{posterior_predictive} list containing observed outcomes and
@@ -43,7 +45,9 @@ The observation-level \code{margin_observed} mask distinguishes observed
 margins from generated imputations. Replicated share entries are
 \code{NA} when the fitted likelihood omitted the share equation.
 With \code{share_conditioning = "observed"}, the share matrix repeats the
-observed log shares for each draw; \code{metadata$share_conditioning} is
+observed log shares for absolute-share fits, or the normalized observed
+log quantity composition for relative-share fits;
+\code{metadata$share_conditioning} is
 \code{"observed"} and \code{metadata$share_replicated} is \code{FALSE}.
 }
 \description{
@@ -58,12 +62,16 @@ market-intercept states are reconstructed with the same helpers used by
 \code{posterior_policy_draws()}; exact role models reuse the plan's sampled
 component state and calculate its state-specific FOC margin mean. The
 returned object contains data and metadata only; it does not create plots.
-The raw \code{log_shareIn} values are likelihood outcomes. The
-\code{share_rep_normalized} matrix is a derived within-market-year softmax;
-it is not a likelihood variable. Prediction samples residual outcomes at
-the fitted latent states and does not solve a new structural equilibrium.
-Normalizing shares therefore does not force the raw log shares to match
-the observed values in \code{"replicate"} mode.
+For \code{share_basis = "absolute"}, raw \code{log_shareIn} values are
+likelihood outcomes and \code{share_rep_normalized} is a derived softmax.
+For \code{share_basis = "relative"}, the Gaussian likelihood lives on
+orthonormal ILR quantity-share contrasts. Returned \code{log_shareIn}
+values are normalized log compositions and \code{share_rep_normalized}
+is their exponentiation; no raw share-level observation is replicated.
+Collapsed fits use the plan's recovered quality state, rather than the
+native \code{pred_shareIn} zero-quality reference composition. Prediction
+samples residual outcomes at fitted latent states and does not solve a
+new structural equilibrium or force replicated shares to observed values.
 }
 \seealso{
 \code{posterior_policy_draws()}, \code{posterior_quality()}

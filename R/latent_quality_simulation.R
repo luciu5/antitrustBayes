@@ -430,6 +430,8 @@
                    after = 3L)
     keys <- c(keys, "market_intercept_draws", "market_labels")
   }
+  if (identical(plan$share_basis, "relative"))
+    keys <- c(keys, "share_basis", "derived_market_year_intercept_draws", "market_year_labels")
   digest::digest(plan[keys], algo = "xxhash64", serialize = TRUE)
 }
 
@@ -487,6 +489,15 @@
       role_offset = role_args$role_offset, exact_k = !is.null(k_cache)
     )
   ), class = c("bayes_policy_draw_plan", "list"))
+  if (identical(.share_basis_from_fit(fit), "relative")) {
+    derived <- .lq_relative_derived_intercepts(fit, draws, draw_indices, quality$draws)
+    plan$share_basis <- "relative"
+    plan$derived_market_year_intercept_draws <- derived$draws
+    plan$market_year_labels <- derived$labels
+    plan$metadata$share_basis <- "relative"
+    plan$metadata$observation_basis <- "ilr_quantity_shares_v1"
+    plan$metadata$market_year_labels <- derived$labels
+  }
   plan$fit_signature$latent_state_fingerprint <- .lq_plan_state_fingerprint(plan)
   plan
 }
@@ -646,7 +657,74 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
     stop("'draw_plan' contains market-intercept draws for a sampled-intercept fit.",
          call. = FALSE)
   }
+  if (identical(.share_basis_from_fit(fit), "relative")) {
+    if (!identical(plan$share_basis, "relative"))
+      stop("Relative-share fit requires a matching relative-share draw plan.", call. = FALSE)
+    expected <- .lq_relative_derived_intercepts(fit, draws, di, plan$quality_draws)
+    if (!identical(as.character(plan$market_year_labels), expected$labels) ||
+        !isTRUE(all.equal(plan$derived_market_year_intercept_draws, expected$draws,
+                         tolerance = 1e-12)))
+      stop("'draw_plan' has inconsistent derived market-year intercepts.", call. = FALSE)
+  }
   plan
+}
+
+.lq_market_year_labels <- function(fit) {
+  d <- fit@stan_data
+  n <- as.integer(d$N_market_year %||% max(d$market_year_idx %||% 1L))
+  labels <- fit@metadata$market_year_labels %||%
+    attr(d, "market_year_size", exact = TRUE)$market_year_labels %||%
+    as.character(seq_len(n))
+  labels <- as.character(labels)
+  if (length(labels) != n || anyNA(labels) || any(!nzchar(labels)) || anyDuplicated(labels))
+    stop("Relative-share fit has malformed market-year labels.", call. = FALSE)
+  labels
+}
+
+## Retained predictor includes q only when quality was sampled in Stan.
+## Recover q before deriving the level calibration; never use a zero-q GQ.
+.lq_relative_full_predictor <- function(fit, draws, draw_indices, quality_draws) {
+  n <- as.integer(fit@stan_data$N %||% nrow(fit@data))
+  value <- .posterior_quality_matrix(draws$relative_share_predictor, n,
+                                      "relative_share_predictor")
+  if (nrow(value) != .lq_draw_count(fit, draws) || any(!is.finite(value)))
+    stop("Relative-share predictor draws are malformed.", call. = FALSE)
+  value <- value[draw_indices, , drop = FALSE]
+  if (identical(.lq_quality_mode(fit), "collapsed")) {
+    incidence <- .lq_quality_incidence(fit)
+    index <- incidence$obs_to_quality
+    if (length(index) != n || anyNA(index) || !is.matrix(quality_draws) ||
+        nrow(quality_draws) != length(draw_indices) ||
+        any(index < 1L | index > ncol(quality_draws)))
+      stop("Relative-share predictor has malformed quality incidence.", call. = FALSE)
+    value <- value + quality_draws[, index, drop = FALSE]
+  }
+  if (any(!is.finite(value))) stop("Relative-share predictor is nonfinite.", call. = FALSE)
+  value
+}
+
+.lq_relative_derived_intercepts <- function(fit, draws, draw_indices, quality_draws) {
+  labels <- .lq_market_year_labels(fit)
+  predictor <- .lq_relative_full_predictor(fit, draws, draw_indices, quality_draws)
+  cells <- as.integer(fit@stan_data$market_year_idx %||% rep.int(1L, ncol(predictor)))
+  if (length(cells) != ncol(predictor) || anyNA(cells) ||
+      !setequal(cells, seq_along(labels)))
+    stop("Relative-share fit has malformed market-year incidence.", call. = FALSE)
+  outside <- .posterior_quality_matrix(draws$s0_prob, length(labels), "s0_prob")
+  if (nrow(outside) != .lq_draw_count(fit, draws) ||
+      any(!is.finite(outside)) || any(outside <= 0 | outside >= 1))
+    stop("Relative-share outside-share draws are malformed.", call. = FALSE)
+  out <- matrix(NA_real_, nrow = length(draw_indices), ncol = length(labels),
+    dimnames = list(as.character(draw_indices), labels))
+  for (cell in seq_along(labels)) {
+    rows <- which(cells == cell)
+    v <- predictor[, rows, drop = FALSE]
+    top <- apply(v, 1L, max)
+    out[, cell] <- -stats::qlogis(outside[draw_indices, cell]) - top -
+      log(rowSums(exp(sweep(v, 1L, top, "-"))))
+  }
+  if (any(!is.finite(out))) stop("Derived market-year intercepts are nonfinite.", call. = FALSE)
+  list(draws = out, labels = labels)
 }
 
 .lq_quality_for_draw <- function(plan, draw_index) {
@@ -671,6 +749,18 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
     return(list(score = score, s0 = s0,
                 quality = rep(0, length(plan$group_labels)),
                 draw_index = as.integer(draw)))
+  }
+  if (identical(.share_basis_from_fit(object), "relative")) {
+    position <- match(as.integer(draw), plan$draw_indices)
+    cell <- as.integer(unit$market_year_index)
+    if (is.na(position) || length(cell) != 1L || is.na(cell) ||
+        cell < 1L || cell > ncol(plan$derived_market_year_intercept_draws))
+      stop("Relative-share policy state has an invalid market-year map.", call. = FALSE)
+    value <- .lq_relative_full_predictor(object, draws, draw,
+      plan$quality_draws[position, , drop = FALSE])
+    score <- value[1L, unit$idx] + plan$derived_market_year_intercept_draws[position, cell]
+    return(list(score = as.numeric(score), s0 = s0,
+      quality = .lq_quality_for_draw(plan, draw), draw_index = as.integer(draw)))
   }
   intercept_mode <- .market_intercept_parameterization_from_fit(object)
   mean_name <- if (identical(intercept_mode, "collapsed"))

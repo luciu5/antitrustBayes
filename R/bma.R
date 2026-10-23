@@ -7,6 +7,9 @@
 
 validate_comparison_contract <- function(fits) {
   reference <- fits[[1L]]
+  bases <- vapply(fits, .share_basis_from_fit, character(1))
+  if (length(unique(bases)) != 1L)
+    stop("Models must use the same share_basis and observation measure; relative and absolute share evidence cannot be mixed.", call. = FALSE)
   columns <- c(
     "prices", "quantities", "margins", "market", "year", "group",
     "loo_cluster", "margin_observed", "outside_price"
@@ -47,6 +50,9 @@ validate_comparison_contract <- function(fits) {
       names(reference@metadata$resolved_priors),
       grep("^bargaining_", names(reference@metadata$resolved_priors), value = TRUE)
     )
+    if (identical(bases[[1L]], "relative"))
+      shared_prior_names <- setdiff(shared_prior_names,
+        grep("^prior_sigma_b_market", shared_prior_names, value = TRUE))
     if (!(.bayes_uses_cutoff_partition(reference) &&
           .bayes_uses_cutoff_partition(candidate))) {
       shared_prior_names <- setdiff(shared_prior_names,
@@ -689,6 +695,10 @@ validate_comparison_contract <- function(fits) {
 #' side, outside prices, margin mask, and current quantity-space likelihood.
 #' This permits Logit/CES comparison without comparing likelihoods defined on
 #' different observed outcomes.
+#' All candidates must also share \code{share_basis}: relative-share and
+#' absolute-share evidence describes different observation measures and cannot
+#' be mixed. Relative-share predictive units must contain complete market-year
+#' cells, as well as whole shared-k partition units where applicable.
 #' The current Stan specification retains prior density constants and support
 #' normalizers directly. Earlier specification fits must be refitted. Evidence
 #' refers to the transformed-outcome working likelihood. Bridge comparison
@@ -1026,6 +1036,7 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
   result <- data.frame(
     model         = nms,
     backend       = unname(backends),
+    share_basis   = vapply(fits, .share_basis_from_fit, character(1)),
     supply_model  = vapply(fits, function(f)
       supply_names[f@supply_model], character(1)),
     demand_model  = vapply(fits, slot, character(1), "demand_model"),
@@ -1102,6 +1113,8 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
     bridge_context_info, nms)
   attr(result, "backend_metadata") <- stats::setNames(lapply(fits, function(fit) {
     list(backend = .bayes_comparison_backend(fit),
+         share_basis = .share_basis_from_fit(fit),
+         share_observation_measure = fit@metadata$share_observation_measure,
          inference = fit@metadata$inference,
          stan_kernel = fit@metadata$stan_kernel,
          stan_source_hash = fit@metadata$stan_source_hash,

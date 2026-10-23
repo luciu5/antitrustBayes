@@ -76,7 +76,10 @@
   intercept_collapsed <- identical(
     .market_intercept_parameterization_from_fit(fit), "collapsed"
   )
-  share_mean_field <- if (intercept_collapsed) {
+  relative <- identical(.share_basis_from_fit(fit), "relative")
+  share_mean_field <- if (relative) {
+    "relative_share_predictor"
+  } else if (intercept_collapsed) {
     "share_mean_integrated"
   } else {
     "share_mean"
@@ -93,7 +96,7 @@
       required <- c(required, "bargaining_power")
     if (purpose %in% c("policy_plan", "posterior_predictive")) {
       if (quality == "sampled") {
-        required <- c(required, "share_mean")
+        required <- c(required, share_mean_field)
         ## One global group is deterministically centered at zero and the
         ## historical recovery path intentionally accepts no b_quality_all.
         n_quality <- fit@stan_data$N_quality %||% fit@stan_data$N_group %||%
@@ -114,7 +117,7 @@
             identical(conditioning, "auto") &&
             !(native || identical(partition, "ordered_k"))) {
           required <- c(required, "rho", "sigma_margin", "pred_marginNormInv")
-          if (intercept_collapsed &&
+          if ((intercept_collapsed || relative) &&
               isTRUE(fit@stan_data$use_market_resid_scale == 1L))
             required <- c(required, "sigma_margin_market")
         }
@@ -128,7 +131,7 @@
         if (exact_quality)
           required <- c(required, "rho", "sigma_margin", "posterior_component_prob",
                         "a_market", "s0_prob")
-        if (exact_quality && intercept_collapsed &&
+        if (exact_quality && (intercept_collapsed || relative) &&
             isTRUE(fit@stan_data$use_market_resid_scale == 1L))
           required <- c(required, "sigma_margin_market")
       }
@@ -136,8 +139,7 @@
   }
   if (purpose == "posterior_predictive") {
     required <- c(required, "sigma_share", "sigma_margin")
-    required <- c(required, if (intercept_collapsed)
-      "share_mean_integrated" else "share_mean")
+    required <- c(required, share_mean_field)
     if (!native) required <- c(required, "pred_marginNormInv")
     if (.posterior_contract_rho_active(fit)) required <- c(required, "rho")
     if (isTRUE(fit@stan_data$use_market_resid_scale == 1L)) {
@@ -164,7 +166,7 @@
     if (.posterior_contract_rho_active(fit) && identical(conditioning, "auto") &&
         !(native || identical(partition, "ordered_k"))) {
       required <- c(required, "rho", "sigma_margin", "pred_marginNormInv")
-      if (intercept_collapsed &&
+      if ((intercept_collapsed || relative) &&
           isTRUE(fit@stan_data$use_market_resid_scale == 1L))
         required <- c(required, "sigma_margin_market")
     }
@@ -178,7 +180,7 @@
     if (exact_quality)
       required <- c(required, "rho", "sigma_margin", "posterior_component_prob",
                     "a_market", "s0_prob")
-    if (exact_quality && intercept_collapsed &&
+    if (exact_quality && (intercept_collapsed || relative) &&
         isTRUE(fit@stan_data$use_market_resid_scale == 1L))
       required <- c(required, "sigma_margin_market")
   }
@@ -208,6 +210,12 @@
     }
     if (identical(as.character(fit@demand_model), "ces"))
       required <- c(required, "R0_prob")
+  }
+  if (relative && purpose %in% c("policy_plan", "posterior_quality", "posterior_predictive")) {
+    required <- c(required, "s0_prob", "relative_share_predictor")
+    if (quality == "sampled") optional <- c(optional, "derived_market_year_intercept")
+    if (quality == "collapsed" && isTRUE(fit@stan_data$use_market_resid_scale == 1L))
+      required <- c(required, "sigma_share_market")
   }
   required <- unique(required)
   optional <- setdiff(unique(optional), required)

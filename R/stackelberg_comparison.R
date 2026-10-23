@@ -54,6 +54,18 @@
 }
 
 .bayes_comparison_units <- function(fits, loo_unit) {
+  for (fit in fits) {
+    if (identical(.share_basis_from_fit(fit), "relative")) {
+      if (loo_unit == "observation")
+        stop("Observation LOO is unsupported for relative shares; use complete market-year cells.", call. = FALSE)
+      if (loo_unit == "cluster") {
+        counts <- tapply(fit@stan_data$cluster, fit@stan_data$market_year_idx,
+                         function(x) length(unique(x)))
+        if (any(counts != 1L))
+          stop("Relative-share LOO clusters must contain complete market-year cells.", call. = FALSE)
+      }
+    }
+  }
   for (fit in fits) if (.bayes_is_exact_ordered_k(fit)) {
     dat <- fit@stan_data
     if (loo_unit == "observation") {
@@ -79,7 +91,7 @@
     if (!is.list(normalization) ||
         !identical(normalization$mode, "native_stan_normalized") ||
         !isTRUE(normalization$model_spec_version == .antitrust_bayes_model_spec_version)) {
-      stop("Marginal likelihood requires native normalized specification-10 fits. Refit older or unverified objects.")
+      stop("Marginal likelihood requires native normalized current-specification fits. Refit older or unverified objects.")
     }
     if (isTRUE(dat$use_s0_market_pool == 1L) &&
         isTRUE(dat$use_s0_market_year_pool == 1L)) {

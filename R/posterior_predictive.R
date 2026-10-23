@@ -11,10 +11,12 @@
 #'   and, when creating a new plan, draw selection and latent-state
 #'   reconstruction. The prior R random state is restored after a seeded call.
 #' @param allow_experimental Explicitly allow exploratory Pathfinder draws.
-#' @param share_conditioning \code{"replicate"} (default) draws new log-share
-#'   outcomes. \code{"observed"} fixes log shares at their observed values and
-#'   draws margins conditional on their residuals. The latter requires the
-#'   joint likelihood (\code{likelihood_mode = 1}).
+#' @param share_conditioning \code{"replicate"} (default) draws new share
+#'   outcomes under the fitted observation basis. \code{"observed"} fixes
+#'   observed shares and draws conditional margins. Absolute-share fits use
+#'   raw log-share residuals; relative-share fits use within-market-year
+#'   contrasts and their dense Gaussian conditional margin covariance.
+#'   The latter requires the joint likelihood (\code{likelihood_mode = 1}).
 #'
 #' @return A \code{posterior_predictive} list containing observed outcomes and
 #'   draw-aligned \code{log_shareIn} and \code{log_marginNormInv} matrices,
@@ -23,7 +25,9 @@
 #'   margins from generated imputations. Replicated share entries are
 #'   \code{NA} when the fitted likelihood omitted the share equation.
 #'   With \code{share_conditioning = "observed"}, the share matrix repeats the
-#'   observed log shares for each draw; \code{metadata$share_conditioning} is
+#'   observed log shares for absolute-share fits, or the normalized observed
+#'   log quantity composition for relative-share fits;
+#'   \code{metadata$share_conditioning} is
 #'   \code{"observed"} and \code{metadata$share_replicated} is \code{FALSE}.
 #'
 #' @details Each row of the outcome matrices corresponds to one posterior
@@ -34,12 +38,16 @@
 #'   \code{posterior_policy_draws()}; exact role models reuse the plan's sampled
 #'   component state and calculate its state-specific FOC margin mean. The
 #'   returned object contains data and metadata only; it does not create plots.
-#'   The raw \code{log_shareIn} values are likelihood outcomes. The
-#'   \code{share_rep_normalized} matrix is a derived within-market-year softmax;
-#'   it is not a likelihood variable. Prediction samples residual outcomes at
-#'   the fitted latent states and does not solve a new structural equilibrium.
-#'   Normalizing shares therefore does not force the raw log shares to match
-#'   the observed values in \code{"replicate"} mode.
+#'   For \code{share_basis = "absolute"}, raw \code{log_shareIn} values are
+#'   likelihood outcomes and \code{share_rep_normalized} is a derived softmax.
+#'   For \code{share_basis = "relative"}, the Gaussian likelihood lives on
+#'   orthonormal ILR quantity-share contrasts. Returned \code{log_shareIn}
+#'   values are normalized log compositions and \code{share_rep_normalized}
+#'   is their exponentiation; no raw share-level observation is replicated.
+#'   Collapsed fits use the plan's recovered quality state, rather than the
+#'   native \code{pred_shareIn} zero-quality reference composition. Prediction
+#'   samples residual outcomes at fitted latent states and does not solve a
+#'   new structural equilibrium or force replicated shares to observed values.
 #'
 #' @seealso \code{posterior_policy_draws()}, \code{posterior_quality()}
 #' @export
@@ -239,7 +247,9 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
   intercept_collapsed <- identical(
     .market_intercept_parameterization_from_fit(fit), "collapsed"
   )
-  mean_name <- if (intercept_collapsed) "share_mean_integrated" else "share_mean"
+  relative <- identical(.share_basis_from_fit(fit), "relative")
+  mean_name <- if (relative) "relative_share_predictor" else if (intercept_collapsed)
+    "share_mean_integrated" else "share_mean"
   share_mean <- .posterior_quality_matrix(draws[[mean_name]], data_info$n,
                                            mean_name)
   if (nrow(share_mean) != n_total || any(!is.finite(share_mean))) {
@@ -443,6 +453,58 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
   .posterior_quality_with_seed(seed, calculate)
 }
 
+## A normalized composition carries only within-period contrasts. Raw
+## correlated Gaussian errors generate that same projected joint law; when
+## shares are fixed, the conditional margin covariance is dense.
+.posterior_predict_relative_residual_draws <- function(
+    share_mean, margin_mean, share_scale, margin_scale, rho, rho_active,
+    likelihood_mode, cell, seed = NULL, share_conditioning = "replicate",
+    observed_share = NULL) {
+  n_draw <- nrow(share_mean)
+  n <- ncol(share_mean)
+  if (length(cell) != n || anyNA(cell))
+    stop("Relative-share prediction has malformed market-year incidence.", call. = FALSE)
+  calculate <- function() {
+    share <- margin <- matrix(NA_real_, nrow = n_draw, ncol = n)
+    for (r in seq_len(n_draw)) for (rows in split(seq_len(n), cell)) {
+      ss <- share_scale[r, rows]
+      sm <- margin_scale[r, rows]
+      correlation <- if (isTRUE(rho_active)) rho[[r]] else 0
+      if (likelihood_mode == 3L) {
+        margin[r, rows] <- margin_mean[r, rows] + stats::rnorm(length(rows), sd = sm)
+        next
+      }
+      if (identical(share_conditioning, "observed")) {
+        value <- observed_share[rows]
+        if (likelihood_mode != 2L) {
+          precision <- .relative_share_precision(diag(length(rows)), variance = ss^2,
+            quality_index = seq_along(rows), quality_block = rep.int(1L, length(rows)),
+            cell = rep.int(1L, length(rows)), tau = 0)
+          cross <- correlation * ss * sm
+          conditional_mean <- margin_mean[r, rows] + cross *
+            as.numeric(precision %*% (value - share_mean[r, rows]))
+          covariance <- diag(sm^2, nrow = length(rows)) -
+            (cross %o% cross) * precision
+          covariance <- (covariance + t(covariance)) / 2
+          margin[r, rows] <- conditional_mean +
+            as.numeric(crossprod(chol(covariance), stats::rnorm(length(rows))))
+        }
+      } else {
+        error <- stats::rnorm(length(rows), sd = ss)
+        value <- share_mean[r, rows] + error
+        if (likelihood_mode != 2L) {
+          margin[r, rows] <- margin_mean[r, rows] + correlation * sm / ss * error +
+            stats::rnorm(length(rows), sd = sm * sqrt(1 - correlation^2))
+        }
+      }
+      top <- max(value)
+      share[r, rows] <- value - top - log(sum(exp(value - top)))
+    }
+    list(log_shareIn = share, log_marginNormInv = margin)
+  }
+  .posterior_quality_with_seed(seed, calculate)
+}
+
 .posterior_predict_from_draws <- function(fit, draws, plan, seed = NULL,
                                           share_conditioning = c("replicate", "observed")) {
   share_conditioning <- match.arg(share_conditioning)
@@ -494,7 +556,16 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
   } else rep(0, length(means$draw_indices))
   replicate_seed <- if (is.null(seed)) NULL else
     as.integer((as.double(seed) + 3) %% .Machine$integer.max)
-  replicated <- .posterior_predict_residual_draws(
+  relative <- identical(.share_basis_from_fit(fit), "relative")
+  if (relative && (share_family != "gaussian" || margin_family != "gaussian"))
+    stop("Relative-share posterior prediction requires Gaussian likelihoods.", call. = FALSE)
+  replicated <- if (relative) .posterior_predict_relative_residual_draws(
+    means$share_mean, means$margin_mean, scales$share, scales$margin,
+    rho, rho_active, data_info$likelihood_mode,
+    cell = as.integer(fit@stan_data$market_year_idx %||% rep.int(1L, data_info$n)),
+    seed = replicate_seed, share_conditioning = share_conditioning,
+    observed_share = data_info$observed_share
+  ) else .posterior_predict_residual_draws(
     means$share_mean, means$margin_mean,
     scales$share, scales$margin,
     share_family, margin_family, nu, rho, rho_active,
@@ -582,6 +653,18 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
     metadata$share_replicated <- FALSE
     metadata$share_rep_normalized_definition <-
       "softmax of fixed observed log_shareIn within market-year; derived view, not a Stan likelihood variable"
+  }
+  if (relative) {
+    metadata$share_basis <- "relative"
+    metadata$observation_basis <- "ilr_quantity_shares_v1"
+    metadata$market_intercept_parameterization <- "derived_market_year"
+    metadata$share_rep_normalized_definition <- if (share_conditioning == "observed")
+      "fixed observed quantity composition within market-year" else
+      "normalized quantity composition generated by the fitted ILR Gaussian law"
+    metadata$conditioning <- if (.lq_quality_mode(fit) == "collapsed") {
+      if (rho_active) "observed relative-share contrasts and matched Gaussian margins" else
+        "observed relative-share contrasts"
+    } else "posterior parameter draw"
   }
   structure(list(
     observed = list(

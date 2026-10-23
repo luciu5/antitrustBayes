@@ -184,7 +184,7 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   inactive <- character()
   market_sd_fields <- c("prior_sigma_b_market_family",
     "prior_sigma_b_market_scale", "prior_sigma_b_market_shape", "prior_sigma_b_market_rate")
-  if (n_market == 1L) {
+  if (n_market == 1L || identical(.share_basis_from_fit(fit), "relative")) {
     inactive <- c(inactive, market_sd_fields)
   } else if (isTRUE(stan$prior_sigma_b_market_family == 1L)) {
     inactive <- c(inactive, "prior_sigma_b_market_shape", "prior_sigma_b_market_rate")
@@ -318,7 +318,7 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   data_state <- lapply(dat[data_fields], function(x) unname(as.vector(x)))
   names(data_state) <- data_fields
   stan_fields <- intersect(c(
-    "shareIn", "clr_shareIn", "marginNormInv", "log_marginNormInv",
+    "share_basis", "shareIn", "clr_shareIn", "marginNormInv", "log_marginNormInv",
     "margin_obs", "market_year_idx", "cluster", "likelihood_mode",
     "outside_price", "X_s0", "s0_pooling",
     "s0_pooling_resolved", "use_rho", "use_alpha_market_pool",
@@ -404,6 +404,7 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
   )
   state <- list(
     model_spec_version = model_spec_version,
+    share_basis = .share_basis_from_fit(fit),
     demand_model = .mu_or(md$demand_model, fit@demand_model),
     market_side = fit@market_side,
     likelihood = .mu_or(md$likelihood, NULL),

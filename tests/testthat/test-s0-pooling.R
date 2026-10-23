@@ -58,12 +58,12 @@ test_that("multi-market intercept hierarchies are noncentered", {
   cases <- list(
     logit = list(
       data = make_panel(seed = 19),
-      args = list(demand_model = "logit"),
+      args = list(demand_model = "logit", share_basis = "absolute"),
       rotated_name = "gamma_market"
     ),
     ces = list(
       data = make_ces_panel(seed = 19),
-      args = list(demand_model = "ces", market_side = "output"),
+      args = list(demand_model = "ces", market_side = "output", share_basis = "absolute"),
       rotated_name = "b_market_rot"
     )
   )

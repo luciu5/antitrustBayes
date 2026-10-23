@@ -103,6 +103,10 @@ Requires that the Stan model includes a \code{log_lik} generated quantity
 side, outside prices, margin mask, and current quantity-space likelihood.
 This permits Logit/CES comparison without comparing likelihoods defined on
 different observed outcomes.
+All candidates must also share \code{share_basis}: relative-share and
+absolute-share evidence describes different observation measures and cannot
+be mixed. Relative-share predictive units must contain complete market-year
+cells, as well as whole shared-k partition units where applicable.
 The current Stan specification retains prior density constants and support
 normalizers directly. Earlier specification fits must be refitted. Evidence
 refers to the transformed-outcome working likelihood. Bridge comparison

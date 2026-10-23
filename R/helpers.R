@@ -25,7 +25,7 @@ safe_sd <- function(x, floor = 1e-8) {
   quality_parameterization <- match.arg(quality_parameterization)
   quality_scope <- match.arg(quality_scope)
   market_intercept_parameterization <- match.arg(
-    market_intercept_parameterization, c("sampled", "collapsed")
+    market_intercept_parameterization, c("sampled", "collapsed", "derived_market_year")
   )
   if (is.null(margin_likelihood)) margin_likelihood <- share_likelihood
   margin_likelihood <- match.arg(margin_likelihood, c("student_t", "gaussian"))
@@ -33,7 +33,7 @@ safe_sd <- function(x, floor = 1e-8) {
     stop("quality_parameterization = 'collapsed' requires share_likelihood = 'gaussian'.")
   }
   if (quality_parameterization == "collapsed" && use_market_resid_scale &&
-      !identical(market_intercept_parameterization, "collapsed")) {
+      !market_intercept_parameterization %in% c("collapsed", "derived_market_year")) {
     stop("Collapsed Gaussian quality does not support use_market_resid_scale = TRUE.")
   }
   if (share_likelihood == "student_t" && margin_likelihood == "gaussian") {
@@ -100,7 +100,7 @@ safe_sd <- function(x, floor = 1e-8) {
   quality_parameterization <- match.arg(quality_parameterization)
   share_likelihood <- match.arg(share_likelihood)
   market_intercept_parameterization <- match.arg(
-    market_intercept_parameterization, c("sampled", "collapsed")
+    market_intercept_parameterization, c("sampled", "collapsed", "derived_market_year")
   )
   if (identical(quality_scale_parameterization, "total_fraction") &&
       (!identical(quality_parameterization, "collapsed") ||
@@ -133,7 +133,7 @@ safe_sd <- function(x, floor = 1e-8) {
 ## sampled path; code 2 removes the multi-market Gaussian
 ## intercept from the Stan target and reconstructs it after sampling.
 .resolve_market_intercept_parameterization <- function(
-    market_intercept_parameterization = c("sampled", "collapsed"),
+    market_intercept_parameterization = NULL,
     N_market,
     share_likelihood = c("gaussian", "student_t"),
     margin_likelihood = NULL,
@@ -142,7 +142,15 @@ safe_sd <- function(x, floor = 1e-8) {
     likelihood_mode = 1L,
     market_s0_parameterization = c("legacy", "rotated", "joint"),
     use_market_resid_scale = FALSE,
-    quality_scale_parameterization = c("legacy", "total_fraction")) {
+    quality_scale_parameterization = c("legacy", "total_fraction"),
+    share_basis = "absolute") {
+  if (identical(share_basis, "relative")) {
+    if (!is.null(market_intercept_parameterization))
+      stop("Relative shares derive the market-year intercept; explicit intercept coordinates require absolute shares.", call. = FALSE)
+    return(list(requested = NULL, effective = "derived_market_year", code = 1L,
+                no_op = FALSE, coordinate_convention = "derived_market_year_calibration"))
+  }
+  if (is.null(market_intercept_parameterization)) market_intercept_parameterization <- "sampled"
   requested <- match.arg(market_intercept_parameterization,
                          c("sampled", "collapsed"))
   if (length(N_market) != 1L || !is.numeric(N_market) ||
@@ -214,6 +222,7 @@ safe_sd <- function(x, floor = 1e-8) {
 ## stricter validate_fit_spec() version check used before package operations.
 .market_intercept_parameterization_from_fit <- function(fit) {
   if (methods::is(fit, "BayesSpecifiedFit")) return("sampled")
+  if (identical(.share_basis_from_fit(fit), "relative")) return("derived_market_year")
   stan_data <- fit@stan_data
   metadata <- fit@metadata
   decode <- function(value, field) {
@@ -855,20 +864,21 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #'   (default) or \code{"student_t"}.
 #' @param quality_parameterization Quality effects are \code{"collapsed"}
 #'   (default) or \code{"sampled"}; collapsed quality integrates Gaussian
-#'   group effects and disallows market residual scales.
+#'   group effects. Relative shares also support market residual scales.
 #' @param quality_scale_parameterization Sampler coordinates for the Gaussian
 #'   share-noise and quality scales. \code{"legacy"} (default) samples
 #'   \code{log(sigma_share)} and the positive quality scale directly.
 #'   \code{"total_fraction"} is an exact experimental reparameterization that
 #'   samples the log total scale and logit share-noise variance fraction; it
 #'   requires Gaussian shares, collapsed quality, and a common residual scale.
-#' @param market_intercept_parameterization Character string selecting
-#'   \code{"sampled"} (default) or \code{"collapsed"} Gaussian
-#'   market-intercept coordinates. The collapsed mode requires multiple
-#'   markets, Gaussian shares and margins, collapsed market-scoped quality, a
-#'   joint likelihood, and legacy/base s0 coordinates. A single market (Logit or CES)
-#'   samples its free Normal(0, 1) intercept directly without a hierarchy SD;
-#'   a collapsed-coordinate request leaves that sampled intercept in place.
+#' @param share_basis \code{"relative"} (default) uses J-1 orthonormal
+#'   conditional quantity-share contrasts per market-year and Gaussian residuals.
+#'   \code{"absolute"} retains the absolute log-share likelihood.
+#' @param market_intercept_parameterization Leave \code{NULL} for relative
+#'   shares, which derive a market-year intercept without an intercept prior.
+#'   For absolute shares \code{NULL} resolves to \code{"sampled"}; the
+#'   optional \code{"collapsed"} mode integrates the existing Gaussian
+#'   multi-market hierarchy subject to its existing restrictions.
 #' @param margin_likelihood Margin residual family: \code{"student_t"} or
 #'   \code{"gaussian"}; \code{NULL} (default) follows
 #'   \code{share_likelihood}, so the resolved default is Gaussian.
@@ -941,15 +951,20 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               share_likelihood = c("gaussian", "student_t"),
                               quality_parameterization = c("collapsed", "sampled"),
                               quality_scale_parameterization = c("legacy", "total_fraction"),
-                              market_intercept_parameterization = c("sampled", "collapsed"),
+                              market_intercept_parameterization = NULL,
                               margin_likelihood = NULL,
-                              quality_scope = c("market", "global")) {
+                              quality_scope = c("market", "global"),
+                              share_basis = c("relative", "absolute")) {
+  basis <- .resolve_share_basis(share_basis, share_likelihood, margin_likelihood,
+                                market_intercept_parameterization, market_s0_parameterization)
+  share_basis <- basis$name
   N <- length(prices)
   quality_scope <- match.arg(quality_scope)
   n_market_requested <- nlevels(droplevels(as.factor(market)))
   market_intercept_resolution <- .resolve_market_intercept_parameterization(
     market_intercept_parameterization = market_intercept_parameterization,
     N_market = n_market_requested,
+    share_basis = share_basis,
     share_likelihood = share_likelihood,
     margin_likelihood = margin_likelihood,
     quality_parameterization = quality_parameterization,
@@ -1412,6 +1427,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   }
 
   stan_data <- .attach_market_year_quantity_size(stan_data, market_year_size)
+  stan_data <- .attach_share_basis(stan_data, basis)
 
   stan_data
 }
@@ -1457,15 +1473,20 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   share_likelihood = c("gaussian", "student_t"),
                                   quality_parameterization = c("collapsed", "sampled"),
                                   quality_scale_parameterization = c("legacy", "total_fraction"),
-                                  market_intercept_parameterization = c("sampled", "collapsed"),
+                                  market_intercept_parameterization = NULL,
                                   margin_likelihood = NULL,
-                                  quality_scope = c("market", "global")) {
+                                  quality_scope = c("market", "global"),
+                              share_basis = c("relative", "absolute")) {
+  basis <- .resolve_share_basis(share_basis, share_likelihood, margin_likelihood,
+                                market_intercept_parameterization, market_s0_parameterization)
+  share_basis <- basis$name
   N <- length(prices)
   quality_scope <- match.arg(quality_scope)
   n_market_requested <- nlevels(droplevels(as.factor(market)))
   market_intercept_resolution <- .resolve_market_intercept_parameterization(
     market_intercept_parameterization = market_intercept_parameterization,
     N_market = n_market_requested,
+    share_basis = share_basis,
     share_likelihood = share_likelihood,
     margin_likelihood = margin_likelihood,
     quality_parameterization = quality_parameterization,
@@ -1952,6 +1973,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   }
 
   stan_data <- .attach_market_year_quantity_size(stan_data, market_year_size)
+  stan_data <- .attach_share_basis(stan_data, basis)
 
   stan_data
 }
@@ -2121,7 +2143,7 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
 # Current fitted-object/model contract. Increment whenever the Stan likelihood
 # changes in a way that makes serialized fits unsuitable for comparison or
 # simulation under the current package.
-.antitrust_bayes_model_spec_version <- 13L
+.antitrust_bayes_model_spec_version <- 14L
 
 # Arithmetic mean of a logistic-normal random variable. The outside-share
 # prior is parameterized on the logit scale in Stan, while FOC prior

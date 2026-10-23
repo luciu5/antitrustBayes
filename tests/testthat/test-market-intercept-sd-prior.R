@@ -11,7 +11,7 @@
     group = paste0("firm", seq_len(7L * n_market)),
     supply_model = unname(family[model]), use_cutoff = FALSE, use_rho = TRUE, use_hmt = FALSE,
     structure = structure, market_intercept_parameterization = coordinates,
-    priors = priors)
+    priors = priors, share_basis = "absolute")
   if (structure != "simultaneous") {
     args$partition_prior <- "ordered_k"
     args$k_support <- 1:6

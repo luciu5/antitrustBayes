@@ -1,5 +1,5 @@
 test_that("collapsed Gaussian API records routine and explicit legacy modes", {
-  f <- list(
+  f <- list(share_basis = "absolute",
     prices = c(1.0, 1.2, 0.9, 1.1),
     quantities = c(1.1, 0.9, 1.2, 0.8),
     margins = c(0.20, 0.30, 0.25, 0.15),
@@ -35,7 +35,7 @@ test_that("collapsed Gaussian API records routine and explicit legacy modes", {
   )))
   expect_equal(unname(unlist(d_b[c("share_likelihood", "margin_likelihood",
                                   "quality_parameterization")])), c(2L, 2L, 2L))
-  expect_equal(attr(d_b, "model_spec_version"), 13L)
+  expect_equal(attr(d_b, "model_spec_version"), 14L)
   expect_equal(attr(d_b, "likelihood_mode_metadata")$mode,
                "gaussian/collapsed/gaussian")
 
@@ -78,7 +78,7 @@ test_that("collapsed Gaussian API records routine and explicit legacy modes", {
 })
 
 test_that("missing margins and all four direct model paths encode the same contract", {
-  common <- list(
+  common <- list(share_basis = "absolute",
     prices = c(1.0, 1.2, 0.9, 1.1), quantities = c(1.1, 0.9, 1.2, 0.8),
     margins = c(0.20, 0.30, 0.25, 0.15), market = c(1, 1, 2, 2),
     year = rep(1, 4), group = c(1, 2, 1, 2), supply_model = 1L,
@@ -98,11 +98,11 @@ test_that("missing margins and all four direct model paths encode the same contr
   d_ces <- do.call(prepare_ces_stan_data, ces)
   expect_equal(d_ces$N_margin, 2L)
   expect_equal(d_ces$quality_parameterization, 2L)
-  expect_equal(attr(d_ces, "model_spec_version"), 13L)
+  expect_equal(attr(d_ces, "model_spec_version"), 14L)
 })
 
 test_that("exact ordered-k rho restriction distinguishes rho zero from active rho", {
-  f <- list(
+  f <- list(share_basis = "absolute",
     prices = c(1.0, 1.2, 0.9, 1.1), quantities = c(1.1, 0.9, 1.2, 0.8),
     margins = c(0.20, 0.30, 0.25, 0.15), market = c(1, 1, 2, 2),
     year = rep(1, 4), group = c(1, 2, 1, 2), supply_model = 1L,
@@ -123,7 +123,7 @@ test_that("exact ordered-k rho restriction distinguishes rho zero from active rh
 })
 
 test_that("fringe and Stackelberg Logit/CES preparations retain BF/CF/BS/CS data", {
-  f <- list(
+  f <- list(share_basis = "absolute",
     prices = c(1.0, 1.2, 0.9, 1.1), quantities = c(1.1, 0.9, 1.2, 0.8),
     margins = c(0.20, 0.30, 0.25, 0.15), market = rep(1, 4), year = rep(1, 4),
     group = c(1, 2, 1, 2), supply_model = 1L, use_cutoff = FALSE,

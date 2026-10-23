@@ -17,7 +17,8 @@
     margins = rep(c(.25, .35, .20, .30), length.out = n),
     market = market, year = year, group = group,
     supply_model = 1L, use_cutoff = FALSE, use_rho = TRUE,
-    priors = list(), market_intercept_parameterization = "sampled"
+    priors = list(), market_intercept_parameterization = "sampled",
+    share_basis = "absolute"
   )
   args[names(overrides)] <- overrides
   data <- do.call(.mic_ns("prepare_stan_data"), args)

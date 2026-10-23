@@ -41,9 +41,10 @@ prepare_ces_stan_data(
   share_likelihood = c("gaussian", "student_t"),
   quality_parameterization = c("collapsed", "sampled"),
   quality_scale_parameterization = c("legacy", "total_fraction"),
-  market_intercept_parameterization = c("sampled", "collapsed"),
+  market_intercept_parameterization = NULL,
   margin_likelihood = NULL,
-  quality_scope = c("market", "global")
+  quality_scope = c("market", "global"),
+  share_basis = c("relative", "absolute")
 )
 }
 \arguments{
@@ -129,7 +130,7 @@ include zero; Stackelberg supports must be positive.}
 
 \item{quality_parameterization}{Quality effects are \code{"collapsed"}
 (default) or \code{"sampled"}; collapsed quality integrates Gaussian
-group effects and disallows market residual scales.}
+group effects. Relative shares also support market residual scales.}
 
 \item{quality_scale_parameterization}{Sampler coordinates for the Gaussian
 share-noise and quality scales. \code{"legacy"} (default) samples
@@ -138,12 +139,11 @@ share-noise and quality scales. \code{"legacy"} (default) samples
 samples the log total scale and logit share-noise variance fraction; it
 requires Gaussian shares, collapsed quality, and a common residual scale.}
 
-\item{market_intercept_parameterization}{Character string selecting
-\code{"sampled"} (default) or \code{"collapsed"} Gaussian
-market-intercept coordinates. The collapsed mode requires multiple
-markets, Gaussian shares and margins, collapsed market-scoped quality, a
-joint likelihood, and legacy/base s0 coordinates. A single market resolves
-to the existing sampled/no-op path.}
+\item{market_intercept_parameterization}{Leave \code{NULL} for relative
+shares, which derive a market-year intercept without an intercept prior.
+For absolute shares \code{NULL} resolves to \code{"sampled"}; the
+optional \code{"collapsed"} mode integrates the existing Gaussian
+multi-market hierarchy subject to its existing restrictions.}
 
 \item{margin_likelihood}{Margin residual family: \code{"student_t"} or
 \code{"gaussian"}; \code{NULL} (default) follows
@@ -153,6 +153,10 @@ to the existing sampled/no-op path.}
 centers persistent quality separately within each market while retaining
 the original ownership/ranking \code{group} field. \code{"global"}
 retains the historical pooled scope.}
+
+\item{share_basis}{\code{"relative"} (default) uses J-1 orthonormal
+conditional quantity-share contrasts per market-year and Gaussian residuals.
+\code{"absolute"} retains the absolute log-share likelihood.}
 }
 \value{
 A list suitable for passing to a CmdStanR model. The returned

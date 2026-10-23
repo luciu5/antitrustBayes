@@ -156,7 +156,8 @@ test_that("conditional prediction marks fixed shares and never reads held-out ma
     prices, quantities, margins, rep("m1", 4L),
     rep(c("y1", "y2"), each = 2L), rep(c("a", "b"), 2L),
     supply_model = 1L, use_rho = TRUE, margin_observed = mask,
-    likelihood_mode = 1L, quality_parameterization = "sampled"
+    likelihood_mode = 1L, quality_parameterization = "sampled",
+    share_basis = "absolute"
   )
   fit <- methods::new(
     "BayesLogit", spec = NULL, model = NULL, parameters = list(),
@@ -268,7 +269,8 @@ test_that("collapsed quality prediction reuses plan state without changing the f
   stan_data <- prepare_stan_data(
     prices, quantities, margins, market, year, group, supply_model = 1L,
     use_cutoff = FALSE, use_rho = FALSE, likelihood_mode = 2L,
-    quality_parameterization = "collapsed", quality_scope = "market"
+    quality_parameterization = "collapsed", quality_scope = "market",
+    share_basis = "absolute"
   )
   fit <- methods::new(
     "BayesLogit", spec = NULL, model = NULL, parameters = list(),

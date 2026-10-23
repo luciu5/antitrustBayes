@@ -3,9 +3,10 @@
 ## In collapsed mode Stan integrates the centered group-quality vector out of
 ## the share likelihood.  This helper reconstructs its conditional
 ## posterior after sampling the common parameters.  It intentionally works
-## from the generated share_mean quantity rather than rebuilding the demand
-## equation, so that all fitted intercepts, pooling, and conduct terms are
-## inherited from the fit.
+## from retained predictors rather than rebuilding the demand equation.
+## Absolute-share fits retain their share_mean/intercept contract. Relative
+## fits condition only on within-market-year contrasts of the retained
+## relative_share_predictor and derive calibration levels after recovering q.
 
 .posterior_quality_mode_value <- function(x, name, choices) {
   if (is.null(x)) return(NULL)
@@ -246,12 +247,10 @@
   intercept_collapsed <- identical(
     modes$market_intercept_parameterization, "collapsed"
   )
-  share_mean_name <- if (intercept_collapsed) "share_mean_integrated" else "share_mean"
-  share_mean_value <- if (intercept_collapsed) {
-    draws$share_mean_integrated
-  } else {
-    draws$share_mean
-  }
+  relative <- identical(.share_basis_from_fit(fit), "relative")
+  share_mean_name <- if (relative) "relative_share_predictor" else if (intercept_collapsed)
+    "share_mean_integrated" else "share_mean"
+  share_mean_value <- draws[[share_mean_name]]
   needed_draws <- c("sigma_share")
   if (intercept_collapsed)
     needed_draws <- c(needed_draws, "mu_b_market_vec", "sigma_b_market_vec")
@@ -372,6 +371,13 @@
              call. = FALSE)
     }
   }
+  if (relative && isTRUE(stan_data$use_market_resid_scale == 1L)) {
+    sigma_share_market <- .posterior_quality_matrix(
+      draws$sigma_share_market, n_market, "sigma_share_market")
+    if (nrow(sigma_share_market) != n_draw || any(!is.finite(sigma_share_market)) ||
+        any(sigma_share_market <= 0))
+      stop("Market-specific share residual scales are malformed.", call. = FALSE)
+  }
   if (any(!is.finite(share_mean)) || any(!is.finite(tau)) || any(!is.finite(sigma))) {
     stop("Posterior draws contain non-finite values.", call. = FALSE)
   }
@@ -409,7 +415,7 @@
     stop("Collapsed quality fit has malformed market observation indices.",
          call. = FALSE)
   }
-  margin_scale_active <- intercept_collapsed &&
+  margin_scale_active <- (intercept_collapsed || relative) &&
     isTRUE(stan_data$use_market_resid_scale == 1L) &&
     isTRUE(stan_data$use_rho == 1L) &&
     isTRUE(stan_data$likelihood_mode == 1L) &&
@@ -438,7 +444,7 @@
        mu_b_market = mu_b_market, sigma_b_market = sigma_b_market,
        sigma_share_market = sigma_share_market,
        sigma_margin_market = sigma_margin_market,
-       modes = modes)
+       relative = relative, modes = modes)
 }
 
 .posterior_quality_with_seed <- function(seed, fun) {
@@ -848,8 +854,9 @@
 #' @param seed Optional integer seed controlling posterior draw selection and
 #'   conditional quality simulation. The prior random-number state is restored
 #'   after the function returns.
-#' @param draws Optional list containing numeric \code{share_mean} (draws by
-#'   observations), \code{sigma_share}, and the economic quality scale
+#' @param draws Optional list containing numeric \code{share_mean} for
+#'   absolute-share fits or \code{relative_share_predictor} for relative-share
+#'   fits (draws by observations), \code{sigma_share}, and the economic quality scale
 #'   \code{sigma_b_strat_economic} (or historical \code{sigma_b_strat}). Under
 #'   \code{quality_scale_parameterization = "total_fraction"}, unrestricted
 #'   Stan extraction supplies the economic alias; a restricted raw extraction
@@ -871,13 +878,20 @@
 #' model. Global fits retain one block across groups; market fits have one
 #' persistent block for every market and use the same economic group labels in
 #' the separate ownership/ranking map. For each common-parameter draw this
-#' function conditions that prior on the observed \code{log_shareIn} and, with
-#' active Gaussian rho, the matched margins. Exact market ordered-k fits first
+#' function conditions that prior on the observed \code{log_shareIn} under
+#' \code{share_basis = "absolute"}, or its orthonormal within-market-year
+#' contrasts under \code{share_basis = "relative"}. The relative conditional
+#' projects out every market-year level, including when matched Gaussian
+#' margins are observed and rho is active. Exact market ordered-k fits first
 #' realize one existing component state per market and use its FOC margin mean.
 #' The returned quality draw is generated
 #' after the conditioning step, so HMC does not need to sample quality
-#' coordinates. Computation is linear in the number of observations and groups
-#' and never constructs a dense group covariance matrix.
+#' coordinates. Reconstruction avoids a dense group covariance matrix.
+#' Relative-share fits derive one calibration intercept per market-year only
+#' after drawing this same conditional quality state. Their native collapsed
+#' \code{pred_shareIn} is a zero-quality reference composition, not a recovered
+#' posterior quality realization; use the returned quality state or a reusable
+#' policy draw plan for posterior reconstruction and prediction.
 #'
 #' @return A \code{posterior_quality} list. \code{$draws} is a draws by scoped
 #' units numeric matrix of conditional quality draws; \code{$conditional_means}
@@ -891,6 +905,11 @@
 #' parameter and conditional quality uncertainty). \code{$realized_k} records
 #' exact market states when applicable, and \code{$metadata} records whether
 #' moments are conditional on a realized state.
+#' Relative-share results additionally contain
+#' \code{$derived_market_year_intercept_draws} and
+#' \code{$derived_market_year_labels}; these are calibration levels computed
+#' from the same recovered quality draw and outside-share state, with no
+#' independent intercept prior.
 #'
 #' @export
 posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
@@ -951,7 +970,30 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
       if (!is.finite(tau_sq))
         stop("Posterior draw ", draw,
              " has an unusable sigma_b_strat squared.", call. = FALSE)
-      if (intercept_collapsed) {
+      if (isTRUE(parsed$relative)) {
+        sigma_share <- if (is.null(parsed$sigma_share_market))
+          rep(parsed$sigma[[draw]], length(parsed$y)) else
+          parsed$sigma_share_market[draw, parsed$market]
+        residual <- parsed$y - parsed$share_mean[draw, ]
+        variance <- sigma_share^2
+        if (!is.null(joint)) {
+          idx <- joint$idx
+          sigma_margin <- joint$sigma_by_market[row, parsed$market[idx]]
+          residual[idx] <- residual[idx] - joint$rho[[row]] * sigma_share[idx] /
+            sigma_margin * (joint$y[idx] - log(joint$prediction[row, idx] + 1e-9))
+          variance[idx] <- variance[idx] * (1 - joint$rho[[row]]^2)
+        }
+        arguments <- list(residual = residual, variance = variance,
+          quality_index = parsed$quality,
+          quality_block = rep.int(seq_along(parsed$blocks), parsed$blocks),
+          cell = as.integer(fit@stan_data$market_year_idx %||% rep.int(1L, length(parsed$y))),
+          tau = parsed$tau[[draw]])
+        moments <- do.call(.relative_share_gaussian,
+          c(arguments, list(return_moments = TRUE)))
+        means[row, ] <- moments$conditional_mean
+        sds[row, ] <- sqrt(pmax(0, moments$conditional_variance))
+        quality[row, ] <- as.numeric(do.call(.relative_share_quality_draw, arguments))
+      } else if (intercept_collapsed) {
         for (m in seq_len(parsed$n_market)) {
           obs <- which(parsed$market == m)
           units <- which(parsed$quality_lookup$market_index == m)
@@ -1085,7 +1127,7 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
         market_for_unit, drop = FALSE]))
     }
     quality_labels <- parsed$quality_labels
-    structure(list(
+    result <- structure(list(
       draws = quality,
       conditional_means = means,
       conditional_sds = sds,
@@ -1111,7 +1153,10 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
         quality_parameterization = parsed$modes$quality_parameterization,
         share_likelihood = parsed$modes$share_likelihood,
         likelihood_mode = parsed$modes$likelihood_mode,
-        conditioning = if (is.null(joint)) "observed log shares only" else
+        conditioning = if (isTRUE(parsed$relative)) {
+          if (is.null(joint)) "observed relative-share contrasts only" else
+            "observed relative-share contrasts and matched Gaussian margins"
+        } else if (is.null(joint)) "observed log shares only" else
           "observed log shares and matched Gaussian margins",
         conditional_moments = if (intercept_collapsed) {
           "quality_moments_integrate_market_intercept_conditional_on_observed_state"
@@ -1127,6 +1172,14 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
           "sum(group quality) = 0" else "sum(group quality) = 0 within each market"
       )
     ), class = c("posterior_quality", "list"))
+    if (isTRUE(parsed$relative)) {
+      derived <- .lq_relative_derived_intercepts(fit, draws, draw_indices, quality)
+      result$derived_market_year_intercept_draws <- derived$draws
+      result$derived_market_year_labels <- derived$labels
+      result$metadata$share_basis <- "relative"
+      result$metadata$observation_basis <- "ilr_quantity_shares_v1"
+    }
+    result
   }
   .posterior_quality_with_seed(seed, calculate)
 }

@@ -8,7 +8,8 @@ bayes_combine_conditional_k(
   logml,
   k_support,
   k_prior = NULL,
-  repetitions = NULL
+  repetitions = NULL,
+  component_fits = NULL
 )
 }
 \arguments{
@@ -26,6 +27,11 @@ states in columns, named in support order. Failed attempts may be
 A combined repetition is available only when that row is finite for every
 k state. The reported SD uses complete rows and is unavailable with fewer
 than two; it measures bridge repeat variability, not evidence accuracy.}
+
+\item{component_fits}{Optional fits named in original k order. When supplied,
+verifies singleton k identity, common observations, priors and share basis.
+Sampler backends may differ. With bare numeric evidence the caller must
+establish these scientific contracts before combining it.}
 }
 \value{
 A list with \code{logml}, \code{posterior_k}, original \code{k_prior},

@@ -105,7 +105,7 @@
 #'   (default) or \code{"student_t"}.
 #' @param quality_parameterization Quality effects are \code{"collapsed"}
 #'   (default) or \code{"sampled"}; collapsed quality integrates Gaussian
-#'   group effects and disallows market residual scales.
+#'   group effects. Relative shares also support market residual scales.
 #' @param quality_scale_parameterization Sampler coordinates for the Gaussian
 #'   share-noise and quality scales. \code{"legacy"} (default) preserves the
 #'   historical coordinates. \code{"total_fraction"} is an exact experimental
@@ -114,18 +114,22 @@
 #'   fields \code{sigma_b_strat} and \code{log_sigma_share} are sampler
 #'   coordinates; use \code{sigma_b_strat_economic} and \code{sigma_share} for
 #'   the reconstructed economic scales.
-#' @param market_intercept_parameterization Character string selecting
-#'   \code{"sampled"} (default) or \code{"collapsed"} Gaussian market-
-#'   intercept coordinates. The collapsed mode requires multiple markets,
-#'   Gaussian shares and margins, collapsed market-scoped quality, a joint
-#'   likelihood, and legacy/base s0 coordinates. It is an opt-in sampler
-#'   parameterization. A single market (Logit or CES) always samples a free
-#'   inside-market intercept with a normalized Normal(0, 1) prior and no
-#'   between-market SD;
-#'   requesting collapsed coordinates there leaves this sampled intercept in place.
-#'   Outside-good utility remains zero and product quality stays centered.
-#'   The intercept and outside-share log odds enter conditional demand additively;
-#'   their separate identification depends on supply information and the priors.
+#' @param share_basis Share observation basis. The default \code{"relative"}
+#'   uses J-1 orthonormal log-share contrasts in each market-year, with a
+#'   correctly projected Gaussian share-margin likelihood. It supports Gaussian
+#'   residuals, sampled or collapsed persistent quality, and active rho.
+#'   Outside shares are informed by supply and their priors, not a share-level
+#'   intercept prior. \code{"absolute"} retains the absolute log-share model.
+#'   Evidence comparisons must use the same basis. Relative shares do not support
+#'   observation-level LOO.
+#' @param market_intercept_parameterization For \code{share_basis = "absolute"},
+#'   \code{NULL} resolves to \code{"sampled"}; \code{"collapsed"} integrates
+#'   the Gaussian multi-market intercept hierarchy with collapsed market quality,
+#'   a joint Gaussian likelihood and legacy outside-share coordinates. A single
+#'   market samples a Normal(0, 1) intercept without a hierarchy SD.
+#'   For relative shares leave this argument \code{NULL}: the intercept is
+#'   derived per market-year from the same realized quality, conduct and outside
+#'   share draw, with no intercept prior or hierarchy parameters.
 #' @param quality_scope Quality incidence for the hierarchical quality effect:
 #'   \code{"market"} (default), which centers persistent quality separately
 #'   within each market while retaining the original \code{group} ownership
@@ -418,7 +422,7 @@ bayes_est <- function(prices, quantities, margins,
                       share_likelihood = c("gaussian", "student_t"),
                       quality_parameterization = c("collapsed", "sampled"),
                       quality_scale_parameterization = c("legacy", "total_fraction"),
-                      market_intercept_parameterization = c("sampled", "collapsed"),
+                      market_intercept_parameterization = NULL,
                       quality_scope = c("market", "global"),
                       margin_likelihood = NULL,
                       use_market_resid_scale = FALSE,
@@ -449,6 +453,7 @@ bayes_est <- function(prices, quantities, margins,
                       k_scope = "market",
                       backend = c("cmdstanr", "nutpie"),
                       nutpie_options = list(),
+                      share_basis = c("relative", "absolute"),
                       ...) {
   cl <- match.call()
   inference <- match.arg(inference)
@@ -495,9 +500,10 @@ bayes_est <- function(prices, quantities, margins,
   quality_scale_parameterization <- match.arg(
     quality_scale_parameterization, c("legacy", "total_fraction")
   )
-  market_intercept_parameterization <- match.arg(
-    market_intercept_parameterization, c("sampled", "collapsed")
-  )
+  basis <- .resolve_share_basis(share_basis, share_likelihood, margin_likelihood,
+                                market_intercept_parameterization,
+                                market_s0_parameterization, priors)
+  share_basis <- basis$name
   quality_scope <- match.arg(quality_scope)
   if (!is.null(margin_likelihood)) {
     margin_likelihood <- match.arg(margin_likelihood, c("student_t", "gaussian"))
@@ -622,6 +628,7 @@ bayes_est <- function(prices, quantities, margins,
   market_intercept_resolution <- .resolve_market_intercept_parameterization(
     market_intercept_parameterization = market_intercept_parameterization,
     N_market = nlevels(droplevels(as.factor(market))),
+    share_basis = share_basis,
     share_likelihood = share_likelihood,
     margin_likelihood = margin_likelihood,
     quality_parameterization = quality_parameterization,
@@ -800,6 +807,7 @@ bayes_est <- function(prices, quantities, margins,
       quality_parameterization = likelihood_modes$quality_parameterization,
       quality_scale_parameterization = quality_scale_resolution$requested,
       market_intercept_parameterization = market_intercept_resolution$requested,
+      share_basis = share_basis,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope
     )
@@ -850,6 +858,7 @@ bayes_est <- function(prices, quantities, margins,
       quality_parameterization = likelihood_modes$quality_parameterization,
       quality_scale_parameterization = quality_scale_resolution$requested,
       market_intercept_parameterization = market_intercept_resolution$requested,
+      share_basis = share_basis,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope
     )
@@ -1016,6 +1025,9 @@ bayes_est <- function(prices, quantities, margins,
     market_intercept_resolution$no_op
   metadata$market_intercept_coordinate_convention <-
     market_intercept_resolution$coordinate_convention
+  metadata$share_basis <- basis$name
+  metadata$share_observation_measure <- basis$observation_measure
+  metadata$share_dimension <- attr(stan_data, "share_dimension", exact = TRUE)
   metadata$model_spec_version <- .antitrust_bayes_model_spec_version
   metadata$quality_scale_parameterization <- quality_scale_resolution$requested
   metadata$quality_scale_parameterization_effective <-
@@ -1056,7 +1068,8 @@ bayes_est <- function(prices, quantities, margins,
     partition_metadata$k_prior_by_unit
   metadata$firm_market_ranking <- attr(stan_data, "firm_market_ranking", exact = TRUE)
   metadata$resolved_priors <- priors
-  metadata$market_intercept_mean_prior <- list(family = "normal", mean = 0, sd = 1)
+  metadata$market_intercept_mean_prior <- if (share_basis == "absolute")
+    list(family = "normal", mean = 0, sd = 1) else NULL
   metadata$market_year_size <- market_year_size
   metadata$N_mt <- market_year_size$N_mt
   metadata$market_year_idx <- market_year_size$observation_to_market_year
@@ -1073,6 +1086,8 @@ bayes_est <- function(prices, quantities, margins,
   metadata$prior_normalization <- list(
     mode = "native_stan_normalized",
     model_spec_version = .antitrust_bayes_model_spec_version,
+    share_basis = basis$name,
+    share_observation_measure = basis$observation_measure,
     market_intercept_mean_prior = metadata$market_intercept_mean_prior,
     share_likelihood = likelihood_modes$share_likelihood,
     margin_likelihood = likelihood_modes$margin_likelihood,

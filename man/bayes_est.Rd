@@ -20,7 +20,7 @@ bayes_est(
   share_likelihood = c("gaussian", "student_t"),
   quality_parameterization = c("collapsed", "sampled"),
   quality_scale_parameterization = c("legacy", "total_fraction"),
-  market_intercept_parameterization = c("sampled", "collapsed"),
+  market_intercept_parameterization = NULL,
   quality_scope = c("market", "global"),
   margin_likelihood = NULL,
   use_market_resid_scale = FALSE,
@@ -51,6 +51,7 @@ bayes_est(
   k_scope = "market",
   backend = c("cmdstanr", "nutpie"),
   nutpie_options = list(),
+  share_basis = c("relative", "absolute"),
   ...
 )
 }
@@ -129,7 +130,7 @@ invalid for Gaussian residuals.}
 
 \item{quality_parameterization}{Quality effects are \code{"collapsed"}
 (default) or \code{"sampled"}; collapsed quality integrates Gaussian
-group effects and disallows market residual scales.}
+group effects. Relative shares also support market residual scales.}
 
 \item{quality_scale_parameterization}{Sampler coordinates for the Gaussian
 share-noise and quality scales. \code{"legacy"} (default) preserves the
@@ -140,18 +141,14 @@ fields \code{sigma_b_strat} and \code{log_sigma_share} are sampler
 coordinates; use \code{sigma_b_strat_economic} and \code{sigma_share} for
 the reconstructed economic scales.}
 
-\item{market_intercept_parameterization}{Character string selecting
-\code{"sampled"} (default) or \code{"collapsed"} Gaussian market-
-intercept coordinates. The collapsed mode requires multiple markets,
-Gaussian shares and margins, collapsed market-scoped quality, a joint
-likelihood, and legacy/base s0 coordinates. It is an opt-in sampler
-parameterization. A single market (Logit or CES) always samples a free
-inside-market intercept with a normalized Normal(0, 1) prior and no
-between-market SD;
-requesting collapsed coordinates there leaves this sampled intercept in place.
-Outside-good utility remains zero and product quality stays centered.
-The intercept and outside-share log odds enter conditional demand additively;
-their separate identification depends on supply information and the priors.}
+\item{market_intercept_parameterization}{For \code{share_basis = "absolute"},
+\code{NULL} resolves to \code{"sampled"}; \code{"collapsed"} integrates
+the Gaussian multi-market intercept hierarchy with collapsed market quality,
+a joint Gaussian likelihood and legacy outside-share coordinates. A single
+market samples a Normal(0, 1) intercept without a hierarchy SD.
+For relative shares leave this argument \code{NULL}: the intercept is
+derived per market-year from the same realized quality, conduct and outside
+share draw, with no intercept prior or hierarchy parameters.}
 
 \item{quality_scope}{Quality incidence for the hierarchical quality effect:
 \code{"market"} (default), which centers persistent quality separately
@@ -314,6 +311,15 @@ Expert debugging options include \code{store_divergences},
 \code{stan_options} to retain adaptation traces; these can substantially
 increase fit size. \code{mindepth}, \code{extra_doublings} and
 \code{max_energy_error} are backend-native controls, not automatic tuning.}
+
+\item{share_basis}{Share observation basis. The default \code{"relative"}
+uses J-1 orthonormal log-share contrasts in each market-year, with a
+correctly projected Gaussian share-margin likelihood. It supports Gaussian
+residuals, sampled or collapsed persistent quality, and active rho.
+Outside shares are informed by supply and their priors, not a share-level
+intercept prior. \code{"absolute"} retains the absolute log-share model.
+Evidence comparisons must use the same basis. Relative shares do not support
+observation-level LOO.}
 
 \item{...}{Additional arguments (currently unused).}
 }
