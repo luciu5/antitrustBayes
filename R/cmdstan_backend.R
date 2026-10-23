@@ -29,13 +29,24 @@
   base <- getOption("antitrustBayes.cmdstan_cache",
                     tools::R_user_dir("antitrustBayes", which = "cache"))
   cache <- file.path(base, "stan", hash)
-  if (!dir.exists(cache) && !dir.create(cache, recursive = TRUE,
-                                        showWarnings = FALSE)) {
-    stop("Cannot create CmdStan cache directory: ", cache, call. = FALSE)
+  ## Concurrent fits can race to create the same directory or file; another
+  ## process winning is success, so test existence after the attempt.
+  if (!dir.exists(cache)) {
+    suppressWarnings(dir.create(cache, recursive = TRUE, showWarnings = FALSE))
+    if (!dir.exists(cache)) {
+      stop("Cannot create CmdStan cache directory: ", cache, call. = FALSE)
+    }
   }
   cached_source <- file.path(cache, paste0(kernel, ".stan"))
-  if (!file.exists(cached_source) && !file.copy(source, cached_source)) {
-    stop("Cannot copy Stan kernel into the CmdStan cache.", call. = FALSE)
+  if (!file.exists(cached_source)) {
+    ## Rename is atomic, so a concurrent fit never compiles a half-written file.
+    staging <- tempfile(paste0(kernel, "_"), tmpdir = cache, fileext = ".stan")
+    copied <- suppressWarnings(file.copy(source, staging))
+    if (copied) suppressWarnings(file.rename(staging, cached_source))
+    unlink(staging)
+    if (!file.exists(cached_source)) {
+      stop("Cannot copy Stan kernel into the CmdStan cache.", call. = FALSE)
+    }
   }
   model_file <- file.path(cache, paste0(kernel, ".model.rds"))
   model <- if (file.exists(model_file)) tryCatch(readRDS(model_file),
