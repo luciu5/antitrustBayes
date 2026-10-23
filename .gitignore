@@ -68,3 +68,4 @@ tmp_lib/
 
 # Normalization-correction fits, native caches and raw validation evidence.
 /.scratch/single-market-intercept/
+/.scratch/option-b-relative-shares-20261022/

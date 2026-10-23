@@ -1,0 +1,21 @@
+"key","attempt","fit_status","evidence_status","error"
+"PNB_MC_A","initial_preflight","failed","not_started","The model executable was built with threading enabled but 'threads_per_chain' was not set!"
+"PNB_MC_B","initial_preflight","failed","not_started","The model executable was built with threading enabled but 'threads_per_chain' was not set!"
+"PNB_B_A","initial_preflight","failed","not_started","The model executable was built with threading enabled but 'threads_per_chain' was not set!"
+"PNB_B_B","initial_preflight","failed","not_started","The model executable was built with threading enabled but 'threads_per_chain' was not set!"
+"PNB_C_A","initial_preflight","failed","not_started","The model executable was built with threading enabled but 'threads_per_chain' was not set!"
+"PNB_C_B","initial_preflight","failed","not_started","The model executable was built with threading enabled but 'threads_per_chain' was not set!"
+"Ctruth20_C_A","initial_preflight","failed","not_started","The model executable was built with threading enabled but 'threads_per_chain' was not set!"
+"Ctruth20_C_B","initial_preflight","failed","not_started","The model executable was built with threading enabled but 'threads_per_chain' was not set!"
+"PNB_MC_A","explicit_one_thread_retry","complete","computed",NA
+"PNB_MC_B","explicit_one_thread_retry","complete","error","Model methods cannot be used with a pre-compiled Stan executable, the model must be compiled again"
+"PNB_B_A","explicit_one_thread_retry","complete","computed",NA
+"PNB_B_B","explicit_one_thread_retry","complete","error","Model methods cannot be used with a pre-compiled Stan executable, the model must be compiled again"
+"PNB_C_A","explicit_one_thread_retry","complete","computed",NA
+"PNB_C_B","explicit_one_thread_retry","complete","error","Model methods cannot be used with a pre-compiled Stan executable, the model must be compiled again"
+"Ctruth20_C_A","explicit_one_thread_retry","complete","computed",NA
+"Ctruth20_C_B","explicit_one_thread_retry","complete","error","Model methods cannot be used with a pre-compiled Stan executable, the model must be compiled again"
+"PNB_MC_B","exact_source_native_bridge","reused_complete_fit","computed",NA
+"PNB_B_B","exact_source_native_bridge","reused_complete_fit","computed",NA
+"PNB_C_B","exact_source_native_bridge","reused_complete_fit","computed",NA
+"Ctruth20_C_B","exact_source_native_bridge","reused_complete_fit","computed",NA

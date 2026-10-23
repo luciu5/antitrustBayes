@@ -1,0 +1,9 @@
+"test","points","max_error","passed"
+"PNB_MC_B_calibrated_outside",4000,4.9960036108132e-16,TRUE
+"PNB_MC_B_centered_quality",4000,7.6813555516253e-15,TRUE
+"PNB_B_B_calibrated_outside",4000,3.88578058618805e-16,TRUE
+"PNB_B_B_centered_quality",4000,8.39432690025177e-15,TRUE
+"PNB_C_B_calibrated_outside",4000,4.44089209850063e-16,TRUE
+"PNB_C_B_centered_quality",4000,8.57647286522933e-15,TRUE
+"Ctruth20_C_B_calibrated_outside",4000,1.66533453693773e-16,TRUE
+"Ctruth20_C_B_centered_quality",4000,8.60422844084496e-16,TRUE

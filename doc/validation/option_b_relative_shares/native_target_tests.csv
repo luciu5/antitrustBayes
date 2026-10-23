@@ -1,0 +1,6 @@
+"test","points","max_error","passed"
+"PNB_MC_B_A_B_decomposition",5,3.63797880709171e-12,TRUE
+"PNB_MC_B_MC_prior_factorization",2,5.46229728115577e-14,TRUE
+"PNB_B_B_A_B_decomposition",5,9.09494701772928e-13,TRUE
+"PNB_C_B_A_B_decomposition",5,1.13686837721616e-12,TRUE
+"Ctruth20_C_B_A_B_decomposition",5,2.27373675443232e-13,TRUE
