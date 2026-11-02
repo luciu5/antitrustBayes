@@ -50,6 +50,11 @@ Check installed versions and library paths before interpreting integration skips
 or failures. The inspected default user library lacked the compatible stack;
 choose an existing compatible library explicitly rather than reinstalling blindly.
 An installed version alone does not verify its source revision.
+Automatic `release/**` push and pull-request CI reads exact structural-package
+SHAs from [`ci/release-dependencies.json`](../ci/release-dependencies.json);
+manual release certification still requires and checks all three full-SHA
+workflow inputs. Other development branches retain their existing bootstrap
+refs.
 
 ## Verification commands
 
