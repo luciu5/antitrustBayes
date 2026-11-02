@@ -197,6 +197,7 @@ jobs:
           printf -- '- release_pin_build: `%s`\n' "$RELEASE_PIN_BUILD" >> "${GITHUB_STEP_SUMMARY}"
           printf 'release_pin_build=%s\nantitrustBayes_resolved_sha=%s\n' \
             "$RELEASE_PIN_BUILD" "$(git rev-parse HEAD)" >> "$RUNNER_TEMP/dependency-shas.txt"
+          declare -A dependency_checkouts=()
           for dependency in antitrust coordination trade; do
             if [[ "${dependency}" == antitrust ]]; then
               repository="${ANTITRUST_REPO}"
@@ -224,6 +225,7 @@ jobs:
               exit 1
             fi
             checkout_dir="$(mktemp -d "$RUNNER_TEMP/dependency-${dependency}.XXXXXX")"
+            dependency_checkouts["${dependency}"]="${checkout_dir}"
             git -C "${checkout_dir}" init --quiet
             git -C "${checkout_dir}" fetch --depth 1 "https://github.com/${repository}.git" "${expected_sha}"
             git -C "${checkout_dir}" checkout --detach FETCH_HEAD
@@ -236,11 +238,16 @@ jobs:
           expected <- unname(source_dcf[["Version"]])
           actual <- as.character(utils::packageVersion(args[[2L]]))
           stopifnot(identical(actual, expected), requireNamespace(args[[2L]], quietly = TRUE))
-          normalize_remotes <- function(x) {
-            if (is.null(x) || !length(x) || is.na(x[[1L]]) || !nzchar(x[[1L]])) {
+          normalize_remotes <- function(metadata) {
+            fields <- if (is.matrix(metadata)) colnames(metadata) else names(metadata)
+            if (is.null(fields) || !"Remotes" %in% fields) {
               return(character())
             }
-            trimws(strsplit(as.character(x[[1L]]), ",", fixed = TRUE)[[1L]])
+            value <- metadata[["Remotes"]]
+            if (!length(value) || is.na(value[[1L]]) || !nzchar(value[[1L]])) {
+              return(character())
+            }
+            trimws(strsplit(as.character(value[[1L]]), ",", fixed = TRUE)[[1L]])
           }
           if (identical(args[[3L]], "true")) {
             antitrust_sha <- tolower(args[[4L]])
@@ -252,8 +259,8 @@ jobs:
                         paste0("luciu5/coordination@", coordination_sha)),
               stop("Unexpected structural dependency: ", args[[2L]])
             )
-            source_remotes <- normalize_remotes(source_dcf[["Remotes"]])
-            installed_remotes <- normalize_remotes(utils::packageDescription(args[[2L]])[["Remotes"]])
+            source_remotes <- normalize_remotes(source_dcf)
+            installed_remotes <- normalize_remotes(utils::packageDescription(args[[2L]]))
             stopifnot(identical(source_remotes, expected_remotes),
                       identical(installed_remotes, expected_remotes))
           }
@@ -263,6 +270,13 @@ jobs:
             printf '%s_requested_ref=%s\n%s_resolved_sha=%s\n' \
               "$dependency" "$requested_ref" "$dependency" "$expected_sha" >> "$RUNNER_TEMP/dependency-shas.txt"
           done
+          if [[ "$RELEASE_PIN_BUILD" == true ]]; then
+            Rscript --vanilla ci/test-verified-dependency-metadata.R \
+              "${dependency_checkouts[antitrust]}" \
+              "${dependency_checkouts[coordination]}" \
+              "${dependency_checkouts[trade]}" \
+              "$ANTITRUST_SELECTED_REF" "$COORDINATION_SELECTED_REF"
+          fi
 
       - name: Verify optional-free installation and CmdStanR pin
         shell: Rscript {0}
@@ -437,6 +451,7 @@ jobs:
           printf -- '- release_pin_build: `%s`\n' "$RELEASE_PIN_BUILD" >> "${GITHUB_STEP_SUMMARY}"
           printf 'release_pin_build=%s\nantitrustBayes_resolved_sha=%s\n' \
             "$RELEASE_PIN_BUILD" "$(git rev-parse HEAD)" >> "$RUNNER_TEMP/dependency-shas.txt"
+          declare -A dependency_checkouts=()
           for dependency in antitrust coordination trade; do
             if [[ "${dependency}" == antitrust ]]; then
               repository="${ANTITRUST_REPO}"
@@ -464,6 +479,7 @@ jobs:
               exit 1
             fi
             checkout_dir="$(mktemp -d "$RUNNER_TEMP/dependency-${dependency}.XXXXXX")"
+            dependency_checkouts["${dependency}"]="${checkout_dir}"
             git -C "${checkout_dir}" init --quiet
             git -C "${checkout_dir}" fetch --depth 1 "https://github.com/${repository}.git" "${expected_sha}"
             git -C "${checkout_dir}" checkout --detach FETCH_HEAD
@@ -476,11 +492,16 @@ jobs:
           expected <- unname(source_dcf[["Version"]])
           actual <- as.character(utils::packageVersion(args[[2L]]))
           stopifnot(identical(actual, expected), requireNamespace(args[[2L]], quietly = TRUE))
-          normalize_remotes <- function(x) {
-            if (is.null(x) || !length(x) || is.na(x[[1L]]) || !nzchar(x[[1L]])) {
+          normalize_remotes <- function(metadata) {
+            fields <- if (is.matrix(metadata)) colnames(metadata) else names(metadata)
+            if (is.null(fields) || !"Remotes" %in% fields) {
               return(character())
             }
-            trimws(strsplit(as.character(x[[1L]]), ",", fixed = TRUE)[[1L]])
+            value <- metadata[["Remotes"]]
+            if (!length(value) || is.na(value[[1L]]) || !nzchar(value[[1L]])) {
+              return(character())
+            }
+            trimws(strsplit(as.character(value[[1L]]), ",", fixed = TRUE)[[1L]])
           }
           if (identical(args[[3L]], "true")) {
             antitrust_sha <- tolower(args[[4L]])
@@ -492,8 +513,8 @@ jobs:
                         paste0("luciu5/coordination@", coordination_sha)),
               stop("Unexpected structural dependency: ", args[[2L]])
             )
-            source_remotes <- normalize_remotes(source_dcf[["Remotes"]])
-            installed_remotes <- normalize_remotes(utils::packageDescription(args[[2L]])[["Remotes"]])
+            source_remotes <- normalize_remotes(source_dcf)
+            installed_remotes <- normalize_remotes(utils::packageDescription(args[[2L]]))
             stopifnot(identical(source_remotes, expected_remotes),
                       identical(installed_remotes, expected_remotes))
           }
@@ -503,6 +524,13 @@ jobs:
             printf '%s_requested_ref=%s\n%s_resolved_sha=%s\n' \
               "$dependency" "$requested_ref" "$dependency" "$expected_sha" >> "$RUNNER_TEMP/dependency-shas.txt"
           done
+          if [[ "$RELEASE_PIN_BUILD" == true ]]; then
+            Rscript --vanilla ci/test-verified-dependency-metadata.R \
+              "${dependency_checkouts[antitrust]}" \
+              "${dependency_checkouts[coordination]}" \
+              "${dependency_checkouts[trade]}" \
+              "$ANTITRUST_SELECTED_REF" "$COORDINATION_SELECTED_REF"
+          fi
 
       - name: Verify optional-free installation and CmdStanR pin
         shell: Rscript {0}

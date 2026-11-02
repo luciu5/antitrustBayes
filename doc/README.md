@@ -54,7 +54,9 @@ Automatic `release/**` push and pull-request CI reads exact structural-package
 SHAs from [`ci/release-dependencies.json`](../ci/release-dependencies.json);
 manual release certification still requires and checks all three full-SHA
 workflow inputs. Other development branches retain their existing bootstrap
-refs.
+refs. Release-pin CI also executes both embedded dependency metadata verifiers
+against their selected source checkouts and installed packages; see the
+[regression route](../ci/README.md#structural-dependency-metadata-regression).
 
 ## Verification commands
 
