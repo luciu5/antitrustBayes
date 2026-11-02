@@ -5,10 +5,37 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      release_certification:
+        description: "Require explicit full SHAs for the source dependency stack"
+        required: false
+        default: false
+        type: boolean
       antitrust_ref:
-        description: "antitrust branch or commit SHA to install"
-        required: true
-        default: "20f0923fc560295e04310aed5615c19dadf672cb"
+        description: "antitrust development bootstrap ref (ignored for certification)"
+        required: false
+        default: "refactor"
+        type: string
+      antitrust_release_sha:
+        description: "Full 40-character antitrust candidate SHA"
+        required: false
+        type: string
+      coordination_ref:
+        description: "coordination development bootstrap ref (ignored for certification)"
+        required: false
+        default: "main"
+        type: string
+      coordination_release_sha:
+        description: "Full 40-character coordination candidate SHA"
+        required: false
+        type: string
+      trade_ref:
+        description: "trade development bootstrap ref (ignored for certification)"
+        required: false
+        default: "refactor"
+        type: string
+      trade_release_sha:
+        description: "Full 40-character trade candidate SHA"
+        required: false
         type: string
       run_stan_tests:
         description: "Run the opt-in CmdStan sampling/parity tier"
@@ -23,12 +50,13 @@ permissions:
 
 env:
   R_VERSION: "4.6.1"
+  RELEASE_CERTIFICATION: ${{ inputs.release_certification && 'true' || 'false' }}
   ANTITRUST_REPO: "luciu5/antitrust"
-  ANTITRUST_REQUESTED_REF: ${{ inputs.antitrust_ref || '20f0923fc560295e04310aed5615c19dadf672cb' }}
+  ANTITRUST_REQUESTED_REF: ${{ inputs.release_certification && inputs.antitrust_release_sha || inputs.antitrust_ref || 'refactor' }}
   COORDINATION_REPO: "luciu5/coordination"
-  COORDINATION_SHA: "6955c4845df0c1de98eb540423118b53732211e5"
+  COORDINATION_REQUESTED_REF: ${{ inputs.release_certification && inputs.coordination_release_sha || inputs.coordination_ref || 'main' }}
   TRADE_REPO: "luciu5/trade"
-  TRADE_SHA: "2826df0fc3530c01066000725f643b060e71d136"
+  TRADE_REQUESTED_REF: ${{ inputs.release_certification && inputs.trade_release_sha || inputs.trade_ref || 'refactor' }}
   CMDSTANR_SHA: "55342f4f6c9300f9a47046f107b4db9b5e468aa6"
   _R_CHECK_FORCE_SUGGESTS_: "false"
   ANTITRUSTBAYES_RUN_STAN_TESTS: "false"
@@ -47,6 +75,21 @@ jobs:
         with:
           r-version: ${{ env.R_VERSION }}
           use-public-rspm: true
+
+      - name: Validate dependency refs for release certification
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_CERTIFICATION" == true ]]; then
+            for item in "antitrust:$ANTITRUST_REQUESTED_REF" "coordination:$COORDINATION_REQUESTED_REF" "trade:$TRADE_REQUESTED_REF"; do
+              name="${item%%:*}"
+              sha="${item#*:}"
+              if [[ ! "$sha" =~ ^[[:xdigit:]]{40}$ ]]; then
+                echo "Release certification requires an explicit full 40-character ${name} SHA; mutable refs such as main/refactor are rejected." >&2
+                exit 1
+              fi
+            done
+          fi
 
       # Explicit dependencies keep nutpieR/bridgestan out of the default tier.
       # Structural packages are installed below from verified checkouts so
@@ -78,31 +121,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          requested_ref="${ANTITRUST_REQUESTED_REF}"
-          antitrust_sha="$(git ls-remote "https://github.com/${ANTITRUST_REPO}.git" "${requested_ref}" | awk 'NR == 1 { print $1 }')"
-          if [[ -z "${antitrust_sha}" && "${requested_ref}" != refs/* ]]; then
-            antitrust_sha="$(git ls-remote "https://github.com/${ANTITRUST_REPO}.git" "refs/heads/${requested_ref}" | awk 'NR == 1 { print $1 }')"
-          fi
-          if [[ -z "${antitrust_sha}" && "${requested_ref}" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            antitrust_sha="${requested_ref}"
-          fi
-          if [[ ! "${antitrust_sha}" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "Could not resolve antitrust ref '${requested_ref}' to a commit SHA" >&2
-            exit 1
-          fi
-          printf 'ANTITRUST_SHA=%s\n' "${antitrust_sha}" >> "${GITHUB_ENV}"
           printf '## Verified dependency sources\n' >> "${GITHUB_STEP_SUMMARY}"
           printf -- '- antitrustBayes: `%s`\n' "$(git rev-parse HEAD)" >> "${GITHUB_STEP_SUMMARY}"
           for dependency in antitrust coordination trade; do
             if [[ "${dependency}" == antitrust ]]; then
               repository="${ANTITRUST_REPO}"
-              expected_sha="${antitrust_sha}"
+              requested_ref="${ANTITRUST_REQUESTED_REF}"
             elif [[ "${dependency}" == coordination ]]; then
               repository="${COORDINATION_REPO}"
-              expected_sha="${COORDINATION_SHA}"
+              requested_ref="${COORDINATION_REQUESTED_REF}"
             else
               repository="${TRADE_REPO}"
-              expected_sha="${TRADE_SHA}"
+              requested_ref="${TRADE_REQUESTED_REF}"
+            fi
+            if [[ "$RELEASE_CERTIFICATION" == true ]]; then
+              expected_sha="${requested_ref,,}"
+            else
+              expected_sha="$(git ls-remote "https://github.com/${repository}.git" "$requested_ref" | awk 'NR == 1 { print $1 }')"
+              if [[ -z "$expected_sha" && "$requested_ref" != refs/* ]]; then
+                expected_sha="$(git ls-remote "https://github.com/${repository}.git" "refs/heads/${requested_ref}" | awk 'NR == 1 { print $1 }')"
+              fi
+              if [[ -z "$expected_sha" && "$requested_ref" =~ ^[0-9a-fA-F]{40}$ ]]; then
+                expected_sha="$requested_ref"
+              fi
+            fi
+            if [[ ! "$expected_sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "Could not resolve ${dependency} ref '$requested_ref' to a commit SHA" >&2
+              exit 1
             fi
             checkout_dir="$(mktemp -d)"
             git -C "${checkout_dir}" init --quiet
@@ -117,7 +162,9 @@ jobs:
           stopifnot(identical(actual, expected), requireNamespace(args[[2L]], quietly = TRUE))
           cat(args[[2L]], actual, find.package(args[[2L]]), "\n")
           RSCRIPT
-            printf -- '- %s: `%s`\n' "${dependency}" "${expected_sha}" >> "${GITHUB_STEP_SUMMARY}"
+            printf -- '- %s: requested `%s`, resolved `%s`\n' "${dependency}" "$requested_ref" "${expected_sha}" >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s_requested_ref=%s\n%s_resolved_sha=%s\n' \
+              "$dependency" "$requested_ref" "$dependency" "$expected_sha" >> "$RUNNER_TEMP/dependency-shas.txt"
           done
 
       - name: Verify optional-free installation and CmdStanR pin
@@ -125,9 +172,9 @@ jobs:
         run: |
           stopifnot(!requireNamespace("nutpieR", quietly = TRUE),
                     !requireNamespace("bridgestan", quietly = TRUE),
-                    utils::packageVersion("antitrust") >= "0.99.41",
-                    utils::packageVersion("coordination") >= "0.0.0.9006",
-                    utils::packageVersion("trade") >= "0.8.9.9002",
+                    utils::packageVersion("antitrust") >= "0.99.43",
+                    utils::packageVersion("coordination") >= "0.1.0",
+                    utils::packageVersion("trade") >= "0.9.0",
                     identical(utils::packageDescription("cmdstanr")$RemoteSha,
                               Sys.getenv("CMDSTANR_SHA")))
           for (package in c("antitrust", "coordination", "trade", "cmdstanr", "posterior")) {
@@ -157,7 +204,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: optional-free-check
-          path: antitrustBayes.Rcheck
+          path: |
+            antitrustBayes.Rcheck
+            ${{ runner.temp }}/dependency-shas.txt
           if-no-files-found: ignore
 
   stan:
@@ -174,6 +223,21 @@ jobs:
         with:
           r-version: ${{ env.R_VERSION }}
           use-public-rspm: true
+
+      - name: Validate dependency refs for release certification
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_CERTIFICATION" == true ]]; then
+            for item in "antitrust:$ANTITRUST_REQUESTED_REF" "coordination:$COORDINATION_REQUESTED_REF" "trade:$TRADE_REQUESTED_REF"; do
+              name="${item%%:*}"
+              sha="${item#*:}"
+              if [[ ! "$sha" =~ ^[[:xdigit:]]{40}$ ]]; then
+                echo "Release certification requires an explicit full 40-character ${name} SHA; mutable refs such as main/refactor are rejected." >&2
+                exit 1
+              fi
+            done
+          fi
 
       - name: Install ordinary dependencies
         uses: r-lib/actions/setup-r-dependencies@v2
@@ -202,31 +266,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          requested_ref="${ANTITRUST_REQUESTED_REF}"
-          antitrust_sha="$(git ls-remote "https://github.com/${ANTITRUST_REPO}.git" "${requested_ref}" | awk 'NR == 1 { print $1 }')"
-          if [[ -z "${antitrust_sha}" && "${requested_ref}" != refs/* ]]; then
-            antitrust_sha="$(git ls-remote "https://github.com/${ANTITRUST_REPO}.git" "refs/heads/${requested_ref}" | awk 'NR == 1 { print $1 }')"
-          fi
-          if [[ -z "${antitrust_sha}" && "${requested_ref}" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            antitrust_sha="${requested_ref}"
-          fi
-          if [[ ! "${antitrust_sha}" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "Could not resolve antitrust ref '${requested_ref}' to a commit SHA" >&2
-            exit 1
-          fi
-          printf 'ANTITRUST_SHA=%s\n' "${antitrust_sha}" >> "${GITHUB_ENV}"
           printf '## Verified dependency sources\n' >> "${GITHUB_STEP_SUMMARY}"
           printf -- '- antitrustBayes: `%s`\n' "$(git rev-parse HEAD)" >> "${GITHUB_STEP_SUMMARY}"
           for dependency in antitrust coordination trade; do
             if [[ "${dependency}" == antitrust ]]; then
               repository="${ANTITRUST_REPO}"
-              expected_sha="${antitrust_sha}"
+              requested_ref="${ANTITRUST_REQUESTED_REF}"
             elif [[ "${dependency}" == coordination ]]; then
               repository="${COORDINATION_REPO}"
-              expected_sha="${COORDINATION_SHA}"
+              requested_ref="${COORDINATION_REQUESTED_REF}"
             else
               repository="${TRADE_REPO}"
-              expected_sha="${TRADE_SHA}"
+              requested_ref="${TRADE_REQUESTED_REF}"
+            fi
+            if [[ "$RELEASE_CERTIFICATION" == true ]]; then
+              expected_sha="${requested_ref,,}"
+            else
+              expected_sha="$(git ls-remote "https://github.com/${repository}.git" "$requested_ref" | awk 'NR == 1 { print $1 }')"
+              if [[ -z "$expected_sha" && "$requested_ref" != refs/* ]]; then
+                expected_sha="$(git ls-remote "https://github.com/${repository}.git" "refs/heads/${requested_ref}" | awk 'NR == 1 { print $1 }')"
+              fi
+              if [[ -z "$expected_sha" && "$requested_ref" =~ ^[0-9a-fA-F]{40}$ ]]; then
+                expected_sha="$requested_ref"
+              fi
+            fi
+            if [[ ! "$expected_sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "Could not resolve ${dependency} ref '$requested_ref' to a commit SHA" >&2
+              exit 1
             fi
             checkout_dir="$(mktemp -d)"
             git -C "${checkout_dir}" init --quiet
@@ -241,7 +307,9 @@ jobs:
           stopifnot(identical(actual, expected), requireNamespace(args[[2L]], quietly = TRUE))
           cat(args[[2L]], actual, find.package(args[[2L]]), "\n")
           RSCRIPT
-            printf -- '- %s: `%s`\n' "${dependency}" "${expected_sha}" >> "${GITHUB_STEP_SUMMARY}"
+            printf -- '- %s: requested `%s`, resolved `%s`\n' "${dependency}" "$requested_ref" "${expected_sha}" >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s_requested_ref=%s\n%s_resolved_sha=%s\n' \
+              "$dependency" "$requested_ref" "$dependency" "$expected_sha" >> "$RUNNER_TEMP/dependency-shas.txt"
           done
 
       - name: Verify optional-free installation and CmdStanR pin
@@ -249,9 +317,9 @@ jobs:
         run: |
           stopifnot(!requireNamespace("nutpieR", quietly = TRUE),
                     !requireNamespace("bridgestan", quietly = TRUE),
-                    utils::packageVersion("antitrust") >= "0.99.41",
-                    utils::packageVersion("coordination") >= "0.0.0.9006",
-                    utils::packageVersion("trade") >= "0.8.9.9002",
+                    utils::packageVersion("antitrust") >= "0.99.43",
+                    utils::packageVersion("coordination") >= "0.1.0",
+                    utils::packageVersion("trade") >= "0.9.0",
                     identical(utils::packageDescription("cmdstanr")$RemoteSha,
                               Sys.getenv("CMDSTANR_SHA")))
 
@@ -278,3 +346,11 @@ jobs:
             reporter = "summary", package = "antitrustBayes",
             load_package = "installed"
           )
+
+      - name: Preserve CmdStan dependency provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stan-dependency-provenance
+          path: ${{ runner.temp }}/dependency-shas.txt
+          if-no-files-found: ignore

@@ -41,14 +41,14 @@ Install CmdStanR and a CmdStan toolchain following the
 [CmdStanR installation instructions](https://mc-stan.org/cmdstanr/).
 Install compatible revisions of `antitrust` and `coordination` before
 installing `antitrustBayes`. The declared package minima are
-`antitrust >= 0.99.38`, `coordination >= 0.0.0.9003`, and `cmdstanr >= 0.9.0`;
+`antitrust >= 0.99.43`, `coordination >= 0.1.0`, and `cmdstanr >= 0.9.0`;
 these are dependency requirements, not a tested combination of arbitrary
 revisions. Check the selected R library before development:
 
 ```r
 stopifnot(
-  packageVersion("antitrust") >= "0.99.38",
-  packageVersion("coordination") >= "0.0.0.9003",
+  packageVersion("antitrust") >= "0.99.43",
+  packageVersion("coordination") >= "0.1.0",
   packageVersion("cmdstanr") >= "0.9.0"
 )
 ```
@@ -60,16 +60,15 @@ without upgrading the selected dependency versions:
 remotes::install_github("luciu5/antitrustBayes", upgrade = "never")
 ```
 
-The [dependency-stack CI](.github/workflows/qa.yml) defaults to `antitrust`
-SHA `103c2491607d7f164f5e4e00fc21d6ea79331138` (version 0.99.39) and
-records resolved `antitrust` and `antitrustBayes` repository SHAs. It does
-not pin `coordination` or the complete dependency stack. In the sources
-inspected on October 13, 2026, `coordination` 0.0.0.9006 requires
-`antitrust >= 0.99.41`, so it cannot be combined with that default CI pin.
-Some integration tests also require `coordination >= 0.0.0.9006` and skip
-with older versions. CI manual dispatch accepts another `antitrust` branch
-or SHA for explicit compatibility testing. See the documentation index for
-local environment checks and validation tiers.
+The [dependency-stack CI](.github/workflows/qa.yml) uses the antitrust
+`refactor`, coordination `main`, and trade `refactor` branches for ordinary
+development runs, then records each resolved commit SHA. It also pins CmdStanR.
+Select release certification to require full 40-character SHAs for antitrust,
+coordination, and trade; that mode rejects branch names and checks the selected
+package versions and public cross-package APIs. Trade is installed for the
+policy integration tests even though it is not a declared runtime dependency
+of `antitrustBayes`. See the documentation index for local environment checks
+and validation tiers.
 
 ## Optional Nutpie backend
 
@@ -449,6 +448,6 @@ separate market k values and shared parameters require joint combinations.
 ## Dependencies
 
 - [CmdStanR](https://mc-stan.org/cmdstanr/) (>= 0.9.0) and a working [CmdStan](https://mc-stan.org/users/interfaces/cmdstan) installation
-- [antitrust](https://github.com/luciu5/antitrust) (>= 0.99.38)
-- [coordination](https://github.com/luciu5/coordination) (>= 0.0.0.9003; the selected revision may require a newer `antitrust`)
+- [antitrust](https://github.com/luciu5/antitrust) (>= 0.99.43)
+- [coordination](https://github.com/luciu5/coordination) (>= 0.1.0)
 - [loo](https://mc-stan.org/loo/) (>= 2.5.0)

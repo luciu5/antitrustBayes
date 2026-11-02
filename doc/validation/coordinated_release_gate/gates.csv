@@ -1,0 +1,21 @@
+"case","test","value","threshold","passed"
+"logit_C_M4T4","fit_identity","verified","verified current fit",TRUE
+"logit_C_M4T4","all_structural_truth_in_95pct","4","4/4",TRUE
+"logit_C_M4T4","max_structural_relative_median_error","0.000828924662350072",".08",TRUE
+"logit_C_M4T4","s0_t1_truth_in_95pct","4",">=3/4",TRUE
+"logit_C_M4T4","s0_t1_median_mae","0.000287114207870205","<=.06",TRUE
+"logit_C_M4T4","max_active_parameter_rhat","1.01011022313317","<=1.05",TRUE
+"logit_C_M4T4","min_active_parameter_bulk_ess","603.076175884349",">=100",TRUE
+"logit_C_M4T4","divergences","0","0",TRUE
+"logit_C_M4T4","sigma_share_median_over_actual_rms","1.15985046918934","[.5,2]",TRUE
+"logit_C_M4T4","sigma_margin_median_over_actual_rms","1.2027544810602","[.5,2]",TRUE
+"ces_C_M4T4_finite_noise","fit_identity","verified","verified current fit",TRUE
+"ces_C_M4T4_finite_noise","all_structural_truth_in_95pct","4","4/4",TRUE
+"ces_C_M4T4_finite_noise","max_structural_relative_median_error","0.0126396252650967",".08",TRUE
+"ces_C_M4T4_finite_noise","s0_t1_truth_in_95pct","4",">=3/4",TRUE
+"ces_C_M4T4_finite_noise","s0_t1_median_mae","0.00665949015658114","<=.06",TRUE
+"ces_C_M4T4_finite_noise","max_active_parameter_rhat","1.01079628615882","<=1.05",TRUE
+"ces_C_M4T4_finite_noise","min_active_parameter_bulk_ess","584.156468919464",">=100",TRUE
+"ces_C_M4T4_finite_noise","divergences","0","0",TRUE
+"ces_C_M4T4_finite_noise","sigma_share_median_over_actual_rms","1.41536718216585","[.5,2]",TRUE
+"ces_C_M4T4_finite_noise","sigma_margin_median_over_actual_rms","1.1295612431086","[.5,2]",TRUE

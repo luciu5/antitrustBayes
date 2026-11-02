@@ -4,6 +4,10 @@ Implementation validated 2026-10-23: relative-share Option B for Logit/CES,
 package version `0.2.0.9009`, model specification 14. See the bounded
 [implementation results](validation/relative_share_implementation/README.md),
 including the preserved incomplete noiseless CES panel stress attempt.
+The 2026-11-01 [coordinated release gate](validation/coordinated_release_gate_results.md)
+passed 20/20 frozen inference criteria and 32/32 independent baseline/merger
+FOCs on fresh current relative-share Logit/CES panel fits; broad recovery
+remains separate. Package checks now have no errors, warnings, or NOTEs.
 The previous committed baseline is `01e5a22` (version `0.2.0.9008`, specification 13).
 This is the current operational agenda and navigation entrypoint. Topic contracts
 and results remain the detailed sources; historical checklists do not select work.
@@ -64,8 +68,8 @@ ANTITRUSTBAYES_RUN_STAN_TESTS=false Rscript --vanilla -e 'testthat::test_local(f
 ANTITRUSTBAYES_RUN_STAN_TESTS=false Rscript --vanilla -e 'testthat::test_local(reporter="summary")'
 ```
 
-Some integrations require a newer `coordination` than the declared minimum;
-record skips and the resolved dependency versions. Routine checks can parse Stan
+Record integration skips and the resolved dependency versions; the current
+minimum is `coordination >= 0.0.0.9006`. Routine checks can parse Stan
 when CmdStan exists. Sampling is separately opt-in; short chains are smoke tests.
 See the [test audit](test_suite_audit.md) for tier definitions and dated evidence.
 Extended deterministic enterprise-fixture checks must also use current source:
@@ -75,7 +79,12 @@ Rscript --vanilla -e 'pkgload::load_all("."); testthat::test_file("doc/market_in
 ```
 
 For statistical recovery, use the explicit prerequisites, output configuration,
-and gates in [current CmdStanR validation](validation/README.md). The archived
+and frozen specification-14 gates in [current CmdStanR validation](validation/README.md).
+The [coordinated release runner](validation/coordinated_release_gate.R) uses
+exactly two current relative-share Logit/CES panel fits; its
+[dated report](validation/coordinated_release_gate_results.md) preserves every
+failed criterion and fit provenance. Older absolute-share recovery results do
+not qualify specification 14. The archived
 124-task [enterprise runner](market_intercept_enterprise/README.md) needs a
 reviewed backend port; its passing fixture checks do not validate current HMC.
 For documentation-only work, resolve changed local links and run
