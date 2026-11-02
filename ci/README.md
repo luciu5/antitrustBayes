@@ -7,8 +7,8 @@ keys: `antitrust`, `coordination`, and `trade`. Each value must be the full
 and every SHA before fetching; it checks out each dependency outside the package
 build tree and records the resolved SHA.
 
-The checked-in values are previous-manifest placeholders. Replace them with the
-final candidate commit SHAs after those candidates have been committed. A
+The checked-in values identify the coordinated upstream candidates. Regenerate
+them from the release manifest when those upstream candidates change. A
 release certification started with `workflow_dispatch` remains separate and
 requires all three full SHA inputs; those inputs are checked against the
 checked-out commits. Ordinary development pushes and pull requests keep their
