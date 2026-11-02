@@ -13,7 +13,7 @@ on:
       antitrust_ref:
         description: "antitrust development bootstrap ref (ignored for certification)"
         required: false
-        default: "refactor"
+        default: "master"
         type: string
       antitrust_release_sha:
         description: "Full 40-character antitrust candidate SHA"
@@ -31,7 +31,7 @@ on:
       trade_ref:
         description: "trade development bootstrap ref (ignored for certification)"
         required: false
-        default: "refactor"
+        default: "master"
         type: string
       trade_release_sha:
         description: "Full 40-character trade candidate SHA"
@@ -52,11 +52,11 @@ env:
   R_VERSION: "4.6.1"
   RELEASE_CERTIFICATION: ${{ inputs.release_certification && 'true' || 'false' }}
   ANTITRUST_REPO: "luciu5/antitrust"
-  ANTITRUST_REQUESTED_REF: ${{ inputs.release_certification && inputs.antitrust_release_sha || inputs.antitrust_ref || 'refactor' }}
+  ANTITRUST_REQUESTED_REF: ${{ inputs.release_certification && inputs.antitrust_release_sha || inputs.antitrust_ref || 'master' }}
   COORDINATION_REPO: "luciu5/coordination"
   COORDINATION_REQUESTED_REF: ${{ inputs.release_certification && inputs.coordination_release_sha || inputs.coordination_ref || 'main' }}
   TRADE_REPO: "luciu5/trade"
-  TRADE_REQUESTED_REF: ${{ inputs.release_certification && inputs.trade_release_sha || inputs.trade_ref || 'refactor' }}
+  TRADE_REQUESTED_REF: ${{ inputs.release_certification && inputs.trade_release_sha || inputs.trade_ref || 'master' }}
   CMDSTANR_SHA: "55342f4f6c9300f9a47046f107b4db9b5e468aa6"
   _R_CHECK_FORCE_SUGGESTS_: "false"
   ANTITRUSTBAYES_RUN_STAN_TESTS: "false"

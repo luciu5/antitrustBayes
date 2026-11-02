@@ -61,7 +61,7 @@ remotes::install_github("luciu5/antitrustBayes", upgrade = "never")
 ```
 
 The [dependency-stack CI](.github/workflows/qa.yml) uses the antitrust
-`refactor`, coordination `main`, and trade `refactor` branches for ordinary
+`master`, coordination `main`, and trade `master` branches for ordinary
 development runs, then records each resolved commit SHA. It also pins CmdStanR.
 Select release certification to require full 40-character SHAs for antitrust,
 coordination, and trade; that mode rejects branch names and checks the selected
