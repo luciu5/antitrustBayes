@@ -1,5 +1,5 @@
 name: antitrust dependency-stack QA
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('certification-{0}-{1}-{2}-{3}-{4}', inputs.release_certification, inputs.antitrust_release_sha, inputs.coordination_release_sha, inputs.trade_release_sha, inputs.run_stan_tests) || github.event_name }}
+run-name: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && format('release-certification-{0}', github.sha) || github.event_name == 'workflow_dispatch' && format('certification-{0}-{1}-{2}-{3}-{4}', inputs.release_certification, inputs.antitrust_release_sha, inputs.coordination_release_sha, inputs.trade_release_sha, inputs.run_stan_tests) || github.event_name }}
 
 on:
   push:
@@ -53,6 +53,7 @@ env:
   R_VERSION: "4.6.1"
   RELEASE_CERTIFICATION: ${{ inputs.release_certification && 'true' || 'false' }}
   RELEASE_BRANCH_BUILD: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')) || (github.event_name == 'pull_request' && (startsWith(github.head_ref, 'release/') || startsWith(github.base_ref, 'release/'))) }}
+  RELEASE_PIN_BUILD: ${{ (inputs.release_certification == true) || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')) || (github.event_name == 'pull_request' && (startsWith(github.head_ref, 'release/') || startsWith(github.base_ref, 'release/'))) }}
   ANTITRUST_REPO: "luciu5/antitrust"
   ANTITRUST_REQUESTED_REF: ${{ inputs.release_certification && inputs.antitrust_release_sha || inputs.antitrust_ref || 'master' }}
   COORDINATION_REPO: "luciu5/coordination"
@@ -133,7 +134,7 @@ jobs:
             printf '%s_ref=%s\n' "$name" "$ref" >> "$GITHUB_OUTPUT"
           done
 
-      - name: Validate dependency refs for release certification
+      - name: Validate full SHAs for release-pin runs
         env:
           ANTITRUST_SELECTED_REF: ${{ steps.dependency-refs.outputs.antitrust_ref }}
           COORDINATION_SELECTED_REF: ${{ steps.dependency-refs.outputs.coordination_ref }}
@@ -141,12 +142,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$RELEASE_CERTIFICATION" == true ]]; then
+          if [[ "$RELEASE_PIN_BUILD" == true ]]; then
             for item in "antitrust:$ANTITRUST_SELECTED_REF" "coordination:$COORDINATION_SELECTED_REF" "trade:$TRADE_SELECTED_REF"; do
               name="${item%%:*}"
               sha="${item#*:}"
               if [[ ! "$sha" =~ ^[[:xdigit:]]{40}$ ]]; then
-                echo "Release certification requires an explicit full 40-character ${name} SHA; mutable refs such as main/refactor are rejected." >&2
+                echo "Release pinning requires a full 40-character ${name} SHA." >&2
                 exit 1
               fi
             done
@@ -193,6 +194,9 @@ jobs:
           set -euo pipefail
           printf '## Verified dependency sources\n' >> "${GITHUB_STEP_SUMMARY}"
           printf -- '- antitrustBayes: `%s`\n' "$(git rev-parse HEAD)" >> "${GITHUB_STEP_SUMMARY}"
+          printf -- '- release_pin_build: `%s`\n' "$RELEASE_PIN_BUILD" >> "${GITHUB_STEP_SUMMARY}"
+          printf 'release_pin_build=%s\nantitrustBayes_resolved_sha=%s\n' \
+            "$RELEASE_PIN_BUILD" "$(git rev-parse HEAD)" >> "$RUNNER_TEMP/dependency-shas.txt"
           for dependency in antitrust coordination trade; do
             if [[ "${dependency}" == antitrust ]]; then
               repository="${ANTITRUST_REPO}"
@@ -204,7 +208,7 @@ jobs:
               repository="${TRADE_REPO}"
               requested_ref="${TRADE_SELECTED_REF}"
             fi
-            if [[ "$RELEASE_CERTIFICATION" == true ]]; then
+            if [[ "$RELEASE_PIN_BUILD" == true ]]; then
               expected_sha="${requested_ref,,}"
             else
               expected_sha="$(git ls-remote "https://github.com/${repository}.git" "$requested_ref" | awk 'NR == 1 { print $1 }')"
@@ -225,11 +229,34 @@ jobs:
             git -C "${checkout_dir}" checkout --detach FETCH_HEAD
             test "$(git -C "${checkout_dir}" rev-parse HEAD)" = "${expected_sha}"
             R CMD INSTALL --no-multiarch "${checkout_dir}"
-            Rscript --vanilla - "${checkout_dir}" "${dependency}" <<'RSCRIPT'
+            Rscript --vanilla - "${checkout_dir}" "${dependency}" "$RELEASE_PIN_BUILD" \
+              "$ANTITRUST_SELECTED_REF" "$COORDINATION_SELECTED_REF" <<'RSCRIPT'
           args <- commandArgs(trailingOnly = TRUE)
-          expected <- unname(read.dcf(file.path(args[[1L]], "DESCRIPTION"))[1L, "Version"])
+          source_dcf <- read.dcf(file.path(args[[1L]], "DESCRIPTION"))[1L, ]
+          expected <- unname(source_dcf[["Version"]])
           actual <- as.character(utils::packageVersion(args[[2L]]))
           stopifnot(identical(actual, expected), requireNamespace(args[[2L]], quietly = TRUE))
+          normalize_remotes <- function(x) {
+            if (is.null(x) || !length(x) || is.na(x[[1L]]) || !nzchar(x[[1L]])) {
+              return(character())
+            }
+            trimws(strsplit(as.character(x[[1L]]), ",", fixed = TRUE)[[1L]])
+          }
+          if (identical(args[[3L]], "true")) {
+            antitrust_sha <- tolower(args[[4L]])
+            coordination_sha <- tolower(args[[5L]])
+            expected_remotes <- switch(args[[2L]],
+              antitrust = character(),
+              coordination = paste0("luciu5/antitrust@", antitrust_sha),
+              trade = c(paste0("luciu5/antitrust@", antitrust_sha),
+                        paste0("luciu5/coordination@", coordination_sha)),
+              stop("Unexpected structural dependency: ", args[[2L]])
+            )
+            source_remotes <- normalize_remotes(source_dcf[["Remotes"]])
+            installed_remotes <- normalize_remotes(utils::packageDescription(args[[2L]])[["Remotes"]])
+            stopifnot(identical(source_remotes, expected_remotes),
+                      identical(installed_remotes, expected_remotes))
+          }
           cat(args[[2L]], actual, find.package(args[[2L]]), "\n")
           RSCRIPT
             printf -- '- %s: requested `%s`, resolved `%s`\n' "${dependency}" "$requested_ref" "${expected_sha}" >> "${GITHUB_STEP_SUMMARY}"
@@ -349,7 +376,7 @@ jobs:
             printf '%s_ref=%s\n' "$name" "$ref" >> "$GITHUB_OUTPUT"
           done
 
-      - name: Validate dependency refs for release certification
+      - name: Validate full SHAs for release-pin runs
         env:
           ANTITRUST_SELECTED_REF: ${{ steps.dependency-refs.outputs.antitrust_ref }}
           COORDINATION_SELECTED_REF: ${{ steps.dependency-refs.outputs.coordination_ref }}
@@ -357,12 +384,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$RELEASE_CERTIFICATION" == true ]]; then
+          if [[ "$RELEASE_PIN_BUILD" == true ]]; then
             for item in "antitrust:$ANTITRUST_SELECTED_REF" "coordination:$COORDINATION_SELECTED_REF" "trade:$TRADE_SELECTED_REF"; do
               name="${item%%:*}"
               sha="${item#*:}"
               if [[ ! "$sha" =~ ^[[:xdigit:]]{40}$ ]]; then
-                echo "Release certification requires an explicit full 40-character ${name} SHA; mutable refs such as main/refactor are rejected." >&2
+                echo "Release pinning requires a full 40-character ${name} SHA." >&2
                 exit 1
               fi
             done
@@ -407,6 +434,9 @@ jobs:
           set -euo pipefail
           printf '## Verified dependency sources\n' >> "${GITHUB_STEP_SUMMARY}"
           printf -- '- antitrustBayes: `%s`\n' "$(git rev-parse HEAD)" >> "${GITHUB_STEP_SUMMARY}"
+          printf -- '- release_pin_build: `%s`\n' "$RELEASE_PIN_BUILD" >> "${GITHUB_STEP_SUMMARY}"
+          printf 'release_pin_build=%s\nantitrustBayes_resolved_sha=%s\n' \
+            "$RELEASE_PIN_BUILD" "$(git rev-parse HEAD)" >> "$RUNNER_TEMP/dependency-shas.txt"
           for dependency in antitrust coordination trade; do
             if [[ "${dependency}" == antitrust ]]; then
               repository="${ANTITRUST_REPO}"
@@ -418,7 +448,7 @@ jobs:
               repository="${TRADE_REPO}"
               requested_ref="${TRADE_SELECTED_REF}"
             fi
-            if [[ "$RELEASE_CERTIFICATION" == true ]]; then
+            if [[ "$RELEASE_PIN_BUILD" == true ]]; then
               expected_sha="${requested_ref,,}"
             else
               expected_sha="$(git ls-remote "https://github.com/${repository}.git" "$requested_ref" | awk 'NR == 1 { print $1 }')"
@@ -439,11 +469,34 @@ jobs:
             git -C "${checkout_dir}" checkout --detach FETCH_HEAD
             test "$(git -C "${checkout_dir}" rev-parse HEAD)" = "${expected_sha}"
             R CMD INSTALL --no-multiarch "${checkout_dir}"
-            Rscript --vanilla - "${checkout_dir}" "${dependency}" <<'RSCRIPT'
+            Rscript --vanilla - "${checkout_dir}" "${dependency}" "$RELEASE_PIN_BUILD" \
+              "$ANTITRUST_SELECTED_REF" "$COORDINATION_SELECTED_REF" <<'RSCRIPT'
           args <- commandArgs(trailingOnly = TRUE)
-          expected <- unname(read.dcf(file.path(args[[1L]], "DESCRIPTION"))[1L, "Version"])
+          source_dcf <- read.dcf(file.path(args[[1L]], "DESCRIPTION"))[1L, ]
+          expected <- unname(source_dcf[["Version"]])
           actual <- as.character(utils::packageVersion(args[[2L]]))
           stopifnot(identical(actual, expected), requireNamespace(args[[2L]], quietly = TRUE))
+          normalize_remotes <- function(x) {
+            if (is.null(x) || !length(x) || is.na(x[[1L]]) || !nzchar(x[[1L]])) {
+              return(character())
+            }
+            trimws(strsplit(as.character(x[[1L]]), ",", fixed = TRUE)[[1L]])
+          }
+          if (identical(args[[3L]], "true")) {
+            antitrust_sha <- tolower(args[[4L]])
+            coordination_sha <- tolower(args[[5L]])
+            expected_remotes <- switch(args[[2L]],
+              antitrust = character(),
+              coordination = paste0("luciu5/antitrust@", antitrust_sha),
+              trade = c(paste0("luciu5/antitrust@", antitrust_sha),
+                        paste0("luciu5/coordination@", coordination_sha)),
+              stop("Unexpected structural dependency: ", args[[2L]])
+            )
+            source_remotes <- normalize_remotes(source_dcf[["Remotes"]])
+            installed_remotes <- normalize_remotes(utils::packageDescription(args[[2L]])[["Remotes"]])
+            stopifnot(identical(source_remotes, expected_remotes),
+                      identical(installed_remotes, expected_remotes))
+          }
           cat(args[[2L]], actual, find.package(args[[2L]]), "\n")
           RSCRIPT
             printf -- '- %s: requested `%s`, resolved `%s`\n' "${dependency}" "$requested_ref" "${expected_sha}" >> "${GITHUB_STEP_SUMMARY}"
