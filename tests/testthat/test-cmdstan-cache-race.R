@@ -11,19 +11,26 @@
   rm(list = ls(cache_env, all.names = TRUE), envir = cache_env)
   state <- new.env()
   state$compiled <- 0L
+  state$version <- "2.39.0"
+  state$path <- file.path(base, "cmdstan")
+  dir.create(state$path)
   compile <- function(file, ...) {
     state$compiled <- state$compiled + 1L
     exe <- paste0(file, ".exe"); writeLines("x", exe)
     structure(list(exe_file = function() exe, file = file), class = "CmdStanModel")
   }
-  testthat::local_mocked_bindings(cmdstan_model = compile, .package = "cmdstanr",
-                                  .env = env)
+  testthat::local_mocked_bindings(
+    cmdstan_model = compile,
+    cmdstan_version = function() state$version,
+    cmdstan_path = function() state$path,
+    .package = "cmdstanr", .env = env
+  )
   list(base = base, state = state)
 }
 
-.cache_dir_for <- function(base) {
+.cache_dir_for <- function(base, expected = 1L) {
   dirs <- list.dirs(file.path(base, "stan"), recursive = FALSE)
-  expect_length(dirs, 1L)
+  expect_length(dirs, expected)
   dirs
 }
 
@@ -40,6 +47,30 @@ test_that("a competitor having already created the cache directory and source is
   second <- antitrustBayes:::.cmdstan_model_for_kernel("ces_supply")
   expect_s3_class(second, "CmdStanModel")
   expect_identical(ctx$state$compiled, 1L)
+})
+
+test_that("the disk cache separates CmdStan versions and resolved paths", {
+  ctx <- .cache_race_context()
+  antitrustBayes:::.cmdstan_model_for_kernel("ces_supply")
+  original <- .cache_dir_for(ctx$base)
+
+  ## A different CmdStan version must not reuse an object compiled against the
+  ## original toolchain, even though the kernel and cache root are unchanged.
+  ctx$state$version <- "2.39.1"
+  antitrustBayes:::.cmdstan_model_for_kernel("ces_supply")
+  by_version <- .cache_dir_for(ctx$base, expected = 2L)
+  expect_true(original %in% by_version)
+  expect_length(setdiff(by_version, original), 1L)
+
+  ## Restoring the version while changing the normalized toolchain path is a
+  ## distinct identity too; this catches reuse across separate installations.
+  ctx$state$version <- "2.39.0"
+  ctx$state$path <- file.path(ctx$base, "other-cmdstan")
+  dir.create(ctx$state$path)
+  antitrustBayes:::.cmdstan_model_for_kernel("ces_supply")
+  by_path <- .cache_dir_for(ctx$base, expected = 3L)
+  expect_length(setdiff(by_path, by_version), 1L)
+  expect_identical(ctx$state$compiled, 3L)
 })
 
 test_that("a pre-existing directory without a model compiles once and leaves no staging files", {
