@@ -52,11 +52,18 @@ bayes_est(
   backend = c("cmdstanr", "nutpie"),
   nutpie_options = list(),
   share_basis = c("relative", "absolute"),
+  price_standardization = NULL,
   ...
 )
 }
 \arguments{
 \item{prices}{Numeric vector of product prices. Must be positive.}
+
+\item{price_standardization}{Optional \code{list(center = ..., scale = ...)}
+fixing the price center and positive scale for relative-share Logit.
+The default uses each fit's price mean and SD. Supplying the same target-snapshot
+values across fits holds the economic slope prior scale fixed and requires
+a distinct fit/cache identity. CES and absolute-share models require \code{NULL}.}
 
 \item{quantities}{Numeric vector of product quantities (e.g., units sold,
 deposits). Must be positive. Within each market-year, the package

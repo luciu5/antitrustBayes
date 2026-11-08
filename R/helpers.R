@@ -837,6 +837,19 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
   )
 }
 
+.resolve_price_standardization <- function(prices, specification = NULL) {
+  if (is.null(specification))
+    return(list(center = mean(prices), scale = safe_sd(prices), source = "within_sample"))
+  if (!is.list(specification) || length(specification) != 2L ||
+      !setequal(names(specification), c("center", "scale")) ||
+      anyDuplicated(names(specification)) ||
+      !all(vapply(specification, function(x)
+        is.numeric(x) && length(x) == 1L && is.finite(x), logical(1))) ||
+      specification$scale <= 0)
+    stop("'price_standardization' must be list(center = finite_number, scale = positive_number).")
+  list(center = specification$center, scale = specification$scale, source = "supplied")
+}
+
 #' Prepare Stan Data for Logit Demand
 #'
 #' Transforms user-supplied vectors into the list expected by the Logit Stan
@@ -902,6 +915,7 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #'   coordinates. The shifted rotation is a no-op for single-market data. The
 #'   joint rotation requires multiple markets and a noncentered market-level
 #'   outside-share hierarchy.
+#' @param price_standardization Optional explicit price center and scale for relative-share Logit.
 #' @param priors Named list of prior hyperparameters.
 #' @param X_s0 Optional model matrix for s0 covariates.
 #' @param outside_price Positive scalar or one value per market-year.
@@ -954,7 +968,8 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               market_intercept_parameterization = NULL,
                               margin_likelihood = NULL,
                               quality_scope = c("market", "global"),
-                              share_basis = c("relative", "absolute")) {
+                              share_basis = c("relative", "absolute"),
+                              price_standardization = NULL) {
   basis <- .resolve_share_basis(share_basis, share_likelihood, margin_likelihood,
                                 market_intercept_parameterization, market_s0_parameterization)
   share_basis <- basis$name
@@ -1166,8 +1181,11 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   }
 
   # Standardize prices
-  price_sd <- safe_sd(prices)
-  price_std <- (prices - mean(prices)) / price_sd
+  if (!is.null(price_standardization) && share_basis != "relative")
+    stop("Supplied price standardization currently requires relative-share Logit.")
+  price_standardization <- .resolve_price_standardization(prices, price_standardization)
+  price_sd <- price_standardization$scale
+  price_std <- (prices - price_standardization$center) / price_sd
 
   # Put both demand systems on the same inverse normalized-margin response.
   # Masked rows
@@ -1308,6 +1326,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
 
   # Attach metadata for later use
   attr(stan_data, "market_levels") <- levels(market_f)
+  attr(stan_data, "price_standardization") <- price_standardization
   attr(stan_data, "year_levels") <- levels(year_f)
   attr(stan_data, "group_levels") <- levels(group_f)
   attr(stan_data, "mky_levels") <- levels(mky_f)

@@ -152,7 +152,7 @@
                             error = function(e) character())
           lines <- lines[nzchar(trimws(lines))]
           if (!length(lines)) return("")
-          tail_output <- paste(tail(lines, 12L), collapse = "\n")
+          tail_output <- paste(utils::tail(lines, 12L), collapse = "\n")
           paste0("Process ", id, " output:\n",
             substr(tail_output, max(1L, nchar(tail_output) - 1999L), nchar(tail_output)))
         }, character(1))

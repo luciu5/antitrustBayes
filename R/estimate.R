@@ -53,6 +53,14 @@
 #'   The fitted object also retains each market-year's original inside
 #'   quantity total as \code{metadata$market_year_size$N_mt} (and repeats it
 #'   in \code{data$N_mt}) for future cross-market aggregation.
+#' @param price_standardization Optional \code{list(center = ..., scale = ...)}
+#'   fixing the price center and positive scale for relative-share Logit.
+#'   The default \code{NULL} uses this fit's price mean and SD. Supplying the
+#'   same target-snapshot values across fits holds the prior's economic slope
+#'   scale fixed. This changes the prior relative to within-sample scaling and
+#'   requires a distinct fit/cache identity; it does not turn information-set
+#'   comparisons into sequential Bayesian updating. CES and absolute-share
+#'   models currently require \code{NULL}.
 #' @param margins Numeric vector of positive price-normalized margins. For
 #'   output markets this is the usual Lerner index \eqn{(p - c) / p}; for
 #'   input markets it may be an input markdown ratio \eqn{(v - w) / w}.
@@ -454,8 +462,11 @@ bayes_est <- function(prices, quantities, margins,
                       backend = c("cmdstanr", "nutpie"),
                       nutpie_options = list(),
                       share_basis = c("relative", "absolute"),
+                      price_standardization = NULL,
                       ...) {
   cl <- match.call()
+  if (!is.null(price_standardization) && match.arg(demand_model) != "logit")
+    stop("Supplied price standardization currently requires relative-share Logit.")
   inference <- match.arg(inference)
   backend <- match.arg(backend)
   if (!is.list(nutpie_options)) stop("nutpie_options must be a named list.", call. = FALSE)
@@ -809,7 +820,8 @@ bayes_est <- function(prices, quantities, margins,
       market_intercept_parameterization = market_intercept_resolution$requested,
       share_basis = share_basis,
       margin_likelihood = likelihood_modes$margin_likelihood,
-      quality_scope = quality_scope
+      quality_scope = quality_scope,
+      price_standardization = price_standardization
     )
     stan_kernel <- if (structure == "stackelberg" ||
                        (exact_structure && structure == "fringe" &&
@@ -961,6 +973,7 @@ bayes_est <- function(prices, quantities, margins,
   )
   metadata$stan_data_fields <- stan_data_names
   metadata$stan_data_hash <- digest::digest(cmdstan_data, algo = "sha256")
+  metadata$price_standardization <- attr(stan_data, "price_standardization", exact = TRUE)
   metadata$backend_version <- as.character(utils::packageVersion(
     if (backend == "cmdstanr") "cmdstanr" else "nutpieR"))
   if (backend == "cmdstanr") {

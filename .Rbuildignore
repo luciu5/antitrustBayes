@@ -11,6 +11,7 @@
 ^LICENSE\.md$
 ^README\.md$
 ^\.github$
+^ci$
 ^tmp_lib$
 ^data-raw$
 ^antitrustBayes\.Rcheck$

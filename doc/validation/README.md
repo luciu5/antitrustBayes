@@ -7,7 +7,57 @@
 > concern older absolute-share specifications; their identification and
 > intercept assumptions do not certify the new likelihood.
 
-# Current CmdStanR statistical validation
+# Specification-14 coordinated release gate
+
+Use the extended-tier [bounded runner](coordinated_release_gate.R) with current
+development source and a compatible explicitly selected R library:
+
+```sh
+R_LIBS=/path/to/compatible/library \
+  Rscript --vanilla doc/validation/coordinated_release_gate.R --sample
+R_LIBS=/path/to/final/compatible/library \
+  Rscript --vanilla doc/validation/coordinated_release_gate.R --analyze --policy
+```
+
+The default durable ignored output is
+`.scratch/coordinated-release-gate` in the authorized antitrustBayes workspace;
+set `AB_RELEASE_GATE_OUTPUT` to select a fresh output root. An existing manifest
+blocks resampling. Fits and failures are preserved before analysis. Exactly two
+current relative-share fits use `relative_validation_fixtures()`'s Logit C M4T4
+and the prescribed finite-noise CES C M4T4 transformation. Both have four chains,
+1,000 total iterations, 500 warmup, `adapt_delta=.99`, depth 13, and recorded seeds.
+No bridge sampling or historical absolute-share fixture enters this gate.
+
+Acceptance is frozen before sampling: each market's structural truth lies in
+its 95% interval with median relative error at most 8%; at least three of the
+four t1 reference outside-share truths lie in 95% intervals with mean absolute
+median error at most .06; active sampled parameters have maximum R-hat at most
+1.05, minimum bulk ESS at least 100, and zero divergences. All 16 outside-share
+cells are reported. The t1 reference is necessary because the current Logit
+fixture leaves outside shares unpooled across years. Both error-scale medians
+must be between .5 and 2 times their fixture's actual log-error RMS, including
+the finite CES errors; no historical Logit noise band is reused for CES.
+
+Raw demand, ownership and cost primitives independently check baseline and
+merger FOCs at the true state and one posterior draw fixed before fitting.
+The maximum allowed residual is `1e-6`. CES follows the legacy Cournot contract,
+which holds its calibrated outside-revenue alpha fixed over policy changes.
+Source, kernel, data, fitted specification, sampler settings and runtime library
+provenance are sealed. [Dated results](coordinated_release_gate_results.md)
+record execution and any failed criterion without changing these thresholds.
+
+## Sampling-free follow-up
+
+Use the [saved-fit/current-policy replay](saved_gate_policy_replay.md) when
+packaging/dependency metadata changes while the sealed R/Stan inference source
+is unchanged. Historical seals remain intact; current runtime and policy FOCs
+are recorded separately. This does not certify new statistical recovery.
+
+# Historical absolute-share CmdStanR validation
+
+The following runner and reported numeric results predate specification 14.
+They remain historical evidence and do not qualify the current default target.
+
 
 Run the known-truth recovery gate after installing the current package and
 CmdStan:

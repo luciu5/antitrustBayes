@@ -44,11 +44,14 @@ prepare_stan_data(
   market_intercept_parameterization = NULL,
   margin_likelihood = NULL,
   quality_scope = c("market", "global"),
-  share_basis = c("relative", "absolute")
+  share_basis = c("relative", "absolute"),
+  price_standardization = NULL
 )
 }
 \arguments{
 \item{prices}{Numeric vector of product prices.}
+
+\item{price_standardization}{Optional explicit price center and scale for relative-share Logit.}
 
 \item{quantities}{Numeric vector of product quantities.}
 

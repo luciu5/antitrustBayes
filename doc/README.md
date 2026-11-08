@@ -1,9 +1,18 @@
 # Development and evidence index
 
-Implementation validated 2026-10-23: relative-share Option B for Logit/CES,
-package version `0.2.0.9009`, model specification 14. See the bounded
+Opt-in [anchored Logit price scaling](validation/anchored_price_standardization.md)
+has deterministic source checks; installed integration and empirical refits
+remain pending the shared-library dependency refresh.
+
+Current package version is `0.3.0`, model specification 14. Relative-share
+Option B for Logit/CES was validated 2026-10-23 at version `0.2.0.9009`.
+See the bounded
 [implementation results](validation/relative_share_implementation/README.md),
 including the preserved incomplete noiseless CES panel stress attempt.
+The 2026-11-01 [coordinated release gate](validation/coordinated_release_gate_results.md)
+passed 20/20 frozen inference criteria and 32/32 independent baseline/merger
+FOCs on fresh current relative-share Logit/CES panel fits; broad recovery
+remains separate. Package checks now have no errors, warnings, or NOTEs.
 The previous committed baseline is `01e5a22` (version `0.2.0.9008`, specification 13).
 This is the current operational agenda and navigation entrypoint. Topic contracts
 and results remain the detailed sources; historical checklists do not select work.
@@ -31,11 +40,13 @@ do not retroactively change saved fits or establish universal HMC improvement.
 
 `antitrust` owns common structural/counterfactual machinery; `coordination` owns
 fringe/Stackelberg models. Read [DESCRIPTION](../DESCRIPTION) for dependency
-minima and [CI](../.github/workflows/qa.yml) for the current development pin and
-canonical R version. CI now pins a verified compatible `antitrust` `0.99.42`,
-`coordination` `0.0.0.9006` and `trade` `0.8.9.9002` stack, with the validated
-CmdStanR revision. The former `antitrust` `0.99.39` pin was incompatible with
-current coordination. The ordinary tier explicitly excludes Nutpie/BridgeStan;
+minima and [CI](../.github/workflows/qa.yml) for dependency selection and the
+canonical R version. Current minima are `antitrust >= 0.99.43`,
+`coordination >= 0.1.0`, and `cmdstanr >= 0.9.0`; optional policy integration
+uses `trade >= 0.9.0`. Ordinary development CI resolves antitrust/trade `master`
+and coordination `main`, records their SHAs, and pins CmdStanR. Release runs
+use the full dependency SHAs described below. Historical executed reports
+retain their earlier compatible stacks. The ordinary tier explicitly excludes Nutpie/BridgeStan;
 the opt-in CmdStan tier installs its frozen toolchain before testing. Hosted
 ordinary CI passed at baseline `55c6fdc` after its parser prerequisite guard
 fix ([executed run](https://github.com/luciu5/antitrustBayes/actions/runs/39570316189)).
@@ -46,6 +57,13 @@ Check installed versions and library paths before interpreting integration skips
 or failures. The inspected default user library lacked the compatible stack;
 choose an existing compatible library explicitly rather than reinstalling blindly.
 An installed version alone does not verify its source revision.
+Automatic `release/**` push and pull-request CI reads exact structural-package
+SHAs from [`ci/release-dependencies.json`](../ci/release-dependencies.json);
+manual release certification still requires and checks all three full-SHA
+workflow inputs. Other development branches retain their existing bootstrap
+refs. Release-pin CI also executes both embedded dependency metadata verifiers
+against their selected source checkouts and installed packages; see the
+[regression route](../ci/README.md#structural-dependency-metadata-regression).
 
 ## Verification commands
 
@@ -64,8 +82,8 @@ ANTITRUSTBAYES_RUN_STAN_TESTS=false Rscript --vanilla -e 'testthat::test_local(f
 ANTITRUSTBAYES_RUN_STAN_TESTS=false Rscript --vanilla -e 'testthat::test_local(reporter="summary")'
 ```
 
-Some integrations require a newer `coordination` than the declared minimum;
-record skips and the resolved dependency versions. Routine checks can parse Stan
+Record integration skips and the resolved dependency versions; the current
+minimum is `coordination >= 0.1.0`. Routine checks can parse Stan
 when CmdStan exists. Sampling is separately opt-in; short chains are smoke tests.
 See the [test audit](test_suite_audit.md) for tier definitions and dated evidence.
 Extended deterministic enterprise-fixture checks must also use current source:
@@ -75,11 +93,23 @@ Rscript --vanilla -e 'pkgload::load_all("."); testthat::test_file("doc/market_in
 ```
 
 For statistical recovery, use the explicit prerequisites, output configuration,
-and gates in [current CmdStanR validation](validation/README.md). The archived
+and frozen specification-14 gates in [current CmdStanR validation](validation/README.md).
+The [coordinated release runner](validation/coordinated_release_gate.R) uses
+exactly two current relative-share Logit/CES panel fits; its
+[dated report](validation/coordinated_release_gate_results.md) preserves every
+failed criterion and fit provenance. Older absolute-share recovery results do
+not qualify specification 14. The archived
 124-task [enterprise runner](market_intercept_enterprise/README.md) needs a
 reviewed backend port; its passing fixture checks do not validate current HMC.
 For documentation-only work, resolve changed local links and run
 `git diff --check`; do not rerun sampling or package installation.
+
+For sampling-free release follow-up, use the
+[sealed-fit/current-policy replay](validation/saved_gate_policy_replay.md).
+It audits the historical inference seals and checks current structural-policy
+FOCs in a new output directory; it does not relax the original runner's strict
+source guard or relabel old fits as fresh inference. Its provenance regressions
+run with `Rscript --vanilla doc/validation/saved_gate_replay_checks.R`.
 
 ## Consolidated agenda and topic evidence
 
