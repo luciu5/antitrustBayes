@@ -1,6 +1,6 @@
 Package: antitrustBayes
 Title: Bayesian Counterfactual Simulation for Antitrust Analysis
-Version: 0.3.0
+Version: 0.3.0.9000
 Author: Charles Taragin
 Maintainer: Charles Taragin <ctaragin+antitrustr@gmail.com>
 Authors@R: c(

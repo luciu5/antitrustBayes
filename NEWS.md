@@ -1,3 +1,7 @@
+# antitrustBayes 0.3.0.9000
+
+- Add a `calcPriceDelta` method for `BayesSim` objects that computes a per-draw Paasche (default) or Laspeyres price index by delegating each draw to `antitrust::calcPriceDelta` on that draw's terminal structural model, after requiring finite prices, nonnegative quantity weights, and a positive denominator. Invalid draws are recorded as `NA` with a reason rather than dropped. Supports `market`, `party`, `levels`, and a `posterior = TRUE` per-draw mode.
+
 # antitrustBayes 0.3.0
 
 - Make relative shares the specification-14 default for Logit/CES estimation and require refitting older model specifications.

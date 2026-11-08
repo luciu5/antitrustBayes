@@ -24,7 +24,7 @@
 #' @importFrom bridgesampling bridge_sampler
 #' @importFrom digest digest
 #' @importFrom loo loo waic loo_compare loo_model_weights relative_eff
-#' @importFrom antitrust calcMC calcMargins calcPrices calcShares ownerToMatrix elast diversion CV HypoMonTest
+#' @importFrom antitrust calcMC calcMargins calcPrices calcShares calcPriceDelta ownerToMatrix elast diversion CV HypoMonTest
 #' @importClassesFrom antitrust AntitrustFit StructuralFit Logit CES
 #' @importMethodsFrom antitrust simulate
 #' @importFrom stats plogis quantile sd weighted.mean

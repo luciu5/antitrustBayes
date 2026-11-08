@@ -386,6 +386,187 @@ setMethod(
   }
 )
 
+#' Posterior Distribution of the Paasche/Laspeyres Price-Change Index
+#'
+#' Computes \code{\link[antitrust]{calcPriceDelta}} separately for each
+#' posterior draw stored in a \code{\linkS4class{BayesSim}} object and
+#' aggregates to one basket-level index value per draw (or, with
+#' \code{market = FALSE}, returns product-level draws). The ratio is
+#' computed independently for every draw before any posterior
+#' aggregation -- never as a ratio of posterior-averaged numerators and
+#' denominators -- and the arithmetic itself is delegated to
+#' \code{antitrust::calcPriceDelta} on that draw's terminal structural
+#' model object, so the weights and formula are exactly \pkg{antitrust}'s:
+#' Paasche weights are post-merger predicted quantity shares
+#' (\code{calcShares(..., revenue = FALSE)}), Laspeyres weights are
+#' pre-merger quantity shares, and the outside option is excluded (shares
+#' are defined only over the modeled inside products).
+#'
+#' Before delegating, each draw is subjected to a stricter validity gate
+#' than \code{antitrust::calcPriceDelta} applies on its own (which uses
+#' \code{na.rm = TRUE} over available products): a draw is recorded as
+#' invalid (\code{NA}), and never silently dropped or treated as a zero
+#' quantity/weight, whenever its simulation failed, any of its relevant
+#' per-product prices or weights are non-finite, any weight is negative, or
+#' (for \code{levels = FALSE}) the weighted pre-merger denominator is not
+#' finite and strictly positive. Finite signed (including negative)
+#' post-merger prices -- as retained under \code{price_domain = "real"} --
+#' are valid draws; no positivity filter is applied. The count of invalid
+#' draws and a reason per draw are always available via
+#' \code{posterior = TRUE}.
+#'
+#' @param object A \code{BayesSim} object.
+#' @param levels Passed to \code{antitrust::calcPriceDelta}: if \code{TRUE},
+#'   report level changes; if \code{FALSE} (default), percent changes.
+#' @param market If \code{TRUE} (default), aggregate to one index value per
+#'   draw. If \code{FALSE}, return the product-level draws x products matrix
+#'   of per-draw \code{antitrust::calcPriceDelta} results (no weighting or
+#'   aggregation; the validity gate above does not apply).
+#' @param party If \code{TRUE}, restrict the \code{market = TRUE} aggregate
+#'   to the merging parties' products (via \code{antitrust::ownerToMatrix}).
+#'   Requires \code{market = TRUE}.
+#' @param index \code{"paasche"} (default) or \code{"laspeyres"}.
+#' @param market_id Which stored market unit to use. Default \code{NULL}
+#'   uses the first (or only) market unit in \code{object@market_ids}.
+#' @param posterior Logical. If \code{TRUE} and \code{market = TRUE},
+#'   return the raw per-draw numeric vector (length \code{n_draws}, with
+#'   \code{NA} for invalid draws) with \code{attr(, "n_valid")} and
+#'   \code{attr(, "failure_reason")} (character, one entry per draw,
+#'   \code{NA} for valid draws) instead of the posterior summary.
+#' @param ... Additional arguments passed to \code{antitrust::calcPriceDelta}.
+#'
+#' @return If \code{market = TRUE} and \code{posterior = FALSE} (default): a
+#'   named numeric summary with \code{mean}, \code{sd}, \code{q025},
+#'   \code{median}, \code{q975}, \code{n_draws} and \code{n_valid}. If
+#'   \code{market = TRUE} and \code{posterior = TRUE}: the per-draw numeric
+#'   vector described above. If \code{market = FALSE}: a draws x products
+#'   numeric matrix.
+#'
+#' @seealso \code{\link[antitrust]{calcPriceDelta}}
+#' @rdname BayesSim-methods
+#' @exportMethod calcPriceDelta
+setMethod(
+  "calcPriceDelta", "BayesSim",
+  function(object, levels = FALSE, market = TRUE, party = FALSE,
+           index = c("paasche", "laspeyres"), market_id = NULL,
+           posterior = FALSE, ...) {
+    index <- match.arg(index)
+    if (isTRUE(party) && !isTRUE(market)) {
+      stop("party = TRUE requires market = TRUE.")
+    }
+    mk <- if (is.null(market_id)) object@market_ids[1] else as.character(market_id)
+    if (!mk %in% object@market_ids) {
+      stop("market_id does not identify a market stored in this BayesSim object: ", mk)
+    }
+
+    sims_mk <- object@sims[[mk]]
+    n_draws <- length(sims_mk)
+    price_pre_mat <- as.matrix(object@price_pre[[mk]])
+    price_post_mat <- as.matrix(object@price_post[[mk]])
+    shares_pre_mat <- as.matrix(object@shares_pre[[mk]])
+    shares_post_mat <- as.matrix(object@shares_post[[mk]])
+    if (nrow(price_pre_mat) != n_draws || nrow(price_post_mat) != n_draws ||
+        nrow(shares_pre_mat) != n_draws || nrow(shares_post_mat) != n_draws) {
+      stop("Stored BayesSim price/share matrices are misaligned with sims for market ", mk)
+    }
+
+    if (!isTRUE(market)) {
+      out <- matrix(NA_real_, n_draws, ncol(price_pre_mat),
+        dimnames = dimnames(price_pre_mat)
+      )
+      for (d in seq_len(n_draws)) {
+        if (is.null(sims_mk[[d]])) next
+        terminal <- tryCatch(.terminal_model(sims_mk[[d]]), error = function(e) NULL)
+        if (is.null(terminal)) next
+        val <- tryCatch(
+          antitrust::calcPriceDelta(terminal,
+            levels = levels, market = FALSE, party = FALSE, index = index, ...
+          ),
+          error = function(e) NULL
+        )
+        if (!is.null(val) && length(val) == ncol(out)) out[d, ] <- val
+      }
+      return(out)
+    }
+
+    weight_mat <- if (identical(index, "paasche")) shares_post_mat else shares_pre_mat
+    ratio <- rep(NA_real_, n_draws)
+    reason <- rep(NA_character_, n_draws)
+    for (d in seq_len(n_draws)) {
+      if (is.null(sims_mk[[d]])) {
+        reason[d] <- "simulation failed for this draw"
+        next
+      }
+      terminal <- tryCatch(.terminal_model(sims_mk[[d]]), error = function(e) e)
+      if (inherits(terminal, "error")) {
+        reason[d] <- paste("terminal model unavailable:", conditionMessage(terminal))
+        next
+      }
+      w_full <- weight_mat[d, ]
+      pre_full <- price_pre_mat[d, ]
+      post_full <- price_post_mat[d, ]
+      keep <- rep(TRUE, length(w_full))
+      if (isTRUE(party)) {
+        owner_pre <- tryCatch(antitrust::ownerToMatrix(terminal, TRUE), error = function(e) NULL)
+        owner_post <- tryCatch(antitrust::ownerToMatrix(terminal, FALSE), error = function(e) NULL)
+        if (is.null(owner_pre) || is.null(owner_post)) {
+          reason[d] <- "merging-party ownership unavailable for this draw"
+          next
+        }
+        keep <- rowSums(abs(owner_post - owner_pre)) > 0
+      }
+      w <- w_full[keep]
+      pre <- pre_full[keep]
+      post <- post_full[keep]
+      if (!length(w) || anyNA(w) || any(!is.finite(w)) ||
+          any(!is.finite(pre)) || any(!is.finite(post)) || any(w < 0)) {
+        reason[d] <- "non-finite price or negative/missing weight for this draw"
+        next
+      }
+      if (!levels) {
+        denom <- sum(w * pre)
+        if (!is.finite(denom) || denom <= 0) {
+          reason[d] <- "non-positive index denominator for this draw"
+          next
+        }
+      }
+      delegated <- tryCatch(
+        antitrust::calcPriceDelta(terminal,
+          levels = levels, market = TRUE, party = party, index = index, ...
+        ),
+        error = function(e) e
+      )
+      if (inherits(delegated, "error") || length(delegated) != 1L || !is.finite(delegated)) {
+        reason[d] <- if (inherits(delegated, "error")) {
+          paste("delegated antitrust::calcPriceDelta failed:", conditionMessage(delegated))
+        } else {
+          "delegated antitrust::calcPriceDelta returned a non-finite value"
+        }
+        next
+      }
+      ratio[d] <- delegated
+    }
+
+    valid <- is.finite(ratio)
+    if (isTRUE(posterior)) {
+      attr(ratio, "n_valid") <- sum(valid)
+      attr(ratio, "n_draws") <- n_draws
+      attr(ratio, "failure_reason") <- reason
+      return(ratio)
+    }
+    vals <- ratio[valid]
+    c(
+      mean = if (length(vals)) mean(vals) else NA_real_,
+      sd = if (length(vals) > 1L) sd(vals) else if (length(vals) == 1L) 0 else NA_real_,
+      q025 = if (length(vals)) unname(quantile(vals, 0.025)) else NA_real_,
+      median = if (length(vals)) unname(quantile(vals, 0.5)) else NA_real_,
+      q975 = if (length(vals)) unname(quantile(vals, 0.975)) else NA_real_,
+      n_draws = n_draws,
+      n_valid = length(vals)
+    )
+  }
+)
+
 
 # ---- BayesSim: show and summary ----
 

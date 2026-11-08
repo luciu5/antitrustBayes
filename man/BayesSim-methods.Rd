@@ -5,6 +5,7 @@
 \alias{diversion,BayesSim-method}
 \alias{CV,BayesSim-method}
 \alias{HypoMonTest,BayesSim-method}
+\alias{calcPriceDelta,BayesSim-method}
 \title{Posterior Distribution of Elasticities}
 \usage{
 \S4method{elast}{BayesSim}(object, preMerger = TRUE, market = NULL, posterior = FALSE)
@@ -27,6 +28,17 @@
   posterior = FALSE,
   ...
 )
+
+\S4method{calcPriceDelta}{BayesSim}(
+  object,
+  levels = FALSE,
+  market = TRUE,
+  party = FALSE,
+  index = c("paasche", "laspeyres"),
+  market_id = NULL,
+  posterior = FALSE,
+  ...
+)
 }
 \arguments{
 \item{object}{A \code{BayesSim} object.}
@@ -34,10 +46,16 @@
 \item{preMerger}{Logical. If \code{TRUE} (default), compute pre-merger
 diversions.}
 
-\item{market}{Which market(s). Default \code{NULL} (first).}
+\item{market}{If \code{TRUE} (default), aggregate to one index value per
+draw. If \code{FALSE}, return the product-level draws x products matrix
+of per-draw \code{antitrust::calcPriceDelta} results (no weighting or
+aggregation; the validity gate above does not apply).}
 
-\item{posterior}{Logical. If \code{TRUE}, return the full logical vector
-of per-draw results.}
+\item{posterior}{Logical. If \code{TRUE} and \code{market = TRUE},
+return the raw per-draw numeric vector (length \code{n_draws}, with
+\code{NA} for invalid draws) with \code{attr(, "n_valid")} and
+\code{attr(, "failure_reason")} (character, one entry per draw,
+\code{NA} for valid draws) instead of the posterior summary.}
 
 \item{revenue}{Logical. If \code{TRUE}, compute revenue diversion.
 Default \code{FALSE}.}
@@ -47,8 +65,19 @@ market.}
 
 \item{ssnip}{SSNIP threshold. Default 0.05.}
 
-\item{...}{Additional arguments passed to
-\code{\link[antitrust]{HypoMonTest}}.}
+\item{...}{Additional arguments passed to \code{antitrust::calcPriceDelta}.}
+
+\item{levels}{Passed to \code{antitrust::calcPriceDelta}: if \code{TRUE},
+report level changes; if \code{FALSE} (default), percent changes.}
+
+\item{party}{If \code{TRUE}, restrict the \code{market = TRUE} aggregate
+to the merging parties' products (via \code{antitrust::ownerToMatrix}).
+Requires \code{market = TRUE}.}
+
+\item{index}{\code{"paasche"} (default) or \code{"laspeyres"}.}
+
+\item{market_id}{Which stored market unit to use. Default \code{NULL}
+uses the first (or only) market unit in \code{object@market_ids}.}
 }
 \value{
 If a single market: a list with \code{mean} and \code{sd}
@@ -65,6 +94,13 @@ If multiple markets: a named list or data frame of such results.
 If \code{posterior = FALSE} (default): proportion of draws where
 the HMT passes (i.e., the probability that a SSNIP is profitable).
 If \code{posterior = TRUE}: a logical vector of per-draw results.
+
+If \code{market = TRUE} and \code{posterior = FALSE} (default): a
+named numeric summary with \code{mean}, \code{sd}, \code{q025},
+\code{median}, \code{q975}, \code{n_draws} and \code{n_valid}. If
+\code{market = TRUE} and \code{posterior = TRUE}: the per-draw numeric
+vector described above. If \code{market = FALSE}: a draws x products
+numeric matrix.
 }
 \description{
 Computes own- and cross-price elasticities for each posterior draw stored
@@ -79,6 +115,34 @@ stored in a \code{\linkS4class{BayesSim}} object.
 Evaluates the Hypothetical Monopolist Test for each posterior draw stored
 in a \code{\linkS4class{BayesSim}} object, returning the proportion of
 draws for which the test passes.
+
+Computes \code{\link[antitrust]{calcPriceDelta}} separately for each
+posterior draw stored in a \code{\linkS4class{BayesSim}} object and
+aggregates to one basket-level index value per draw (or, with
+\code{market = FALSE}, returns product-level draws). The ratio is
+computed independently for every draw before any posterior
+aggregation -- never as a ratio of posterior-averaged numerators and
+denominators -- and the arithmetic itself is delegated to
+\code{antitrust::calcPriceDelta} on that draw's terminal structural
+model object, so the weights and formula are exactly \pkg{antitrust}'s:
+Paasche weights are post-merger predicted quantity shares
+(\code{calcShares(..., revenue = FALSE)}), Laspeyres weights are
+pre-merger quantity shares, and the outside option is excluded (shares
+are defined only over the modeled inside products).
+}
+\details{
+Before delegating, each draw is subjected to a stricter validity gate
+than \code{antitrust::calcPriceDelta} applies on its own (which uses
+\code{na.rm = TRUE} over available products): a draw is recorded as
+invalid (\code{NA}), and never silently dropped or treated as a zero
+quantity/weight, whenever its simulation failed, any of its relevant
+per-product prices or weights are non-finite, any weight is negative, or
+(for \code{levels = FALSE}) the weighted pre-merger denominator is not
+finite and strictly positive. Finite signed (including negative)
+post-merger prices -- as retained under \code{price_domain = "real"} --
+are valid draws; no positivity filter is applied. The count of invalid
+draws and a reason per draw are always available via
+\code{posterior = TRUE}.
 }
 \seealso{
 \code{\link[antitrust]{elast}}
@@ -88,4 +152,6 @@ draws for which the test passes.
 \code{\link[antitrust]{CV}}
 
 \code{\link[antitrust]{HypoMonTest}}
+
+\code{\link[antitrust]{calcPriceDelta}}
 }
