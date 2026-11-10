@@ -16,6 +16,14 @@
 #'     convenience wrapper around this S4 method.}
 #' }
 #'
+#' Start with \code{vignette("pnb-merger", package = "antitrustBayes")}
+#' for a supplied-state merger without Stan. The optional
+#' \code{vignette("posterior-workflow", package = "antitrustBayes")}
+#' covers estimation and paired policy states; its inference and evidence
+#' chunks are not executed during documentation builds. Use
+#' \code{vignette("supply-and-demand", package = "antitrustBayes")}
+#' for model assumptions and units.
+#'
 #' @name antitrustBayes-package
 #' @aliases antitrustBayes
 #' @keywords internal

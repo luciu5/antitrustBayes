@@ -1,224 +1,101 @@
 ---
-title: "Bayesian Merger Simulation: Philadelphia National Bank"
+title: "Simulate the PNB merger from supplied parameters"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Bayesian Merger Simulation: Philadelphia National Bank}
+  %\VignetteIndexEntry{Simulate the PNB merger from supplied parameters}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  eval = FALSE,
-  purl = FALSE
-)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
-## Overview
+How would common ownership of Philadelphia National Bank and Girard Trust
+change deposit rates? This example uses the included PNB market and supplied
+structural parameters to solve that question. Lower deposit rates harm
+depositors: these are **input prices**, paid by banks.
 
-This vignette demonstrates the full `antitrustBayes` workflow using the
-1963 Supreme Court case *United States v. Philadelphia National Bank*.
-The merger between Philadelphia National Bank (PNB) and Girard Trust
-would have created the largest bank in the Philadelphia metropolitan
-area. The Court found the merger violated Section 7 of the Clayton Act.
+You need basic R and an installed `antitrustBayes` package with compatible
+structural dependencies. Follow the
+[installation instructions](https://github.com/luciu5/antitrustBayes#installation).
+This guide needs no CmdStan binary, C++ toolchain or estimated fit. Optional
+estimation follows in [Estimate demand and compare merger scenarios](posterior-workflow.html) ([source](https://github.com/luciu5/antitrustBayes/blob/main/vignettes/posterior-workflow.Rmd));
+the [model reference](supply-and-demand.html) ([source](https://github.com/luciu5/antitrustBayes/blob/main/vignettes/supply-and-demand.Rmd)) explains the assumptions.
 
-We estimate Bayesian logit demand models under an institutionally disciplined
-candidate set, simulate the merger's price effects with full posterior
-uncertainty, compare models via bridge sampling and clustered LOO-IC, and
-compute model-averaged predictions. The candidate-set prior is explicit: the
-auction model receives less prior mass than Bertrand, Cournot, and
-monopolistic competition.
+## Supply a structural state and solve the merger
 
-## Data
+The packaged `pnb` data describes 39 banks. `prices` are deposit interest rates
+in percent; `quantities` are deposits in thousands of dollars. `margins` are
+positive price-normalized input markdowns and can exceed one. `group` identifies
+the owner of each bank's deposit product.
 
-The package includes a dataset `pnb` with 39 banks in the Philadelphia
-market circa 1960.
+Choose illustrative Logit price sensitivity `alpha = 1`, outside quantity share
+`s0 = .015`, and Bertrand conduct (`supply_model = 1L`). These are assumptions,
+not posterior estimates. The small outside share is not an observed data column.
 
-```{r data}
+```{r merger}
 library(antitrustBayes)
 data(pnb)
-str(pnb)
-```
-
-Each row is a bank with deposit rate (`prices`), total deposits
-(`quantities`), price-normalized input margin/markdown (`margins`), and holding company
-identifier (`group`).
-
-## Step 1: Estimate Under Multiple Supply Models
-
-We estimate the Bayesian logit demand model under four supply assumptions
-using the default joint Gaussian share/margin likelihood with collapsed,
-market-specific persistent quality and estimated cross-equation correlation:
-Nash-Bertrand, Monopolistic Competition, Cournot, and Second-Score Auction.
-New relative-share fits also estimate period demand shocks and independent
-measurement precision. The measurement SD has a configurable Lognormal prior
-with median .10 and log SD .5. Counterfactuals retain persistent quality plus
-the recovered period demand realization, while measurement noise remains in
-the observation model. Select `share_residual_model = "combined"` when fitting
-the original one-component residual model. Existing saved fits keep their
-original interpretation and model weights; updated estimates require new fits
-and evidence.
-Nash bargaining is available in the general API, but is not included in this
-retail-deposit candidate set because its institutional interpretation is less
-direct.
-
-```{r estimate, results='hide', message=FALSE}
-supply_models <- c("bertrand", "cournot", "auction", "monopolistic")
-model_priors <- bank_model_priors(supply_models)
-
-fits <- lapply(supply_models, function(sm) {
-  bayes_est(
-    prices     = pnb$prices,
-    quantities = pnb$quantities,
-    margins    = pnb$margins,
-    market  = rep("PHL", nrow(pnb)),
-    group   = pnb$group,
-    supply_model = sm,
-    model_prior = model_priors[[sm]],
-    stan_options = list(
-      chains = 4, iter = 2000, warmup = 1000,
-      cores = 4, seed = 1960,
-      control = list(adapt_delta = 0.95, max_treedepth = 15)
-    )
-  )
-})
-names(fits) <- c("Bertrand", "Cournot", "Auction", "MonCom")
-```
-
-Check MCMC diagnostics --- the number of divergent transitions should be
-small relative to the total post-warmup draws (4000):
-
-```{r diagnostics}
-sapply(fits, function(f) {
-  sp <- f@stanfit$sampler_diagnostics(format = "draws_array")
-  c(divergences   = sum(sp[, , "divergent__"]),
-    max_treedepth = sum(sp[, , "treedepth__"] >= 15))
-})
-```
-
-Inspect the Bertrand fit:
-
-```{r show-fit}
-fits$Bertrand
-```
-
-## Step 2: Model Comparison
-
-Compare models using LOO-IC and bridge sampling:
-
-```{r compare}
-comp <- bayes_compare(
-  Bertrand = fits$Bertrand,
-  Cournot  = fits$Cournot,
-  Auction  = fits$Auction,
-  MonCom   = fits$MonCom,
-  prior_weights = model_priors
+params <- bayes_params(alpha = 1, s0 = .015, supply_model = 1L)
+market <- bayes_market(
+  prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
+  group = pnb$group, outside_price = 1, market_side = "input",
+  insideSize = attr(pnb, "insideSize"), labels = pnb$bank
 )
-print(comp)
-```
-
-Extract weights using either method:
-
-```{r weights}
-# Bridge sampling posterior probabilities (default):
-bayes_weights(comp, "bridge")
-
-# LOO stacking weights:
-bayes_weights(comp, "stacking")
-```
-
-## Step 3: Simulate the Merger
-
-The PNB-Girard Trust merger: acquirer is PNB (`298816`), target is
-Girard Trust (`889018`). Post-merger, Girard Trust's deposits are
-controlled by PNB.
-
-```{r ownership}
+fit <- bayes_specify(params, market)
 owner_post <- pnb$group
-owner_post[owner_post == "889018"] <- "298816"
-```
-
-Simulate under each model:
-
-```{r simulate}
+owner_post[owner_post == attr(pnb, "target")] <- attr(pnb, "acquirer")
 merger <- antitrust::counterfactual(ownership = owner_post)
-sims <- lapply(fits, function(f) {
-  simulate(f, merger, n_draws = 200)
-})
+result <- simulate(fit, merger, n_draws = 1L, mc.cores = 1L)
 ```
 
-Examine the Bertrand simulation:
+`bayes_specify()` creates a supplied-state fit without Stan. Its simulation
+uses the supplied parameters and observed market geometry; it does not invent
+an estimated quality posterior. The ownership change combines the banks named
+by the dataset's acquirer and target attributes.
 
-```{r summary-bertrand}
-summary(sims$Bertrand)
-summary(sims$Bertrand, market = TRUE)
+## Read the merging banks' rates
+
+Use the documented `BayesSim` price matrices to display just those two banks:
+
+```{r rates}
+party <- pnb$group %in% c(attr(pnb, "acquirer"), attr(pnb, "target"))
+rates <- data.frame(bank = pnb$bank,
+  before = as.numeric(result@price_pre[[1]][1, ]),
+  after = as.numeric(result@price_post[[1]][1, ]))
+rates$proportional_change <- rates$after / rates$before - 1
+rates[party, ]
 ```
 
-## Step 4: Bayesian Model Averaging
+Compare `after` with `before` in the same interest-rate units. A proportional
+change of `-.01` means a 1% relative reduction: a rate of 2 percent becomes
+1.98 percent, a .02 percentage-point fall. It does not mean a one-percentage-point
+fall. Effects are conditional on the supplied state, not estimated historical
+merger effects.
 
-Pool simulation draws across models proportional to bridge sampling
-weights:
+## Measure the market effect
 
-```{r bma}
-w <- bayes_weights(comp, "bridge")
-avg_sim <- bayes_avg(sims, weights = w)
+A market index must account for bank size. `calcPriceDelta()` computes a
+Paasche index using postmerger quantities and pre/post rates within the same
+structural realization. It returns a proportional change, rather than an equal
+average of bank-specific proportional changes.
 
-# Model-averaged price effects
-summary(avg_sim)
-
-# Market-level summary (HHI, industry price change, CV)
-summary(avg_sim, market = TRUE)
+```{r index}
+index <- calcPriceDelta(result, market = TRUE, index = "paasche")
+index[c("mean", "n_draws", "n_valid")]
 ```
 
-The model average can be reported as a decision quantity rather than only a
-posterior model table. For input prices, a reduction is harmful, so define harm
-as the negative industry price change and apply a policy threshold:
+In this illustrative state both merging banks lower rates, and the market
+index falls about 3.17%. The negative sign means harm to depositors in this
+model. Check `n_valid` against `n_draws` before interpretation. Here one supplied
+state gives one requested realization; the `mean` is its effect, not a posterior
+average with estimated uncertainty. Supplying several illustrative parameter
+values would still not turn them into an estimated posterior.
 
-```{r decision}
-harm_draws <- -rowMeans(avg_sim@price_change[[1]], na.rm = TRUE)
-merger_decision(harm_draws, threshold = 0.01,
-                false_positive_cost = 1, false_negative_cost = 2)
-```
-
-This reports the posterior probability that the merger exceeds the threshold
-and the Bayes challenge/clear action under the stated loss ratio.
-
-## Step 5: Additional Competition Metrics
-
-All standard antitrust metrics are available with posterior uncertainty:
-
-```{r metrics}
-# Elasticity matrix (posterior mean and SD)
-e <- elast(sims$Bertrand)
-round(e$mean[1:5, 1:5], 3)
-
-# Diversion ratios
-d <- diversion(sims$Bertrand)
-round(d$mean[1:5, 1:5], 3)
-
-# Compensating variation
-CV(sims$Bertrand)
-
-# Hypothetical Monopolist Test
-# (proportion of draws where a 5% SSNIP is profitable for merging parties)
-party_idx <- which(pnb$group %in% c("298816", "889018"))
-HypoMonTest(sims$Bertrand, prodIndex = party_idx)
-```
-
-## Notes
-
-- The `output = FALSE` convention in the underlying `antitrust` package
-  means prices are *input* prices (deposit rates), so negative price
-  changes indicate the merged bank pays depositors less --- a harm to
-  consumers.
-- The outside share (`s0`) is small (~1%) for this market, reflecting
-  limited substitution outside the 39 observed banks in 1960
-  Philadelphia. This amplifies unilateral effects.
-- Bridge sampling requires proper priors on all parameters. The baseline
-  manifest is prespecified and data-independent; use `bayes_prior_manifest()`
-  to make tight/diffuse prior sensitivity transparent.
-- Predictive validation should use the natural equilibrium cluster. For a
-  pooled case exercise, pass a case identifier through `loo_cluster` and
-  compare with a market-level specification as a robustness check.
+You can stop here with a complete deterministic merger calculation. To learn
+about fitting demand, retaining posterior demand states and making paired
+scenario comparisons, continue to the optional
+[posterior workflow](posterior-workflow.html) ([source](https://github.com/luciu5/antitrustBayes/blob/main/vignettes/posterior-workflow.Rmd)). Its inference and evidence steps
+are explicitly separate from this lightweight example. `?bayes_specify`,
+`?bayes_market` and `?"BayesSim-methods"` describe the public interfaces.

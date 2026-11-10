@@ -1,5 +1,10 @@
 # Development and evidence index
 
+For public package use, start with the [supplied-state PNB guide](../vignettes/pnb-merger.Rmd),
+then the optional [posterior workflow](../vignettes/posterior-workflow.Rmd) and
+[model reference](../vignettes/supply-and-demand.Rmd). These guides do not run
+inference or bridge sampling during documentation builds.
+
 The 2026-11-08 total/fraction extraction closeout preserves the economic quality-SD alias
 through nested conditional-quality recovery. Focused `posterior-quality` and
 `selective-extraction` fixtures verify distinct economic/total scales and

@@ -1,163 +1,196 @@
 ---
-title: "Supply and Demand Models"
+title: "Demand, conduct, and posterior policy states"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Supply and Demand Models}
+  %\VignetteIndexEntry{Demand, conduct, and posterior policy states}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include = FALSE}
-knitr::opts_chunk$set(
-    collapse = TRUE,
-    comment = "#>"
-)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
-## Overview
+Which assumptions connect market observations to a merger prediction? This
+reference explains demand, conduct, and the posterior state retained in policy
+calculations. Start with the executable [PNB example](pnb-merger.html) ([source](https://github.com/luciu5/antitrustBayes/blob/main/vignettes/pnb-merger.Rmd)); the
+optional [posterior workflow](posterior-workflow.html) ([source](https://github.com/luciu5/antitrustBayes/blob/main/vignettes/posterior-workflow.Rmd)) shows estimation and
+paired scenarios. The only computation here is a small deterministic
+conduct-information example; no inference or statistical validation runs.
 
-This vignette describes the theoretical underpinnings of the demand and supply models implemented in `antitrustBayes`. We begin by outlining the indirect utility functions for the Constant Elasticity of Substitution (CES) and Logit demand frameworks, and then present the equilibrium first-order conditions (Lerner conditions) for the candidate conduct models under both demand systems. Candidate sets should be justified by the trading institution; bargaining is available in the general API but is not automatically part of the retail-deposit set.
+## Units and market-side conventions
 
----
+Logit observes quantity shares. CES estimation also observes quantities and
+converts them to revenue shares for supply equations. Write $s_j$ for an
+unconditional quantity share, $r_j$ for an unconditional revenue share, and
+$s_0,r_0$ for their outside shares. Conditional inside shares satisfy
+$s_j=(1-s_0)s_{j|I}$ and $r_j=(1-r_0)r_{j|I}$. A firm's share sums the shares
+of **all its products**; product share alone is insufficient for multiproduct
+conduct.
 
-## 1. Demand Frameworks
+Output-market Lerner margins are $m_j=(p_j-c_j)/p_j$, with marginal cost $c_j$.
+In an input deposit market the positive markdown instead is
+$m_j=(v_j-p_j)/p_j$, where $v_j$ is the value-of-funds primitive and $p_j$ is
+the deposit rate. Markdown ratios can exceed one. A lower output price benefits
+buyers; a lower deposit rate harms depositors. Level-rate changes and relative
+rate changes have different units.
 
-### CES Demand and the Fréchet Distribution
+The Bayesian Logit parameter $\alpha$ is a **positive magnitude**. The output
+utility slope is $-\alpha$; the input utility slope is $+\alpha$. This differs
+from the signed output-Logit slope in `antitrust`. Current CES estimation
+supports output markets only; Logit supports input and output markets.
 
-Under the Constant Elasticity of Substitution (CES) demand model, consumer choice can be framed in a discrete choice setting where the indirect utility consumer $i$ derives from product $j$ is multiplicative:
-$$ U_{ij} = V_{j} \epsilon_{ij} $$
-Here, $V_{j}$ represents the deterministic component of utility, defined as:
-$$ V_j = \delta_j p_j^\sigma $$
-where $\delta_j$ represents intrinsic quality, $p_j$ is the product price, and $\sigma$ captures price sensitivity. The idiosyncratic error term $\epsilon_{ij}$ follows a **Fréchet distribution**:
-$$ F(\epsilon) = \exp\left(-\epsilon^{-(\gamma-1)}\right) $$
-where $\gamma > 1$ represents the elasticity of substitution between products. This distributional assumption on the unobserved preference shocks yields the familiar CES revenue shares (choice probabilities):
-$$ r_j = \frac{V_j^{\gamma-1}}{\sum_k V_k^{\gamma-1}} = \frac{\delta_j^{\gamma-1} p_j^{\sigma(\gamma-1)}}{\sum_k \delta_k^{\gamma-1} p_k^{\sigma(\gamma-1)}} $$
+## Demand and outside normalization
 
-To match standard macroeconomic and trade formulations of CES—where the exponent on price is strictly $1-\gamma$, or $-(\gamma-1)$—we require $\sigma(\gamma-1) = -(\gamma-1)$. This implies that functionally $\sigma = -1$, yielding the underlying base deterministic utility $V_j = \delta_j / p_j$.
+For output Logit, normalized choice probabilities have the form
 
-For estimation, both demand systems use conditional quantity shares as the
-observed demand outcome. CES revenue shares are computed from price and
-quantity and enter only the CES supply first-order conditions. If $q_0$ is the
-outside quantity share, $p_0$ the outside price, and $\bar p_I$ the observed
-inside quantity-weighted price, the corresponding outside revenue share is
-$r_0 = q_0p_0/(q_0p_0 + (1-q_0)\bar p_I)$.
-When `use_s0_market_pool = TRUE` and there are no outside-share covariates, the
-latent outside quantity share $q_0$ is shared across all periods of a market.
-The transformed outside revenue share $r_0$ can still vary by period when
-$p_0$ or $\bar p_I$ varies.
+$$
+s_j=\frac{\exp(b_j-\alpha p_j+\mu)}
+ {1+\sum_l\exp(b_l-\alpha p_l+\mu)}.
+$$
 
-### Logit Demand and the Gumbel Distribution
+The outside utility is zero. For input Logit, replace $-\alpha p_j$ with
+$+\alpha p_j$. Product quality and the market-level normalization determine
+attractiveness as well as price sensitivity.
 
-If we take the natural logarithm of the CES utility formulation—a monotone transformation that preserves choice properties—Logit demand naturally emerges. The multiplicative index becomes an additive random utility model:
-$$ \log U_{ij} = \log V_j + \log \epsilon_{ij} = \log \delta_j + \sigma \log p_j + \eta_{ij} $$
-Because $\epsilon_{ij}$ is Fréchet-distributed with shape parameter $\gamma-1$, the transformed error $\eta_{ij} = \log \epsilon_{ij}$ follows a **Gumbel (Type I Extreme Value) distribution** with a scale parameter inversely proportional to $\gamma-1$. 
+A CES revenue-share representation uses positive quality weights $a_j$ and
+$\gamma>1$, with $r_j$ proportional to $a_jp_j^{1-\gamma}$, including an
+outside good at price $p_0$. Quantity shares follow by dividing revenue shares
+by prices and renormalizing. The weights are not numerically interchangeable
+with Logit quality coefficients. If $\bar p_I$ is the inside
+quantity-weighted price, outside quantity and revenue shares are related by
 
-In standard applied work, Logit is often implemented by redefining the deterministic utility as exactly $v_j \equiv \log V_j$:
-$$ u_{ij} = \log \delta_j + \sigma \log p_j + \eta_{ij} $$
-Mapping to the conventional linear-price specification $u_{ij} \approx \tilde{\delta}_j - \alpha p_j + \varepsilon_{ij}$, we equate the local price derivatives between standard Logit and the log-baseline CES model, scaling by the dispersion parameter $\gamma-1$:
-$$ -\alpha = \frac{\partial}{\partial p_j} \left( (\gamma-1) \log V_j \right) = \frac{\sigma (\gamma-1)}{p_j} $$
-Since standard CES requires $\sigma = -1$, this establishes the structural mapping between the CES substitution parameter and the Logit linear price parameter:
-$$ \alpha = \frac{\gamma - 1}{p_j} $$
-This elegant linkage confirms how models parametrically convert into one another around local price points.
+$$
+r_0=\frac{s_0p_0}{s_0p_0+(1-s_0)\bar p_I}.
+$$
 
----
+Consequently, a market-shared outside quantity share can imply different outside
+revenue shares over time when prices change. The outside price must use the
+same units as inside prices. The estimated outside share is latent, not a
+supplied empirical market-penetration observation.
 
-## 2. Equilibrium Supply Models
+## What the posterior and a policy plan retain
 
-In `antitrustBayes`, we implement four primary strategic/competitive models of supply-side competition—Bertrand, monopolistic competition, Cournot, and second-score auction—and an optional fifth model for Nash bargaining. The theoretical implications of these models can be summarized by their equilibrium margin conditions.
+The current Gaussian relative-share likelihood uses orthonormal contrasts of
+log conditional inside **quantity** shares. It removes their common level;
+it does not observe aggregate inside-market attractiveness. Persistent product
+quality is centered within its market and shared across periods. Under the
+default collapsed parameterization, it is integrated during inference and
+recovered conditionally when constructing a policy plan.
 
-For notation:
-- Suppose there are $K$ firms, and each firm $k \in K$ produces a subset of products $\mathcal{J}_k$.
-- Let $s_j$ and $r_j$ be the unconditional volumetric and revenue market shares under the Logit and CES models, respectively.
-- Let $s_{j|I}$ and $r_{j|I}$ be the inside (conditional) shares, such that $s_j = s_{j|I} (1 - s_0)$ and $r_j = r_{j|I} (1 - r_0)$, where $s_0$ and $r_0$ denote the share of the corresponding outside option.
-- Let $m_j = \frac{p_j - c_j}{p_j}$ denote the proportional margin or **Lerner index**, which we use to express the equilibrium conditions for both models.
+Specification 15's default `share_residual_model = "demand_shock"` additionally
+separates period demand shocks from independent measurement error. Joint
+share/margin dependence belongs to the prescribed likelihood; independent
+measurement noise is a separate observation component. The measurement SD has
+a configurable Lognormal prior with median .10 and log SD .5. A snapshot need
+not identify the demand/measurement variance split well; apparent precision
+can depend on those priors.
 
-### Monopolistic Competition
-Under monopolistic competition, we assume firms are naive and ignore the impact of a price change on the aggregate industry price level (or denominator of the share equations). Because they ignore cross-price effects, margins depend only on own-product characteristics.
+`posterior_policy_draws()` jointly retains the parameter draw, persistent
+quality, recovered period demand, outside-share normalization and any latent
+role realization. The derived market-year intercept reproduces that draw's
+outside share at reference prices; relative-share fits have no free intercept
+prior. Policy demand keeps quality **plus period demand**, while measurement
+noise stays in the observation model. These are states for the fitted period,
+not fresh shocks drawn independently for each scenario.
 
-* **Logit:** 
-\[ m_j = \frac{1}{\alpha p_j} \]
-* **CES:** 
-\[ m_j = \frac{1}{\gamma} \]
+Estimated-fit simulation defaults to `demand_anchoring = "latent_quality"`.
+It reconstructs a pre-policy equilibrium, which generally differs from observed
+prices/shares, then measures the policy change from that same draw's baseline.
+Reusing one plan aligns states across scenarios. Explicit `"observed"` retains
+the older conditional observed-share calibration and does not change inference
+or model weights. Supplied-state fits have their own calibration route and no
+estimated quality posterior.
 
-### Nash-Bertrand Competition
-Under static Nash-Bertrand competition, firms choose prices to maximize profits across their entire portfolio of products, accounting for their effect on the total market share denominator while treating rival prices as fixed.
+Compatible specification-14 fits keep their original residual interpretation.
+New fits can explicitly select `"combined"`; absolute-share likelihoods retain
+their original residual model. New-model weights require new inference and
+evidence. See `?bayes_est`, `?posterior_policy_draws` and `?bayes_sim` for the
+supported configurations and state contracts.
 
-* **Logit:** 
-\[ m_j = \frac{1}{\alpha p_j \left(1 - \sum_{l \in \mathcal{J}_k} s_l\right)} \]
-* **CES:** 
-\[ m_j = \frac{1}{\gamma - (\gamma - 1) \sum_{l \in \mathcal{J}_k} r_l} \]
+## Conduct and portfolio first-order conditions
 
-### Cournot Competition
-Under Cournot competition, firms choose quantities rather than prices. This model yields margins that scale differently with market share compared to Bertrand.
+Let $S_f=\sum_{l\in\mathcal J_f}s_l$ and
+$R_f=\sum_{l\in\mathcal J_f}r_l$ denote unconditional firm shares. The table
+expresses the standard output-market proportional margins. The input Logit
+route uses the positive markdown and input-price sign convention above.
 
-* **Logit:** 
-\[ m_j = \frac{1}{\alpha p_j} \left( \frac{s_0 + \sum_{l \in \mathcal{J}_k} s_l}{s_0} \right) \]
-* **CES:** 
-\[
-m_j = \frac{1}{\gamma}
-  + \frac{(\gamma-1)\sum_{l \in \mathcal{J}_k}r_l}
-  {\gamma\{1+(\gamma-1)r_0\}}
-= \frac{1+(\gamma-1)\left(r_0+\sum_{l \in \mathcal{J}_k}r_l\right)}
-  {\gamma\{1+(\gamma-1)r_0\}}.
-\]
+| Conduct | Logit margin $m_j$ | CES margin $m_j$ |
+|:--|:--|:--|
+| Monopolistic competition | $1/(\alpha p_j)$ | $1/\gamma$ |
+| Bertrand | $1/\{\alpha p_j(1-S_f)\}$ | $1/\{\gamma-(\gamma-1)R_f\}$ |
+| Cournot | $(s_0+S_f)/(\alpha p_js_0)$ | $1/\gamma+(\gamma-1)R_f/[\gamma\{1+(\gamma-1)r_0\}]$ |
+| Second-score auction | $-\log(1-S_f)/(\alpha p_jS_f)$ | $1-(1-R_f)^{1/(\gamma-1)}$ |
 
-### Second-Score Auction
-The Second-Score Auction model (or second-price auction) can be used to characterize markets where competition takes the form of bidding for consumer contracts or deposits, representing a "competition for the market". Margins scale according to the firm's total market presence.
+Bertrand firms choose portfolio prices and internalize recaptured sales.
+Cournot firms choose quantities and account for inverse demand. Monopolistic
+competition uses perceived own demand, holding the aggregate denominator/index
+fixed. Auction conduct describes competition for contracts with a second-score
+payment rule. An institution must support that interpretation; it is not an
+automatically plausible model of every retail deposit market. The default
+banking candidate prior therefore downweights it.
 
-* **Logit:** 
-\[ m_j = \frac{1}{\alpha p_j} \left( \frac{-\log\left(1 - \sum_{l \in \mathcal{J}_k} s_l\right)}{\sum_{l \in \mathcal{J}_k} s_l} \right) \]
-* **CES:** 
-\[ m_j = 1 - \left(1 - \sum_{l \in \mathcal{J}_k} r_l\right)^{\frac{1}{\gamma - 1}} \]
+Nash bargaining is an additional API option, outside the baseline banking
+candidate set. Let $\beta$ be buyer-side bargaining power and
+$\kappa=\beta/(1-\beta)$. Its schedules are
 
-### Nash Bargaining (Optional)
+$$
+m_j^{\mathrm{Logit}}=
+ \frac{-\log(1-S_f)}{\alpha p_j\{\kappa S_f-(1-S_f)\log(1-S_f)\}},
+\qquad
+m_j^{\mathrm{CES}}=\frac{1-\beta}{\gamma-(\gamma-1)R_f}.
+$$
 
-The bargaining extension is deliberately separated from the primary banking
-candidate set. Let $q_k=\sum_{l\in\mathcal J_k}s_l$,
-$r_k=\sum_{l\in\mathcal J_k}r_l$, and
-$\kappa=\beta/(1-\beta)$, where $\beta$ is the buyer-side bargaining weight.
-The implemented schedules are
+The Bayesian multiproduct Logit bargaining schedule intentionally differs from
+`antitrust`'s registered product-level bargaining system, so that case retains
+its explicit Bayesian conduct class. CES bargaining scales its Bertrand
+schedule; free demand scale and bargaining power can be confounded. The baseline
+power prior is neutral on $[0,.9999)$; a high-power prior is a sensitivity choice.
+Model-specific recovery and cost/value-of-funds conventions remain fixed when
+comparing policy anchoring.
 
-* **Logit:**
-\[
-m_j = \frac{1}{\alpha p_j}
-\frac{-\log(1-q_k)}{\kappa q_k-(1-q_k)\log(1-q_k)}.
-\]
-* **CES:**
-\[
-m_j = \frac{1-\beta}{\gamma-(\gamma-1)r_k}.
-\]
+## Local conversions are not global equivalence
 
-The CES equation is the registered `antitrust` CES-Bertrand schedule scaled by
-$1-\beta$. The Bayesian multiproduct Logit equation is intentionally different
-from `antitrust`'s registered product-level Logit bargaining system, so that
-one case retains the explicit Bayesian conduct class while counterfactuals
-still run through `antitrust::simulate()`. Bargaining power and a free demand
-scale are confounded in CES data. The implementation uses a neutral baseline
-prior on $\beta \in [0,0.9999)$; a high-power prior is a sensitivity analysis,
-not the default.
+Logging multiplicative utility with Fréchet taste shocks gives Gumbel errors
+and a **log-price** utility index. It preserves the CES choice probabilities;
+replacing log price by price changes the demand model. For an output market,
+matching the CES log-price derivative to linear-price Logit at one reference
+price gives
 
-## 3. Shape-Based Conduct Information
+$$
+\alpha=(\gamma-1)/p_{\mathrm{ref}}.
+$$
 
-Write an inverse-margin schedule as
-\[
-m_{ij}^{-1} = \alpha g_k(q_{ij},s_{0j}).
-\]
-With one observation, a change in $\alpha$ can often make two conduct models
-observationally equivalent. With two or more different firm shares, model
-separation comes from the shape of $g_k$:
-\[
-\frac{g_k(q_1,s_0)}{g_k(q_2,s_0)}
-\neq
-\frac{g_\ell(q_1,s_0)}{g_\ell(q_2,s_0)}.
-\]
-When $s_0$ is uncertain, `conduct_distance()` profiles the comparison model
-over both its scale and outside share. The resulting Gaussian/KL information
-distance predicts when sparse equilibrium data can and cannot learn conduct.
-Shares are unconditional firm shares and must be jointly feasible,
-$\sum_j q_j \le 1 - s_0$ (to a numerical tolerance of $10^{-8}$). `q` may list
-only a subset of the market's firms, so the profiled outside share is bounded
-above by $1 - \sum_j q_j$ rather than by the largest single share.
-Use `conduct_information_matrix()` to inspect pairwise separation and
-`conduct_validation()` for targeted weak-separation, strong-separation,
-Cournot-separation, outside-share, bargaining, and misspecification designs.
+This is a local reference-price comparison. At unequal product prices the local
+derivatives differ by product, so the formula cannot make a single common-alpha
+Logit globally equivalent to CES. `?wtp_convert` uses a reference-price
+conversion; it is not a theorem about identical substitution or merger effects.
+
+## What share geometry can reveal about conduct
+
+One inverse-margin observation can often be matched by changing a demand scale.
+Different firm shares reveal the shape of a conduct schedule, but uncertainty
+about the outside share can make distinct schedules harder to separate. Reuse
+a small deterministic schedule geometry to compare known and profiled outside
+shares:
+
+```{r conduct-information}
+library(antitrustBayes)
+q <- c(.03, .08, .15, .25)
+known <- conduct_distance(q, "cournot", "bertrand", s0_k = .2,
+                          profile_s0 = FALSE)
+unknown <- conduct_distance(q, "cournot", "bertrand", s0_k = .2,
+                            profile_s0 = TRUE)
+c(known_outside = known$distance, profiled_outside = unknown$distance)
+```
+
+Here the two distances agree to the displayed precision. Profiling enlarges
+the comparison model's choices, so the minimized distance cannot increase; it
+need not fall strictly for every share geometry. This Gaussian/KL approximation describes local information,
+not posterior model recovery or statistical coverage. Firm shares must be
+jointly feasible: `sum(q) <= 1-s0` (tolerance `1e-8`); `q` may enumerate only a
+subset of firms. A profiled outside share is bounded by `1-sum(q)`.
+
+Use `?conduct_information_matrix` for pairwise comparisons and
+`?conduct_validation` for a separately requested, potentially expensive Monte
+Carlo study. Neither is required for the merger workflows.

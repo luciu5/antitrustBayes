@@ -1,0 +1,224 @@
+---
+title: "Estimate demand and compare merger scenarios"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Estimate demand and compare merger scenarios}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+How does uncertainty about demand change a merger analysis? This guide estimates
+one PNB deposit-market model, checks the posterior, and compares policies using
+the same recovered demand states. A final optional section compares four conduct
+models. Read the [supplied-state starter](pnb-merger.html) ([source](https://github.com/luciu5/antitrustBayes/blob/main/vignettes/pnb-merger.Rmd)) first; it requires none
+of this inference.
+
+The estimation example uses `antitrustBayes` 0.3.0.9002's specification-15
+relative Gaussian model, with `antitrust >= 0.99.43.9000`,
+`coordination >= 0.1.0` and `cmdstanr >= 0.9.0`. Running it additionally requires
+CmdStan and a C++ toolchain; see the
+[setup instructions](https://github.com/luciu5/antitrustBayes#installation).
+HMC and bridge sampling can take substantial time. **They are not executed when
+this guide is built.** Posterior-dependent chunks are also unevaluated because
+the build has no estimated `fit`. To run the example, execute its chunks in order
+after setup. No estimated numerical output is supplied here.
+
+## Set up one deposit-market question
+
+This guide is self-contained. Prices are percent deposit rates, quantities are
+thousands of dollars, and positive markdown ratios describe banks buying funds.
+Lower rates harm depositors. The explicit candidate prior gives Bertrand,
+Cournot and monopolistic competition .30 each, and auction conduct .10.
+
+```{r data-and-priors}
+library(antitrustBayes)
+data(pnb)
+owner_post <- pnb$group
+owner_post[owner_post == attr(pnb, "target")] <- attr(pnb, "acquirer")
+merger <- antitrust::counterfactual(ownership = owner_post)
+supply_models <- c("bertrand", "cournot", "auction", "monopolistic")
+model_priors <- bank_model_priors(supply_models)
+model_priors
+```
+
+## Estimate Bertrand first
+
+The local helper keeps observations, continuous priors and controls consistent
+if you later estimate the other candidates. This call runs HMC with the default
+CmdStanR backend. Current defaults are joint Gaussian share/margin errors,
+collapsed market-specific persistent quality and active cross-equation
+correlation where identified. The baseline proper-prior manifest is prespecified;
+`?bayes_prior_manifest` describes sensitivity choices.
+
+```{r estimate, eval=FALSE}
+estimate_model <- function(sm) {
+  bayes_est(
+    prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
+    market = rep("PHL", nrow(pnb)), group = pnb$group,
+    demand_model = "logit", market_side = "input", supply_model = sm,
+    share_basis = "relative", share_residual_model = "demand_shock",
+    prior_manifest = "baseline", model_prior = model_priors[[sm]],
+    stan_options = list(chains = 4, iter = 2000, warmup = 1000,
+      cores = 4, seed = 1960,
+      control = list(adapt_delta = .95, max_treedepth = 15))
+  )
+}
+fit <- estimate_model("bertrand")
+```
+
+## Check inference before using policy tails
+
+For this live CmdStanR fit, inspect both parameter and sampler diagnostics:
+
+```{r diagnostics, eval=FALSE}
+summary(fit)
+fit@stanfit$diagnostic_summary()
+```
+
+Inspect R-hat, bulk and tail effective sample sizes, divergences, maximum-depth
+hits and energy/BFMI diagnostics, with traces for parameters important to the
+question. Investigate divergences rather than accepting them because they are a
+small fraction of draws. Good mixing is not proof of identification or correct
+institutional assumptions. Optional Nutpie and reloaded-fit extraction have
+backend-specific contracts; see `?bayes_est` and `?"BayesFit-class"`.
+
+## Reuse one posterior policy plan
+
+New relative Gaussian fits separate persistent quality, period demand shocks and
+independent measurement error. Recover quality and period demand jointly, then
+retain them through both equilibria. Measurement noise remains in the observation
+model. Its SD has a configurable Lognormal prior with median .10 and log SD .5;
+the demand/measurement variance split can remain prior-dependent, especially in
+a snapshot. The [model reference](supply-and-demand.html) ([source](https://github.com/luciu5/antitrustBayes/blob/main/vignettes/supply-and-demand.Rmd)) explains this state.
+
+```{r paired-policies, eval=FALSE}
+plan <- posterior_policy_draws(fit, n_draws = 200L, seed = 701)
+posterior_merger <- simulate(fit, merger, draw_plan = plan, mc.cores = 1L)
+observed_merger <- simulate(fit, merger, draw_plan = plan,
+                            demand_anchoring = "observed", mc.cores = 1L)
+calcPriceDelta(posterior_merger, market = TRUE, index = "paasche")
+calcPriceDelta(observed_merger, market = TRUE, index = "paasche")
+```
+
+The first simulation uses the default `demand_anchoring = "latent_quality"`.
+The plan aligns parameter draws, recovered quality and period demand,
+outside-share normalization and role states where active. Its reconstructed
+pre-policy rates and shares generally differ from observations. Each effect is
+measured against that draw's **own pre-policy equilibrium**.
+
+Explicit `"observed"` retains the historical observed-share calibration. This
+paired comparison holds inference, priors, model probabilities and the existing
+cost/value-of-funds recovery convention fixed. It changes anchoring, not the
+likelihood or posterior. A supplied-state fit instead retains its supplied
+calibration route; it has no estimated quality posterior.
+
+Compatible specification-14 fits keep their original model interpretation.
+Estimating specification 15 requires new inference and evidence before adopting
+new model probabilities. `share_residual_model = "combined"` explicitly selects
+the original residual model for a new fit; it does not convert saved fits.
+
+## Define a harm quantity before a decision
+
+Use the draw-wise Paasche index, which weights post-policy quantities within
+each realization. It is not an equal-bank average, nor a weighted average of
+bank-specific percentage changes. Report unavailable index draws before using
+a posterior threshold probability:
+
+```{r decision, eval=FALSE}
+index_draws <- calcPriceDelta(posterior_merger, market = TRUE,
+                              index = "paasche", posterior = TRUE)
+c(requested = attr(index_draws, "n_draws"),
+  valid = attr(index_draws, "n_valid"))
+table(attr(index_draws, "failure_reason"), useNA = "no")
+if (any(!is.finite(index_draws))) {
+  stop("Decision withheld: inspect failed index draws before conditioning.")
+}
+merger_decision(-as.numeric(index_draws), threshold = .01,
+                false_positive_cost = 1, false_negative_cost = 2)
+```
+
+The minus sign turns a deposit-rate reduction into positive harm. The threshold
+is a **1% relative rate reduction**, not one percentage point. The decision
+reports the probability of exceeding it and a challenge/clear action under the
+stated loss ratio. The worked calculation withholds the decision if index draws
+are unavailable. Conditioning on valid draws needs a separate, disclosed
+analytical choice; do not silently discard failed banks or draws.
+
+For an optional hypothetical-monopsonist calculation, pass the signed input-rate
+threshold explicitly:
+
+```{r input-hmt, eval=FALSE}
+party_idx <- which(pnb$group %in%
+                    c(attr(pnb, "acquirer"), attr(pnb, "target")))
+hmt_draws <- HypoMonTest(posterior_merger, prodIndex = party_idx,
+                         ssnip = -.05, posterior = TRUE)
+requested <- attr(index_draws, "n_draws")
+c(requested = requested, returned = length(hmt_draws),
+  valid = sum(!is.na(hmt_draws)))
+if (length(hmt_draws) != requested || anyNA(hmt_draws)) {
+  stop("HMT summary withheld: inspect missing or failed HMT calculations.")
+}
+mean(hmt_draws)
+```
+
+This uses a 5% rate-reduction threshold. Its reported frequency includes every
+requested calculation only after the length and missingness checks pass; HMT
+solver failures are separate from price-index failures. A positive output-price SSNIP has the
+wrong direction for depositors. See `?HypoMonTest` for the guideline convention
+and `?"BayesSim-methods"` for other metrics and their scales.
+
+## Optional: compare the complete conduct candidate set
+
+You already have a one-model policy analysis. This extension estimates the other
+three models and computes normalized bridge evidence; it runs no estimation or
+evidence during documentation builds. Justify the candidate set by the trading
+institution: bargaining is available in the API but excluded from this banking
+baseline. Retain the same outcomes, market side, masks, share basis and
+continuous-prior contracts across candidates.
+
+```{r comparison, eval=FALSE}
+fits <- setNames(lapply(supply_models, function(sm) {
+  if (sm == "bertrand") fit else estimate_model(sm)
+}), supply_models)
+comp <- bayes_compare(
+  bertrand = fits$bertrand, cournot = fits$cournot,
+  auction = fits$auction, monopolistic = fits$monopolistic,
+  prior_weights = model_priors
+)
+w <- bayes_weights(comp, "bridge")
+```
+
+Default collapsed-quality fits do **not** supply LOO/WAIC or stacking weights.
+Bridge evidence is the demonstrated route; switching to sampled quality or a
+different likelihood just to obtain an old scoring example would change the
+analysis. Supported predictive-scoring units are described in `?bayes_compare`;
+one market does not create meaningful held-out market clusters by naming them.
+
+Every positive-prior candidate needs finite evidence before model probabilities
+exist. Do not renormalize surviving candidates or substitute stacking when a
+bridge calculation fails. Finite evidence alone does not establish numerical
+accuracy: inspect bridge repetitions/uncertainty and each sampler's diagnostics.
+
+```{r model-average, eval=FALSE}
+plans <- lapply(fits, posterior_policy_draws, n_draws = 200L, seed = 701)
+plans$bertrand <- plan
+sims <- Map(function(f, p) simulate(f, merger, draw_plan = p, mc.cores = 1L),
+            fits, plans)
+set.seed(702)
+avg <- bayes_avg(sims[names(w)], weights = w, n_draws = 1000L)
+calcPriceDelta(avg, market = TRUE, index = "paasche")
+sapply(avg@metadata$source_attrition,
+       function(a) c(requested = a$requested, eligible = a$common_eligible))
+```
+
+The pooled valid count does not erase failures in source models. Inspect the
+requested/eligible source counts and warnings: averaging can condition on
+eligible draws within models while retaining the original mixture weights. A
+positive-weight model with no eligible draw is an error. `?bayes_avg` documents
+that distinction. Posterior dispersion describes economic uncertainty;
+Monte Carlo error describes finite computation. Neither substitutes for checking
+model assumptions and identification.

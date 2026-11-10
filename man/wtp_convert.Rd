@@ -21,15 +21,15 @@ A numeric vector of converted parameter draws (one per posterior
 sample).
 }
 \description{
-Transforms posterior draws of the price-sensitivity parameter between
-logit (alpha) and CES (gamma) scales using the Frechet--Gumbel
-distributional equivalence.
+Converts posterior price-sensitivity draws between logit (alpha) and CES
+(gamma) scales by matching a local price derivative at the mean observed
+reference price. This does not make the two demand systems globally equivalent.
 }
 \details{
 CES demand arises from Frechet-distributed taste shocks with shape
 parameter \eqn{\sigma = \gamma - 1}, while logit demand arises from
 Gumbel-distributed shocks. Since CES operates on log-prices and logit
-on price levels, the conversion at reference price \eqn{\bar{p}} is:
+on price levels, the local conversion at reference price \eqn{\bar{p}} is:
 \deqn{\alpha = (\gamma - 1) / \bar{p}, \quad \gamma = 1 + \alpha \bar{p}}
 }
 \examples{

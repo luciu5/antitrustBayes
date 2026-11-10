@@ -72,3 +72,6 @@ tmp_lib/
 
 # Durable bounded specification-14 release fits, CSVs and native cache.
 /.scratch/coordinated-release-gate/
+
+# Local documentation previews.
+/.scratch/pkgdown/

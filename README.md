@@ -88,8 +88,8 @@ Explicit `"observed"` retains the previous conditional observed-share calibratio
 `BayesSpecifiedFit` instead has supplied parameter draws and market geometry.
 Its omitted anchoring argument retains that supplied-state/calibration route;
 it does not fabricate an estimated quality posterior. None of these simulation
-choices changes likelihoods, priors, model probabilities or estimation
-specification 14. See the [policy-state usage guide](doc/statistical_toolkit_usage.md).
+choices changes likelihoods, priors, model probabilities or the fitted
+estimation specification. See the [policy-state usage guide](doc/statistical_toolkit_usage.md).
 
 ## Installation
 
@@ -254,6 +254,13 @@ The executed timing/ESS tables describe these fixtures and matched draw budgets;
 they do not establish a general efficiency or robustness advantage.
 
 ## Quick Start
+
+Read the [supplied-state PNB starter](vignettes/pnb-merger.Rmd) first. Continue
+optionally to [Estimate demand and compare merger scenarios](vignettes/posterior-workflow.Rmd)
+for inference and paired policies, or consult
+[Demand, conduct, and posterior policy states](vignettes/supply-and-demand.Rmd)
+for model assumptions. The starter runs without Stan; the estimation/evidence
+chunks in the second guide are explicitly optional.
 
 This complete example supplies demand parameters and uses the included PNB
 deposit market. It calibrates the supplied state and simulates a merger without Stan.

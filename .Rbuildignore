@@ -21,3 +21,5 @@
 ^doc$
 ^synthetic_dgp_validation\.csv$
 ^inst/stan/.*\.hpp$
+
+^_pkgdown\.yml$

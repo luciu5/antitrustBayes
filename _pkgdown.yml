@@ -1,0 +1,18 @@
+destination: .scratch/pkgdown
+navbar:
+  structure:
+    left: [intro, reference, articles]
+    right: [search, github]
+  components:
+    intro:
+      text: Get started
+      href: articles/pnb-merger.html
+articles:
+- title: Get started
+  navbar: ~
+  contents:
+  - pnb-merger
+- title: Estimation and model assumptions
+  contents:
+  - posterior-workflow
+  - supply-and-demand
