@@ -50,6 +50,33 @@
     stanc_args = character(), compile_time = .1))
 }
 
+test_that("source line-ending portability also survives a missing native library", {
+  directory <- withr::local_tempdir()
+  withr::local_options(antitrustBayes.nutpie_cache = directory)
+  fit <- .nutpie_portability_fixture(directory)
+  current_hash <- fit@metadata$stan_source_hash
+  source <- fit@stanfit$metadata$source_code
+  alternate <- paste0(gsub("\n", "\r\n", source, fixed = TRUE), "\r\n")
+  saved_hash <- digest::digest(alternate, algo = "sha256", serialize = FALSE)
+  fit@metadata$stan_source_hash <- saved_hash
+  fit@stanfit$metadata$source_hash <- saved_hash
+  fit@stanfit$metadata$source_code <- alternate
+  fit@stanfit$metadata$lib_path <- file.path(directory, "missing.so")
+  before <- serialize(fit, NULL)
+  artifact <- .nutpie_portability_artifact(fit, directory)
+  artifact$metadata$source_hash <- current_hash
+  local_mocked_bindings(
+    .bayes_nutpie_bridge_client_version = function() "2.8.0",
+    .bayes_nutpie_bridge_model = function(...) .nutpie_portability_model(),
+    .bayes_nutpie_bridge_rebuild = function(...) artifact)
+  context <- .bayes_nutpie_bridge_context(fit)
+  expect_true(context$migration)
+  expect_identical(context$saved_hash, saved_hash)
+  expect_identical(context$current_hash, current_hash)
+  expect_equal(context$sampler_density_verification$max_absolute_difference, 0)
+  expect_identical(serialize(fit, NULL), before)
+})
+
 test_that("verified saved Nutpie libraries restore without compilation or fit mutation", {
   directory <- withr::local_tempdir()
   withr::local_options(antitrustBayes.nutpie_cache = directory)

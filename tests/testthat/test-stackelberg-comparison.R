@@ -1,5 +1,5 @@
 .stack_comparison_fixture <- function() {
-  methods::new("BayesLogit",stanfit=NULL,supply_model=1L,demand_model="logit",
+  fit <- methods::new("BayesLogit",stanfit=NULL,supply_model=1L,demand_model="logit",
     market_side="output",price_sd=1,call=call("bayes_est"),
     metadata=list(structure="stackelberg", partition_prior="ordered_k", quality_scope="global",
       prior_normalization=list(
@@ -9,6 +9,9 @@
       use_s0_market_pool=0L,use_s0_market_year_pool=0L,
       market_year_idx=c(1L,1L,2L,2L),mky_to_partition_unit=c(1L,1L),
       k_scope_code=1L,cluster=c(1L,1L,1L,1L)))
+  attr(fit@stan_data, "model_spec_version") <- .antitrust_bayes_model_spec_version
+  fit@metadata$prior_normalization$model_spec_version <- .antitrust_bayes_model_spec_version
+  fit
 }
 test_that("predictive units retain the marginalized equilibrium count", {
   fit <- .stack_comparison_fixture()

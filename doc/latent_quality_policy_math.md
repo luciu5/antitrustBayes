@@ -1,5 +1,9 @@
 # Latent-quality counterfactuals: normalization and cost specification
 
+Historical implementation note. Estimated-fit simulation defaults changed on
+2026-11-08; see the [current contract and verification](validation/posterior_policy_default_20261108.md).
+The original benchmark status and mathematical discussion below are preserved.
+
 Status: implementation integrated locally; independent mathematical and native
 reference checks passed. Frozen posterior policy benchmarks remain a separate
 gate. No simulation default has changed.

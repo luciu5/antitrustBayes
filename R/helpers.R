@@ -1,3 +1,22 @@
+## The independent measurement component is identified only by the relative
+## Gaussian observation contract. Legacy absolute/Student-t targets stay combined.
+.resolve_share_residual_model <- function(
+    share_residual_model = c("auto", "demand_shock", "combined"),
+    share_basis = "relative", share_likelihood = "gaussian",
+    margin_likelihood = NULL) {
+  requested <- match.arg(share_residual_model)
+  gaussian <- identical(share_likelihood[[1L]], "gaussian") &&
+    (is.null(margin_likelihood) || identical(margin_likelihood[[1L]], "gaussian"))
+  supported <- identical(share_basis, "relative") && gaussian
+  effective <- if (requested == "auto") {
+    if (supported) "demand_shock" else "combined"
+  } else requested
+  if (effective == "demand_shock" && !supported)
+    stop("share_residual_model = 'demand_shock' requires relative Gaussian shares and Gaussian margins.", call. = FALSE)
+  list(requested = requested, effective = effective,
+       code = if (effective == "demand_shock") 2L else 1L)
+}
+
 # Internal helper used by both data-preparation routines.
 safe_sd <- function(x, floor = 1e-8) {
   s <- stats::sd(x)
@@ -884,6 +903,11 @@ log_prior_from_positive_draws <- function(x, weights = NULL,
 #'   \code{"total_fraction"} is an exact experimental reparameterization that
 #'   samples the log total scale and logit share-noise variance fraction; it
 #'   requires Gaussian shares, collapsed quality, and a common residual scale.
+#' @param share_residual_model Share residual decomposition. \code{"auto"}
+#'   uses \code{"demand_shock"} for relative Gaussian shares and margins,
+#'   estimating independent measurement SD alongside economic demand shocks.
+#'   \code{"combined"} preserves the historical residual target. Explicit
+#'   demand-shock decomposition requires relative Gaussian shares and margins.
 #' @param share_basis \code{"relative"} (default) uses J-1 orthonormal
 #'   conditional quantity-share contrasts per market-year and Gaussian residuals.
 #'   \code{"absolute"} retains the absolute log-share likelihood.
@@ -969,10 +993,13 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
                               margin_likelihood = NULL,
                               quality_scope = c("market", "global"),
                               share_basis = c("relative", "absolute"),
-                              price_standardization = NULL) {
+                              price_standardization = NULL,
+                              share_residual_model = c("auto", "demand_shock", "combined")) {
   basis <- .resolve_share_basis(share_basis, share_likelihood, margin_likelihood,
                                 market_intercept_parameterization, market_s0_parameterization)
   share_basis <- basis$name
+  residual_model <- .resolve_share_residual_model(share_residual_model,
+    share_basis, share_likelihood, margin_likelihood)
   N <- length(prices)
   quality_scope <- match.arg(quality_scope)
   n_market_requested <- nlevels(droplevels(as.factor(market)))
@@ -1283,6 +1310,7 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
       N_margin = as.integer(N_margin),
       margin_idx = array(as.integer(margin_idx), dim = N_margin),
       share_likelihood = likelihood_modes$share_likelihood_code,
+      share_residual_model = residual_model$code,
       margin_likelihood = likelihood_modes$margin_likelihood_code,
       quality_parameterization = likelihood_modes$quality_parameterization_code,
       quality_scale_parameterization = quality_scale_resolution$code,
@@ -1341,6 +1369,8 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
   attr(stan_data, "k_scope") <- k_scope
   attr(stan_data, "k_support") <- k_support
   attr(stan_data, "k_prior") <- k_prior
+  attr(stan_data, "share_residual_model") <- residual_model$effective
+  attr(stan_data, "share_residual_model_requested") <- residual_model$requested
   attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
   attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
   attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
@@ -1409,6 +1439,8 @@ prepare_stan_data <- function(prices, quantities, margins, market, year, group,
     attr(stan_data, "k_scope") <- k_scope
     attr(stan_data, "k_support") <- k_support
     attr(stan_data, "k_prior") <- k_prior
+    attr(stan_data, "share_residual_model") <- residual_model$effective
+    attr(stan_data, "share_residual_model_requested") <- residual_model$requested
     attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
     attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
     attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
@@ -1495,10 +1527,13 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
                                   market_intercept_parameterization = NULL,
                                   margin_likelihood = NULL,
                                   quality_scope = c("market", "global"),
-                              share_basis = c("relative", "absolute")) {
+                              share_basis = c("relative", "absolute"),
+                              share_residual_model = c("auto", "demand_shock", "combined")) {
   basis <- .resolve_share_basis(share_basis, share_likelihood, margin_likelihood,
                                 market_intercept_parameterization, market_s0_parameterization)
   share_basis <- basis$name
+  residual_model <- .resolve_share_residual_model(share_residual_model,
+    share_basis, share_likelihood, margin_likelihood)
   N <- length(prices)
   quality_scope <- match.arg(quality_scope)
   n_market_requested <- nlevels(droplevels(as.factor(market)))
@@ -1828,6 +1863,7 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
       N_margin = as.integer(N_margin),
       margin_idx = array(as.integer(margin_idx), dim = N_margin),
       share_likelihood = likelihood_modes$share_likelihood_code,
+      share_residual_model = residual_model$code,
       margin_likelihood = likelihood_modes$margin_likelihood_code,
       quality_parameterization = likelihood_modes$quality_parameterization_code,
       quality_scale_parameterization = quality_scale_resolution$code,
@@ -1886,6 +1922,8 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
   attr(stan_data, "k_scope") <- k_scope
   attr(stan_data, "k_support") <- k_support
   attr(stan_data, "k_prior") <- k_prior
+  attr(stan_data, "share_residual_model") <- residual_model$effective
+  attr(stan_data, "share_residual_model_requested") <- residual_model$requested
   attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
   attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
   attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
@@ -1955,6 +1993,8 @@ prepare_ces_stan_data <- function(prices, quantities, margins, market, year,
     attr(stan_data, "k_scope") <- k_scope
     attr(stan_data, "k_support") <- k_support
     attr(stan_data, "k_prior") <- k_prior
+    attr(stan_data, "share_residual_model") <- residual_model$effective
+    attr(stan_data, "share_residual_model_requested") <- residual_model$requested
     attr(stan_data, "share_likelihood") <- likelihood_modes$share_likelihood
     attr(stan_data, "margin_likelihood") <- likelihood_modes$margin_likelihood
     attr(stan_data, "quality_parameterization") <- likelihood_modes$quality_parameterization
@@ -2162,7 +2202,7 @@ validate_inputs <- function(prices, quantities, margins, market, year, group,
 # Current fitted-object/model contract. Increment whenever the Stan likelihood
 # changes in a way that makes serialized fits unsuitable for comparison or
 # simulation under the current package.
-.antitrust_bayes_model_spec_version <- 14L
+.antitrust_bayes_model_spec_version <- 15L
 
 # Arithmetic mean of a logistic-normal random variable. The outside-share
 # prior is parameterized on the logit scale in Stan, while FOC prior
@@ -2184,7 +2224,8 @@ logit_normal_mean <- function(location, scale) {
 validate_fit_spec <- function(fit) {
   fit_version <- attr(fit@stan_data, "model_spec_version", exact = TRUE)
   if (is.null(fit_version) ||
-      !identical(as.integer(fit_version), .antitrust_bayes_model_spec_version)) {
+      length(fit_version) != 1L || is.na(fit_version) ||
+      !as.integer(fit_version) %in% c(14L, .antitrust_bayes_model_spec_version)) {
     found <- if (is.null(fit_version)) "pre-versioned" else as.character(fit_version)
     stop(
       "This fit uses antitrustBayes model specification ", found,
@@ -2193,5 +2234,15 @@ validate_fit_spec <- function(fit) {
       call. = FALSE
     )
   }
+  metadata_version <- fit@metadata$model_spec_version
+  if (!is.null(metadata_version) &&
+      !identical(as.integer(metadata_version), as.integer(fit_version)))
+    stop("Fitted model specification metadata disagree.", call. = FALSE)
+  if (as.integer(fit_version) == 14L &&
+      ((!is.null(fit@stan_data$share_residual_model) &&
+        !isTRUE(fit@stan_data$share_residual_model == 1L)) ||
+       (!is.null(fit@metadata$share_residual_model) &&
+        !identical(fit@metadata$share_residual_model, "combined"))))
+    stop("Specification-14 fits cannot contain the new demand-shock model.", call. = FALSE)
   invisible(TRUE)
 }

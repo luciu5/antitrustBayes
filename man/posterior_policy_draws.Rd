@@ -43,10 +43,15 @@ conditional quality vector per selected parameter draw, centered globally
 or within each market according to the fit's quality scope. Exact native
 ordered-k fits also receive one role realization per market and draw. Reuse
 the returned object in observed-anchor and latent-quality simulations.
+Demand-shock fits additionally recover observation-level period demand
+conditional on the same quality and role realization. Policy demand retains
+quality plus period demand; independent measurement error is excluded.
 }
 \details{
-New plans bind a version-3 canonical, name-ordered economic draw
-fingerprint, including reconstructed market-intercept states when those
+Demand-shock plans bind a version-4 fingerprint that includes
+recovered period demand, measurement/demand scales and outside shares.
+Combined-model plans retain version 3. Both bind a canonical, name-ordered
+economic draw fingerprint, including reconstructed market-intercept states when those
 effects were integrated during fitting. Unversioned historical plans are validated through their
 version-1 unrestricted-draw fingerprint as an explicit compatibility path;
 they are not reinterpreted as current plans. Reuse a plan with the same

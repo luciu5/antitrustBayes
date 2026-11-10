@@ -44,7 +44,8 @@ prepare_ces_stan_data(
   market_intercept_parameterization = NULL,
   margin_likelihood = NULL,
   quality_scope = c("market", "global"),
-  share_basis = c("relative", "absolute")
+  share_basis = c("relative", "absolute"),
+  share_residual_model = c("auto", "demand_shock", "combined")
 )
 }
 \arguments{
@@ -157,6 +158,12 @@ retains the historical pooled scope.}
 \item{share_basis}{\code{"relative"} (default) uses J-1 orthonormal
 conditional quantity-share contrasts per market-year and Gaussian residuals.
 \code{"absolute"} retains the absolute log-share likelihood.}
+
+\item{share_residual_model}{Share residual decomposition. \code{"auto"}
+uses \code{"demand_shock"} for relative Gaussian shares and margins,
+estimating independent measurement SD alongside economic demand shocks.
+\code{"combined"} preserves the historical residual target. Explicit
+demand-shock decomposition requires relative Gaussian shares and margins.}
 }
 \value{
 A list suitable for passing to a CmdStanR model. The returned

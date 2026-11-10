@@ -21,13 +21,15 @@ Combines directly supplied demand/conduct parameters and an observed market
 into a \code{\linkS4class{BayesFit}}. The resulting object uses the same
 \code{simulate()} S4 method as a fit returned by \code{\link{bayes_est}},
 without running Stan.
+No CmdStan installation or C++ toolchain is needed for this supplied-state
+route. Its calibrated parameters are distinct from an estimated quality posterior.
 }
 \examples{
 data(pnb)
 params <- bayes_params(alpha = 1, s0 = 0.015, supply_model = 1L)
 market <- bayes_market(
   prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
-  group = pnb$group, outside_price = 1, market_side = "output",
+  group = pnb$group, outside_price = 1, market_side = "input",
   insideSize = attr(pnb, "insideSize"), labels = pnb$bank
 )
 fit <- bayes_specify(params, market)

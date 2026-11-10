@@ -534,6 +534,11 @@ data {
   real ssnip_hmt;
   real<lower=0> prior_sigma_share;
   real<lower=0> prior_log_sigma_share_sd;
+  // 1 preserves the combined residual target, 2 separates economic demand
+  // shocks from independent observation measurement error.
+  int<lower=1, upper=2> share_residual_model;
+  real<lower=0> prior_sigma_measurement;
+  real<lower=0> prior_log_sigma_measurement_sd;
   real<lower=0> prior_sigma_margin;
   real<lower=0> prior_log_sigma_margin_sd;
   real<lower=0> prior_sigma_meanval_strat;
@@ -642,6 +647,9 @@ transformed data {
     if (market_s0_parameterization != 1)
       reject("collapsed market intercepts require the legacy/base s0 parameterization");
   }
+  if (share_residual_model == 2 &&
+      (share_basis != 1 || share_likelihood != 2 || margin_likelihood != 2))
+    reject("demand_shock residuals require relative Gaussian shares and margins");
   rho_active = (use_rho == 1 && likelihood_mode == 1 && any_paired == 1) ? 1 : 0;
 }
 
@@ -685,6 +693,7 @@ parameters {
          ? (use_s0_market_pool == 1 ? N_market : N_market_year) : 0] c_s0_raw;
   vector<lower=0, upper=1>[use_cutoff == 1 ? N_market : 0] cutoff_share;
   vector[rho_active == 1 ? 1 : 0] rho_raw;
+  vector[share_residual_model == 2 ? 1 : 0] log_sigma_measurement;
   real log_sigma_share;
   real log_sigma_margin;
   vector[use_market_resid_scale == 1 ? N_market : 0] log_sigma_share_market_raw;
@@ -710,7 +719,14 @@ transformed parameters {
   real sigma_b_strat_economic = quality_scale_parameterization == 1
     ? sigma_b_strat
     : exp(log(sigma_b_strat) + 0.5 * log_inv_logit(-log_sigma_share));
-  real sigma_share = exp(log_sigma_share_economic);
+  real sigma_demand_shock = exp(log_sigma_share_economic);
+  real sigma_measurement = share_residual_model == 2
+    ? exp(log_sigma_measurement[1]) : 0.0;
+  real sigma_share = share_residual_model == 2
+    ? hypot(sigma_demand_shock, sigma_measurement) : sigma_demand_shock;
+  real rho_demand_shock = 0.0;
+  vector[N_market] sigma_demand_shock_market;
+  vector[N_market] rho_market;
   real sigma_margin = exp(log_sigma_margin);
   vector[N_market] sigma_share_market;
   vector[N_market] sigma_margin_market;
@@ -743,12 +759,16 @@ transformed parameters {
 
   if (use_market_resid_scale == 1) {
     for (m in 1:N_market) {
-      sigma_share_market[m] = exp(log_sigma_share
+      sigma_demand_shock_market[m] = exp(log_sigma_share
         + sigma_log_sigma_share_market[1] * log_sigma_share_market_raw[m]);
+      sigma_share_market[m] = share_residual_model == 2
+        ? hypot(sigma_demand_shock_market[m], sigma_measurement)
+        : sigma_demand_shock_market[m];
       sigma_margin_market[m] = exp(log_sigma_margin
         + sigma_log_sigma_margin_market[1] * log_sigma_margin_market_raw[m]);
     }
   } else {
+    sigma_demand_shock_market = rep_vector(sigma_demand_shock, N_market);
     sigma_share_market = rep_vector(sigma_share, N_market);
     sigma_margin_market = rep_vector(sigma_margin, N_market);
   }
@@ -758,7 +778,12 @@ transformed parameters {
     bargaining_power = bargaining_prior_lower
       + (bargaining_prior_upper - bargaining_prior_lower) * bargaining_unit[1];
   }
-  if (rho_active == 1) rho = 0.95 * tanh(rho_raw[1]);
+  if (rho_active == 1) rho_demand_shock = 0.95 * tanh(rho_raw[1]);
+  rho = share_residual_model == 2
+    ? rho_demand_shock * sigma_demand_shock / sigma_share : rho_demand_shock;
+  for (m in 1:N_market) rho_market[m] = share_residual_model == 2
+    ? rho_demand_shock * sigma_demand_shock_market[m] / sigma_share_market[m]
+    : rho_demand_shock;
 
   // Reconstruct inside-market utility relative to the normalized outside good.
   // A single market uses the population intercept without a redundant random effect.
@@ -905,6 +930,11 @@ transformed parameters {
 }
 
 model {
+  // Primitive log measurement SD has its normalized Normal prior. There is
+  // no exponential Jacobian: log_sigma_measurement is the sampled coordinate.
+  if (share_residual_model == 2)
+    target += normal_lpdf(log_sigma_measurement | log(prior_sigma_measurement),
+      prior_log_sigma_measurement_sd);
   real collapsed_share_ll = 0.0;
   vector[N_market] collapsed_share_ll_market = rep_vector(0.0, N_market);
   vector[N_quality] share_a = rep_vector(0.0, N_quality);
@@ -1043,7 +1073,7 @@ model {
   if (rho_active == 1) {
     // Two-dimensional LKJ-style prior, with the Jacobian for the bounded
     // rho = 0.95*tanh(rho_raw) parameterization.
-    target += (prior_lkj - 1.0) * log1m(square(rho))
+    target += (prior_lkj - 1.0) * log1m(square(rho_demand_shock))
       + log1m(square(tanh(rho_raw[1])))
       - (lbeta(0.5, prior_lkj) + beta_lcdf(square(0.95) | 0.5, prior_lkj) - log(0.95));
   }
@@ -1226,9 +1256,9 @@ model {
         relative_margin_market_ll[m] += ll;
         relative_margin_period_ll[mky] += ll;
         if (rho_active == 1) {
-          relative_cond_resid[i] -= rho * sigma_share_market[m]
+          relative_cond_resid[i] -= rho_market[m] * sigma_share_market[m]
             / sigma_margin_market[m] * residual;
-          relative_cond_var[i] *= 1.0 - square(rho);
+          relative_cond_var[i] *= 1.0 - square(rho_market[m]);
         }
       }
     }
@@ -1549,9 +1579,9 @@ generated quantities {
         relative_margin_market_ll[m] += ll;
         relative_margin_period_ll[mky] += ll;
         if (rho_active == 1) {
-          relative_cond_resid[i] -= rho * sigma_share_market[m]
+          relative_cond_resid[i] -= rho_market[m] * sigma_share_market[m]
             / sigma_margin_market[m] * residual;
-          relative_cond_var[i] *= 1.0 - square(rho);
+          relative_cond_var[i] *= 1.0 - square(rho_market[m]);
         }
       }
     }

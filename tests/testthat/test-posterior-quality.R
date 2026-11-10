@@ -245,3 +245,51 @@ test_that("posterior_quality uses economic quality scale under total/fraction co
     share_mean = mu, sigma_b_strat = total, sigma_share = sigma
   )), "raw pair")
 })
+
+test_that("nested economic quality aliases retain shape and reject ambiguous raw scales", {
+  fit <- posterior_quality_fixture(c(1L, 2L, 1L, 3L), c(.2, .3, .1, .4))
+  fit@metadata$quality_scale_parameterization_effective <- "total_fraction"
+  fit@stan_data$quality_scale_parameterization <- 2L
+  mu <- rbind(c(.1, .2, .15, .3), c(.05, .25, .1, .35))
+  tau <- c(.6, .25)
+  sigma <- c(.4, .7)
+  total <- sqrt(tau^2 + sigma^2)
+  fraction <- sigma^2 / total^2
+  contract <- .posterior_contract(fit, "posterior_quality", conditioning = "share")
+  expected <- posterior_quality(fit, seed = 173L, draws = list(
+    share_mean = mu, sigma_b_strat_economic = tau, sigma_share = sigma))
+  expect_gt(max(abs(expected$draws)), 0)
+
+  for (shape in list(identity, function(x) matrix(x, ncol = 1L))) {
+    explicit <- list(share_mean = mu, sigma_b_strat_economic = shape(tau),
+                     sigma_share = shape(sigma))
+    normalized <- .posterior_normalize_draw_names(explicit, contract)
+    nested <- .posterior_normalize_draw_names(normalized, contract)
+    expect_identical(nested, normalized)
+    expect_identical(nested$sigma_b_strat_economic, shape(tau))
+    expect_identical(nested$sigma_b_strat, shape(tau))
+    got <- posterior_quality(fit, seed = 173L, draws = nested)
+    expect_equal(got$draws, expected$draws, tolerance = 1e-14)
+    expect_equal(dim(got$draws), c(2L, 3L))
+
+    raw <- list(share_mean = mu, sigma_b_strat = shape(total),
+                log_sigma_share = shape(qlogis(fraction)), sigma_share = shape(sigma))
+    recovered <- posterior_quality(fit, seed = 173L, draws = raw)
+    expect_equal(recovered$draws, expected$draws, tolerance = 1e-14)
+    raw$log_sigma_share <- NULL
+    expect_error(posterior_quality(fit, seed = 173L, draws = raw), "raw pair")
+    expect_error(.posterior_normalize_draw_names(raw, contract), "sigma_b_strat")
+    raw$share_variance_fraction <- shape(fraction)
+    recovered_fraction <- posterior_quality(fit, seed = 173L, draws = raw)
+    expect_equal(recovered_fraction$draws, expected$draws, tolerance = 1e-14)
+    raw$sigma_b_strat <- NULL
+    expect_error(posterior_quality(fit, seed = 173L, draws = raw), "economic quality scale")
+  }
+
+  legacy <- fit
+  legacy@metadata$quality_scale_parameterization_effective <- "legacy"
+  legacy@stan_data$quality_scale_parameterization <- 1L
+  recovered_legacy <- posterior_quality(legacy, seed = 173L, draws = list(
+    share_mean = mu, sigma_b_strat = tau, sigma_share = sigma))
+  expect_equal(recovered_legacy$draws, expected$draws, tolerance = 1e-14)
+})

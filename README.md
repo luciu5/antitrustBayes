@@ -35,40 +35,89 @@ Additional utilities:
 - **`conduct_distance()`**, **`conduct_information_matrix()`**, and **`conduct_validation()`** — Theory-guided conduct distinguishability and targeted Monte Carlo validation.
 - **`merger_decision()`** and **`decision_regret()`** — Translate posterior merger effects into threshold decisions and decision regret.
 
-## Installation
+## Posterior-state counterfactuals
 
-Install CmdStanR and a CmdStan toolchain following the
-[CmdStanR installation instructions](https://mc-stan.org/cmdstanr/).
-Install compatible revisions of `antitrust` and `coordination` before
-installing `antitrustBayes`. The declared package minima are
-`antitrust >= 0.99.43`, `coordination >= 0.1.0`, and `cmdstanr >= 0.9.0`;
-these are dependency requirements, not a tested combination of arbitrary
-revisions. Check the selected R library before development:
+New Gaussian relative-share Logit/CES fits default to persistent quality plus
+period demand shocks and independent measurement error. The measurement SD has
+a configurable Lognormal prior with median 0.10 and log SD 0.5. Quality and
+period demand are recovered jointly and retained through counterfactuals;
+measurement noise remains in the observation model. This improves conditional
+baseline reconstruction without requiring an exact match to observed shares.
+The split between the two transitory variances can remain prior-dependent.
 
 ```r
-stopifnot(
-  packageVersion("antitrust") >= "0.99.43",
-  packageVersion("coordination") >= "0.1.0",
-  packageVersion("cmdstanr") >= "0.9.0"
+# New default for relative Gaussian estimation:
+# fit <- bayes_est(..., share_residual_model = "demand_shock",
+#   priors = list(prior_sigma_measurement = .10,
+#                 prior_log_sigma_measurement_sd = .5))
+# Reproduce the original statistical model explicitly:
+# fit_original <- bayes_est(..., share_residual_model = "combined")
+```
+
+Absolute-share fits retain their original residual model. Saved specification-14
+fits retain their original posterior and policy interpretation; they are not
+converted to the new model. Estimating the new model requires new inference,
+including new evidence before using its model probabilities.
+
+Estimated fits use their fitted posterior state by default. This includes the
+quality realization recovered conditionally for analytically collapsed quality,
+recovered period demand for the new model, the posterior outside-share
+normalization, and any latent role realization.
+Parameters, quality, period demand and roles stay aligned within each draw and across the
+pre-policy and post-policy equilibria. The existing cost/value-of-funds recovery
+convention is unchanged.
+
+Use one fixed plan for reproducible comparisons and sequential scenarios:
+
+```r
+# fit is an estimated BayesFit; owner_post names the counterfactual owners.
+plan <- posterior_policy_draws(fit, n_draws = 200, seed = 701)
+posterior_policy <- simulate(fit, ownerPost = owner_post, draw_plan = plan)
+observed_policy <- simulate(
+  fit, ownerPost = owner_post, draw_plan = plan,
+  demand_anchoring = "observed"
 )
 ```
 
-With compatible dependencies already installed, install the package from GitHub
-without upgrading the selected dependency versions:
+The first call is equivalent to explicit `demand_anchoring = "latent_quality"`.
+Its solved pre-policy prices and shares generally differ from the observations;
+measure effects against that draw's own reconstructed pre-policy equilibrium.
+Explicit `"observed"` retains the previous conditional observed-share calibration.
+`bayes_sim()` and `posterior_policy_models()` follow the same choice.
+
+`BayesSpecifiedFit` instead has supplied parameter draws and market geometry.
+Its omitted anchoring argument retains that supplied-state/calibration route;
+it does not fabricate an estimated quality posterior. None of these simulation
+choices changes likelihoods, priors, model probabilities or estimation
+specification 14. See the [policy-state usage guide](doc/statistical_toolkit_usage.md).
+
+## Installation
+
+Install the supported package stack with the ecosystem installer:
 
 ```r
-remotes::install_github("luciu5/antitrustBayes", upgrade = "never")
+source("https://raw.githubusercontent.com/luciu5/competitiontoolbox/master/tools/install_iovrse.R")
+install_iovrse(packages = "antitrustBayes")
 ```
 
-The [dependency-stack CI](.github/workflows/qa.yml) uses the antitrust
-`master`, coordination `main`, and trade `master` branches for ordinary
-development runs, then records each resolved commit SHA. It also pins CmdStanR.
-Select release certification to require full 40-character SHAs for antitrust,
-coordination, and trade; that mode rejects branch names and checks the selected
-package versions and public cross-package APIs. Trade is installed for the
-policy integration tests even though it is not a declared runtime dependency
-of `antitrustBayes`. See the documentation index for local environment checks
-and validation tiers.
+The installer includes the structural dependencies and the CmdStanR **R
+package**. The supplied-parameter example below needs no CmdStan binary or
+C++ toolchain. The package minima are `antitrust >= 0.99.43.9000`,
+`coordination >= 0.1.0`, and `cmdstanr >= 0.9.0`.
+
+Estimation with the default CmdStanR backend additionally needs CmdStan and a
+C++ toolchain. Follow the [CmdStanR setup instructions](https://mc-stan.org/cmdstanr/)
+for your operating system, then run:
+
+```r
+cmdstanr::check_cmdstan_toolchain()
+cmdstanr::install_cmdstan()  # once, after the toolchain check succeeds
+```
+
+The [development and evidence index](doc/README.md) describes development CI,
+release certification, and opt-in statistical validation. Its fixed source
+revisions and toolchains serve reproducibility; ordinary package use needs
+compatible installed dependencies.
 
 ## Optional Nutpie backend
 
@@ -206,29 +255,50 @@ they do not establish a general efficiency or robustness advantage.
 
 ## Quick Start
 
+This complete example supplies demand parameters and uses the included PNB
+deposit market. It calibrates the supplied state and simulates a merger without Stan.
+The supplied parameters are illustrative, rather than an estimated posterior.
+
 ```r
 library(antitrustBayes)
+data(pnb)
 
-# 1. Estimate the Bayesian model
-fit <- bayes_est(
-  prices  = dat$prices,
-  quantities = dat$quantities,
-  margins = dat$margins,
-  market  = dat$market,
-  year    = dat$year,
-  group   = dat$group,
-  supply_model = "bertrand",
-  prior_manifest = "baseline",
-  model_prior = bank_model_priors()[["bertrand"]]
+params <- bayes_params(alpha = 1, s0 = 0.015, supply_model = 1L)
+market <- bayes_market(
+  prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
+  group = pnb$group, outside_price = 1, market_side = "input",
+  insideSize = attr(pnb, "insideSize"), labels = pnb$bank
 )
-
-# 2. Describe and simulate the merger over posterior draws
-scenario <- antitrust::counterfactual(ownership = post_merger_ownership)
-result <- simulate(fit, scenario, n_draws = 500)
-
-# 3. Summarize results with credible intervals
+fit <- bayes_specify(params, market)
+owner_post <- pnb$group
+owner_post[owner_post == attr(pnb, "target")] <- attr(pnb, "acquirer")
+scenario <- antitrust::counterfactual(ownership = owner_post)
+result <- simulate(fit, scenario, mc.cores = 1L)
 summary(result)
 ```
+
+After installing CmdStan and the toolchain, estimate from the same included
+observations with the default CmdStanR backend. PNB margins are deposit-market
+markdown ratios, so this example uses `market_side = "input"`. This step compiles a Stan model
+and runs HMC; its duration depends on your computer. Assess sampling diagnostics
+before interpreting the posterior or its policy results.
+
+```r
+estimated_fit <- bayes_est(
+  prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
+  market = rep("pnb", nrow(pnb)), group = pnb$group,
+  supply_model = "bertrand", market_side = "input",
+  prior_manifest = "baseline"
+)
+estimated_result <- simulate(estimated_fit, scenario, n_draws = 500,
+                             mc.cores = 1L)
+summary(estimated_result)
+```
+
+Estimated-fit policies default to fitted posterior quality, including recovered
+conditional quality for collapsed models. Their pre-policy equilibria may differ
+from the observations. Specified fits use their supplied-state calibration;
+these are distinct inputs to the same simulation interface.
 
 For a banking model comparison, pass the candidate-set probabilities explicitly
 so that the institutionally motivated auction downweighting is visible and
@@ -447,7 +517,7 @@ separate market k values and shared parameters require joint combinations.
 
 ## Dependencies
 
-- [CmdStanR](https://mc-stan.org/cmdstanr/) (>= 0.9.0) and a working [CmdStan](https://mc-stan.org/users/interfaces/cmdstan) installation
-- [antitrust](https://github.com/luciu5/antitrust) (>= 0.99.43)
+- [CmdStanR](https://mc-stan.org/cmdstanr/) (>= 0.9.0); CmdStan and a C++ toolchain are additionally required for CmdStanR estimation
+- [antitrust](https://github.com/luciu5/antitrust) (>= 0.99.43.9000)
 - [coordination](https://github.com/luciu5/coordination) (>= 0.1.0)
 - [loo](https://mc-stan.org/loo/) (>= 2.5.0)

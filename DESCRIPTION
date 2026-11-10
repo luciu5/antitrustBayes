@@ -1,6 +1,6 @@
 Package: antitrustBayes
 Title: Bayesian Counterfactual Simulation for Antitrust Analysis
-Version: 0.3.0.9000
+Version: 0.3.0.9002
 Author: Charles Taragin
 Maintainer: Charles Taragin <ctaragin+antitrustr@gmail.com>
 Authors@R: c(
@@ -24,7 +24,7 @@ Depends:
     R (>= 4.0.0),
     methods
 Imports:
-    antitrust (>= 0.99.43),
+    antitrust (>= 0.99.43.9000),
     cmdstanr (>= 0.9.0),
     coordination (>= 0.1.0),
     bridgesampling (>= 1.1.0),
@@ -81,6 +81,6 @@ Collate:
     'theory.R'
     'validation.R'
 URL: https://github.com/luciu5/antitrustBayes
-SystemRequirements: CmdStan and a C++ toolchain
+SystemRequirements: CmdStan and a C++ toolchain (for CmdStanR estimation)
 Config/roxygen2/version: 8.0.0
 RoxygenNote: 7.3.2

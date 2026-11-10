@@ -7,6 +7,8 @@
 ^\.claude$
 ^\.agents$
 ^\.codex$
+^\.aws$
+^\.agents$
 ^LICENSE$
 ^LICENSE\.md$
 ^README\.md$

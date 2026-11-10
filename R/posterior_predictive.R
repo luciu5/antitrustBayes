@@ -395,7 +395,7 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
   calculate <- function() {
     for (r in seq_len(n_draw)) {
       nu_r <- if (length(nu) == 1L) nu[[1L]] else nu[[r]]
-      rho_r <- if (length(rho) == 1L) rho[[1L]] else rho[[r]]
+      rho_r <- if (is.matrix(rho)) rho[r, ] else if (length(rho) == 1L) rho[[1L]] else rho[[r]]
       if (likelihood_mode != 3L) {
         share_error <- if (share_conditioning == "observed") {
           observed_share - share_mean[r, ]
@@ -419,6 +419,7 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
       if (any(margin_predict_mask)) {
         idx <- which(margin_predict_mask)
         if (isTRUE(rho_active)) {
+          if (length(rho_r) > 1L) rho_r <- rho_r[idx]
           err_share <- share_rep[r, idx] - share_mean[r, idx]
           if (identical(margin_family, "gaussian")) {
             cond_mean <- margin_mean[r, idx] + rho_r *
@@ -469,7 +470,8 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
     for (r in seq_len(n_draw)) for (rows in split(seq_len(n), cell)) {
       ss <- share_scale[r, rows]
       sm <- margin_scale[r, rows]
-      correlation <- if (isTRUE(rho_active)) rho[[r]] else 0
+      correlation <- if (!isTRUE(rho_active)) 0 else if (is.matrix(rho))
+        rho[r, rows] else rho[[r]]
       if (likelihood_mode == 3L) {
         margin[r, rows] <- margin_mean[r, rows] + stats::rnorm(length(rows), sd = sm)
         next
@@ -554,6 +556,13 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
     }
     value
   } else rep(0, length(means$draw_indices))
+  if (rho_active && .posterior_demand_shock_model(fit) &&
+      isTRUE(fit@stan_data$use_market_resid_scale == 1L)) {
+    rho <- .posterior_quality_matrix(draws$rho_market, data_info$n_market,
+      "rho_market")[means$draw_indices, data_info$market, drop = FALSE]
+    if (any(!is.finite(rho)) || any(abs(rho) >= 1))
+      stop("Invalid market-specific posterior correlations.", call. = FALSE)
+  }
   replicate_seed <- if (is.null(seed)) NULL else
     as.integer((as.double(seed) + 3) %% .Machine$integer.max)
   relative <- identical(.share_basis_from_fit(fit), "relative")
@@ -648,6 +657,10 @@ posterior_predict <- function(fit, draw_plan = NULL, n_draws = NULL,
       share_rep_normalized_definition = "softmax of replicated log_shareIn within market-year; derived view, not a Stan likelihood variable",
       seed = if (is.null(seed)) NULL else as.integer(seed)
     )
+  if (.posterior_demand_shock_model(fit)) {
+    metadata$share_residual_model <- "demand_shock"
+    metadata$share_residual_replication <- "new demand shock plus independent observation measurement"
+  }
   if (share_conditioning == "observed") {
     metadata$share_conditioning <- "observed"
     metadata$share_replicated <- FALSE

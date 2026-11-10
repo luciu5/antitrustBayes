@@ -97,20 +97,20 @@ test_that("all four Stan programs still parse after the CES normalization", {
   }
 })
 
-test_that("specification 14 rejects earlier fits, including Logit and CES single-market fits", {
-  expect_identical(.antitrust_bayes_model_spec_version, 14L)
+test_that("specification 15 rejects pre-14 fits, including Logit and CES single-market fits", {
+  expect_identical(.antitrust_bayes_model_spec_version, 15L)
   for (demand in c("logit", "ces")) {
     prepared <- if (demand == "ces") .ces_panel_data() else prepare_stan_data(share_basis = "absolute",
       .ces_p, 1000 * .ces_r, rep(.3, 7), rep("m1", 7), rep(1, 7), paste0("f", 1:7),
       supply_model = 1L, market_side = "output", use_rho = FALSE)
-    expect_identical(attr(prepared, "model_spec_version"), 14L)
+    expect_identical(attr(prepared, "model_spec_version"), 15L)
     fit <- methods::new("BayesLogit", stan_data = prepared, supply_model = 1L,
       demand_model = demand, market_side = "output", price_sd = 1,
       call = quote(identity()))
     expect_invisible(validate_fit_spec(fit))
     old <- fit
     attr(old@stan_data, "model_spec_version") <- 12L
-    expect_error(validate_fit_spec(old), "current specification is 14.*Refit it with bayes_est")
+    expect_error(validate_fit_spec(old), "current specification is 15.*Refit it with bayes_est")
   }
   stale <- list(prior_normalization = list(mode = "native_stan_normalized",
                                            model_spec_version = 12L))
@@ -118,7 +118,7 @@ test_that("specification 14 rejects earlier fits, including Logit and CES single
     demand_model = "ces", market_side = "output", price_sd = 1,
     call = quote(identity()), metadata = stale))
   expect_error(antitrustBayes:::.bayes_validate_bridge(fits), "native normalized")
-  fits[[1L]]@metadata$prior_normalization$model_spec_version <- 14L
+  fits[[1L]]@metadata$prior_normalization$model_spec_version <- 15L
   expect_invisible(antitrustBayes:::.bayes_validate_bridge(fits))
 })
 

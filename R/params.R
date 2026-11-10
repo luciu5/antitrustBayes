@@ -280,6 +280,8 @@ bayes_market <- function(prices, quantities, margins, group,
 #' into a \code{\linkS4class{BayesFit}}. The resulting object uses the same
 #' \code{simulate()} S4 method as a fit returned by \code{\link{bayes_est}},
 #' without running Stan.
+#' No CmdStan installation or C++ toolchain is needed for this supplied-state
+#' route. Its calibrated parameters are distinct from an estimated quality posterior.
 #'
 #' @param params A \code{\link{bayes_params}} object containing one or more
 #'   parameter draws.
@@ -294,7 +296,7 @@ bayes_market <- function(prices, quantities, margins, group,
 #' params <- bayes_params(alpha = 1, s0 = 0.015, supply_model = 1L)
 #' market <- bayes_market(
 #'   prices = pnb$prices, quantities = pnb$quantities, margins = pnb$margins,
-#'   group = pnb$group, outside_price = 1, market_side = "output",
+#'   group = pnb$group, outside_price = 1, market_side = "input",
 #'   insideSize = attr(pnb, "insideSize"), labels = pnb$bank
 #' )
 #' fit <- bayes_specify(params, market)
@@ -461,7 +463,7 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
   use_cutoff <- isTRUE(params$use_cutoff)
   cutoff_draw <- params$cutoff_share[draw_idx]
 
-  obj <- methods::new(
+  obj <- withCallingHandlers(methods::new(
     class_name,
     prices = prices_m,
     shares = shares_for_object,
@@ -485,7 +487,16 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
     cutoff_share = as.numeric(cutoff_draw),
     cutoff_scale = params$cutoff_scale[draw_idx],
     bargaining_power = bargaining_draw
-  )
+  ), warning = function(condition) {
+    ## A conduct realization needs both ownership slots before a scenario
+    ## exists. Silence only this exact no-change notice for that baseline;
+    ## validation, domain and numerical warnings remain visible.
+    if (identical(ownerPre, ownerPost) &&
+        identical(conditionMessage(condition),
+                  "'ownerPost' and 'ownerPre' are the same")) {
+      tryInvokeRestart("muffleWarning")
+    }
+  })
   obj@slopes <- slopes
   obj@ownerPre <- antitrust::ownerToMatrix(obj, TRUE)
   obj@ownerPost <- antitrust::ownerToMatrix(obj, FALSE)
@@ -600,7 +611,18 @@ build_conduct_object <- function(params, draw_idx, market, ownerPre, ownerPost,
   ## specify() returns the registered model with its baseline cost state and
   ## baseline prices initialized by antitrust. No private state or slots are
   ## rewritten here, and no counterfactual equilibrium is solved locally.
-  model <- do.call(antitrust::specify, args)@model
+  ## The core constructor still uses these shares for market-mass
+  ## normalization, despite its non-BLP notice about demand inversion. Keep
+  ## that state and silence only this exact, known notice in this adapter.
+  shares_notice <- paste0(
+    "'shares' argument is only used for BLP demand (for BLP contraction mapping). For '",
+    if (spec$demand == "ces") "CES" else "Logit", "', shares will be ignored.")
+  model <- withCallingHandlers(do.call(antitrust::specify, args),
+    warning = function(condition) {
+      if (identical(conditionMessage(condition), shares_notice)) {
+        tryInvokeRestart("muffleWarning")
+      }
+    })@model
 
   model
 }

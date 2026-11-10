@@ -43,7 +43,7 @@ test_that("intercept estimation preserves market flags, quality blocks and outsi
       expect_identical(sampled$N_quality_block, M)
       expect_identical(sampled$use_s0_market_pool, as.integer(pool == "market"))
       expect_identical(sampled$use_s0_market_year_pool, as.integer(pool == "market_year"))
-      expect_identical(attr(sampled, "model_spec_version"), 14L)
+      expect_identical(attr(sampled, "model_spec_version"), 15L)
       if (M == 1L) {
         collapsed <- do.call(prepare_stan_data,
           c(args, list(market_intercept_parameterization = "collapsed")))

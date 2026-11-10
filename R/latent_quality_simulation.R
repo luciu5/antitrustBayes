@@ -360,10 +360,11 @@
     identical(names(x), names(y))
 }
 
-.lq_fit_fingerprint <- function(fit, draws = NULL, version = 2L) {
+.lq_fit_fingerprint <- function(fit, draws = NULL, version = 2L,
+                                omit_redundant_quality_alias = FALSE) {
   if (length(version) != 1L || !is.numeric(version) ||
       !is.finite(version) || version != as.integer(version) ||
-      !version %in% c(1L, 2L, 3L)) {
+      !version %in% c(1L, 2L, 3L, 4L)) {
     stop("Unsupported latent-quality fit fingerprint version.", call. = FALSE)
   }
   version <- as.integer(version)
@@ -371,13 +372,20 @@
     if (is.null(fit@stanfit)) stop("Cannot validate a legacy plan without its Stan fit.", call. = FALSE)
     draws <- .bayes_backend_extract(fit@stanfit)
   }
-  if (version %in% c(2L, 3L) && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
+  if (version %in% c(2L, 3L, 4L) && !methods::is(fit, "BayesSpecifiedFit") && is.null(draws)) {
     draws <- .posterior_extract(fit, "policy_plan")
   }
   canonical_draws <- if (version == 1L || methods::is(fit, "BayesSpecifiedFit")) {
     draws
   } else {
     .posterior_canonical_draws(draws, fit, "policy_plan")
+  }
+  if (isTRUE(omit_redundant_quality_alias)) {
+    if (!version %in% c(2L, 3L))
+      stop("Historical quality-alias fingerprints require version 2 or 3.", call. = FALSE)
+    if (!is.null(canonical_draws$sigma_b_strat_economic) &&
+        identical(canonical_draws$sigma_b_strat_economic, canonical_draws$sigma_b_strat))
+      canonical_draws$sigma_b_strat_economic <- NULL
   }
   payload <- list(
     data = fit@data,
@@ -390,15 +398,26 @@
     market = if (methods::is(fit, "BayesSpecifiedFit")) fit@market else NULL,
     draws = if (methods::is(fit, "BayesSpecifiedFit")) NULL else canonical_draws
   )
-  if (version %in% c(2L, 3L)) payload$fit_signature_version <- as.integer(version)
+  if (version %in% c(2L, 3L, 4L)) payload$fit_signature_version <- as.integer(version)
   digest::digest(payload, algo = "xxhash64", serialize = TRUE)
+}
+
+## Early v2/v3 canonical payloads did not retain the redundant economic alias.
+## Accept that exact serialization variant, while keeping every economic draw,
+## fitted source/data field and the separately checked latent state hash fixed.
+.lq_fit_fingerprint_matches <- function(fit, draws, fingerprint, version) {
+  current <- .lq_fit_fingerprint(fit, draws, version = version)
+  if (identical(as.character(fingerprint), current)) return(TRUE)
+  version %in% c(2L, 3L) && identical(as.character(fingerprint),
+    .lq_fit_fingerprint(fit, draws, version = version,
+                        omit_redundant_quality_alias = TRUE))
 }
 
 .lq_plan_signature <- function(fit, groups, n_total, mode, draws = NULL) {
   incidence <- .lq_quality_incidence(fit)
   scope <- .lq_quality_scope(fit)
   list(
-    fit_signature_version = 3L,
+    fit_signature_version = if (.posterior_demand_shock_model(fit)) 4L else 3L,
     demand_model = as.character(fit@demand_model),
     market_side = as.character(fit@market_side),
     posterior_draws = as.integer(n_total),
@@ -409,7 +428,8 @@
     quality_lookup = if (is.null(incidence)) NULL else incidence$quality_lookup,
     quality_mode = mode,
     structure = as.character(.lq_or(fit@metadata$structure, "simultaneous")),
-    fit_fingerprint = .lq_fit_fingerprint(fit, draws, version = 3L)
+    fit_fingerprint = .lq_fit_fingerprint(fit, draws, version =
+      if (.posterior_demand_shock_model(fit)) 4L else 3L)
   )
 }
 
@@ -425,11 +445,14 @@
   if (identical(version, 2L)) {
     keys <- append(keys, c("quality_scope", "quality_units", "quality_lookup"),
                    after = 3L)
-  } else if (identical(version, 3L)) {
+  } else if (version %in% c(3L, 4L)) {
     keys <- append(keys, c("quality_scope", "quality_units", "quality_lookup"),
                    after = 3L)
     keys <- c(keys, "market_intercept_draws", "market_labels")
   }
+  if (identical(version, 4L)) keys <- c(keys, "demand_shock_draws",
+    "measurement_sd_draws", "demand_shock_sd_draws", "demand_shock_correlation_draws",
+    "outside_share_draws", "share_residual_model")
   if (identical(plan$share_basis, "relative"))
     keys <- c(keys, "share_basis", "derived_market_year_intercept_draws", "market_year_labels")
   digest::digest(plan[keys], algo = "xxhash64", serialize = TRUE)
@@ -489,8 +512,14 @@
       role_offset = role_args$role_offset, exact_k = !is.null(k_cache)
     )
   ), class = c("bayes_policy_draw_plan", "list"))
+  if (.posterior_demand_shock_model(fit)) {
+    shock_seed <- if (is.null(seed)) NULL else
+      as.integer((as.double(seed) + 4) %% .Machine$integer.max)
+    plan <- .lq_add_demand_shocks(fit, draws, plan, shock_seed)
+  }
   if (identical(.share_basis_from_fit(fit), "relative")) {
-    derived <- .lq_relative_derived_intercepts(fit, draws, draw_indices, quality$draws)
+    derived <- .lq_relative_derived_intercepts(fit, draws, draw_indices, quality$draws,
+      demand_shock_draws = plan$demand_shock_draws)
     plan$share_basis <- "relative"
     plan$derived_market_year_intercept_draws <- derived$draws
     plan$market_year_labels <- derived$labels
@@ -509,6 +538,9 @@
 #' or within each market according to the fit's quality scope. Exact native
 #' ordered-k fits also receive one role realization per market and draw. Reuse
 #' the returned object in observed-anchor and latent-quality simulations.
+#' Demand-shock fits additionally recover observation-level period demand
+#' conditional on the same quality and role realization. Policy demand retains
+#' quality plus period demand; independent measurement error is excluded.
 #'
 #' @param fit A \code{BayesFit}.
 #' @param n_draws Number of posterior draws, defaulting to at most 200.
@@ -523,8 +555,10 @@
 #'   for policy work. Their approximation diagnostics remain attached to the
 #'   originating fit and do not certify posterior accuracy.
 #' @return A reusable object of class \code{bayes_policy_draw_plan}.
-#' @details New plans bind a version-3 canonical, name-ordered economic draw
-#' fingerprint, including reconstructed market-intercept states when those
+#' @details Demand-shock plans bind a version-4 fingerprint that includes
+#' recovered period demand, measurement/demand scales and outside shares.
+#' Combined-model plans retain version 3. Both bind a canonical, name-ordered
+#' economic draw fingerprint, including reconstructed market-intercept states when those
 #' effects were integrated during fitting. Unversioned historical plans are validated through their
 #' version-1 unrestricted-draw fingerprint as an explicit compatibility path;
 #' they are not reinterpreted as current plans. Reuse a plan with the same
@@ -578,12 +612,13 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
       !identical(as.character(sig$market_side), as.character(fit@market_side)) ||
       !identical(as.character(sig$quality_mode), as.character(.lq_quality_mode(fit))) ||
       !identical(as.character(sig$structure), as.character(.lq_or(fit@metadata$structure, "simultaneous"))) ||
-      !identical(as.character(sig$fit_fingerprint), as.character(
-        .lq_fit_fingerprint(fit, draws, version = signature_version))) ||
+      !.lq_fit_fingerprint_matches(fit, draws, sig$fit_fingerprint, signature_version) ||
       !identical(as.integer(signature_version), as.integer(
         if (is.null(sig$fit_signature_version)) 1L else sig$fit_signature_version))) {
     stop("'draw_plan' was created for a different fit or group map.", call. = FALSE)
   }
+  if (.posterior_demand_shock_model(fit) && signature_version != 4L)
+    stop("Demand-shock fits require a version-4 posterior state plan.", call. = FALSE)
   di <- as.integer(plan$draw_indices)
   if (!length(di) || anyNA(di) || any(di < 1L | di > n_total) || anyDuplicated(di)) {
     stop("'draw_plan' has malformed posterior draw indices.", call. = FALSE)
@@ -593,6 +628,13 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
       !identical(rownames(plan$quality_draws), as.character(di))) {
     stop("'draw_plan' latent states or selected posterior rows were changed; ",
          "rebuild it with posterior_policy_draws().", call. = FALSE)
+  }
+  if (signature_version == 4L) {
+    z <- plan$demand_shock_draws
+    if (!is.matrix(z) || !identical(dim(z), c(length(di), nrow(fit@data))) ||
+        any(!is.finite(z)) || !identical(rownames(z), as.character(di)) ||
+        !identical(plan$share_residual_model, "demand_shock"))
+      stop("'draw_plan' has malformed observation demand-shock states.", call. = FALSE)
   }
   metadata_role_offset <- plan$metadata$role_offset
   valid_metadata_role_offset <- length(metadata_role_offset) == 1L &&
@@ -660,7 +702,8 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
   if (identical(.share_basis_from_fit(fit), "relative")) {
     if (!identical(plan$share_basis, "relative"))
       stop("Relative-share fit requires a matching relative-share draw plan.", call. = FALSE)
-    expected <- .lq_relative_derived_intercepts(fit, draws, di, plan$quality_draws)
+    expected <- .lq_relative_derived_intercepts(fit, draws, di, plan$quality_draws,
+      demand_shock_draws = plan$demand_shock_draws)
     if (!identical(as.character(plan$market_year_labels), expected$labels) ||
         !isTRUE(all.equal(plan$derived_market_year_intercept_draws, expected$draws,
                          tolerance = 1e-12)))
@@ -703,9 +746,11 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
   value
 }
 
-.lq_relative_derived_intercepts <- function(fit, draws, draw_indices, quality_draws) {
+.lq_relative_derived_intercepts <- function(fit, draws, draw_indices, quality_draws,
+                                           demand_shock_draws = NULL) {
   labels <- .lq_market_year_labels(fit)
   predictor <- .lq_relative_full_predictor(fit, draws, draw_indices, quality_draws)
+  if (!is.null(demand_shock_draws)) predictor <- predictor + demand_shock_draws
   cells <- as.integer(fit@stan_data$market_year_idx %||% rep.int(1L, ncol(predictor)))
   if (length(cells) != ncol(predictor) || anyNA(cells) ||
       !setequal(cells, seq_along(labels)))
@@ -759,8 +804,13 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
     value <- .lq_relative_full_predictor(object, draws, draw,
       plan$quality_draws[position, , drop = FALSE])
     score <- value[1L, unit$idx] + plan$derived_market_year_intercept_draws[position, cell]
+    if (!is.null(plan$demand_shock_draws))
+      score <- score + plan$demand_shock_draws[position, unit$idx]
     return(list(score = as.numeric(score), s0 = s0,
-      quality = .lq_quality_for_draw(plan, draw), draw_index = as.integer(draw)))
+      quality = .lq_quality_for_draw(plan, draw),
+      demand_shock = if (is.null(plan$demand_shock_draws)) NULL else
+        as.numeric(plan$demand_shock_draws[position, unit$idx]),
+      draw_index = as.integer(draw)))
   }
   intercept_mode <- .market_intercept_parameterization_from_fit(object)
   mean_name <- if (identical(intercept_mode, "collapsed"))
@@ -835,6 +885,11 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
   }
   is_ces <- methods::is(model, "CES")
   is_auction <- methods::is(model, "Auction2ndLogit") && !is_ces
+  if (methods::is(model, "BayesConductLogit") &&
+      identical(as.integer(model@supply_model), 4L) && !is_auction) {
+    stop("Latent-quality smooth-cutoff Logit auctions have no implemented cost-based value-index reconstruction; posted-price Logit reconstruction is invalid for this auction family.",
+         call. = FALSE)
+  }
   if (!is_ces && !methods::is(model, "Logit")) {
     stop("Latent-quality demand replacement currently supports Logit input/output and output CES only.",
          call. = FALSE)
@@ -858,13 +913,16 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
     alpha <- as.numeric(model@slopes$alpha)
     if (length(alpha) != 1L || !is.finite(alpha) || alpha == 0) stop("Latent Logit demand has an invalid signed price coefficient.", call. = FALSE)
     if (is_auction) {
-      if (!isTRUE(model@output) || alpha >= 0 || !is.na(model@normIndex) ||
+      if ((isTRUE(model@output) && alpha >= 0) ||
+          (!isTRUE(model@output) && alpha <= 0) || !is.na(model@normIndex) ||
           !isTRUE(all.equal(as.numeric(price_outside), 0)))
-        stop("Latent auction quality requires output Logit with a positive outside share and zero outside cost shock.", call. = FALSE)
+        stop("Latent auction quality requires a correctly signed Logit coefficient, a positive outside share and zero outside cost shock.", call. = FALSE)
       # Auction2ndLogit stores eta = v + alpha * mcPre, not the ordinary
       # price-based intercept. Its public share method adds alpha times the
       # additive cost change after policy. Keep mcPre and v = eta - alpha*mcPre
       # fixed while realizing probabilities from this conditional quality draw.
+      # The input-market version uses positive alpha and mcPre represents the
+      # value primitive; its native additive value shock follows the same index.
       model@slopes$meanval <- delta
       model@mcDelta <- rep(0, n)
     } else {
@@ -961,6 +1019,7 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
     quality_conditioning = quality_conditioning,
     posterior_draw_index = info$draw_index,
     quality = info$quality,
+    demand_shock = info$demand_shock,
     reference_shares = info$reference_shares,
     latent_pre_shares = info$solved_shares,
     reference_quantity_shares = info$reference_quantity_shares,
@@ -998,8 +1057,13 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
     score_info$quality, score_info$draw_index,
     price_domain = price_domain
   )
+  info$demand_shock <- score_info$demand_shock
   info$price_domain <- price_domain
   fit@model <- info$model
+  ## Public structural consumers also read @parameters (for example demand
+  ## translations). Keep that reusable parameter state at the same realized
+  ## quality as the native model rather than the observed-share inversion.
+  fit@parameters <- info$model@slopes
   list(fit = fit, info = info,
        metadata = .lq_metadata(info, plan$quality_source,
                                plan$quality_conditioning))
@@ -1011,7 +1075,90 @@ posterior_policy_draws <- function(fit, n_draws = NULL, seed = NULL,
     as.numeric(native@pricePre), as.numeric(native@priceOutside),
     score_info$quality, score_info$draw_index
   )
+  info$demand_shock <- score_info$demand_shock
   list(native = info$model, info = info,
        metadata = .lq_metadata(info, plan$quality_source,
                                plan$quality_conditioning))
+}
+
+## Recover the observation shock after the SAME sampled/conditional q and role
+## state. Matheron's update conditions only the fitted ILR contrasts. Independent
+## measurement error participates in conditioning but never enters demand.
+.lq_conditional_demand_shock <- function(residual, shift, variance,
+                                         measurement_sd, cell,
+                                         condition_shares = TRUE) {
+  n <- length(residual)
+  if (length(shift) != n || length(variance) != n || length(cell) != n ||
+      any(!is.finite(c(residual, shift, variance, measurement_sd))) ||
+      any(variance < 0) || length(measurement_sd) != 1L || measurement_sd <= 0)
+    stop("Malformed conditional demand-shock inputs.", call. = FALSE)
+  out <- numeric(n)
+  for (idx in split(seq_len(n), cell)) {
+    basis <- .relative_share_basis(rep.int(1L, length(idx)))
+    if (!ncol(basis)) next
+    x <- shift[idx] + sqrt(variance[idx]) * stats::rnorm(length(idx))
+    if (condition_shares) {
+      error <- measurement_sd * stats::rnorm(length(idx))
+      covariance <- crossprod(basis, (variance[idx] + measurement_sd^2) * basis)
+      discrepancy <- crossprod(basis, residual[idx] - x - error)
+      x <- x + as.numeric(variance[idx] * basis %*% solve(covariance, discrepancy))
+    }
+    out[idx] <- as.numeric(basis %*% crossprod(basis, x))
+  }
+  out
+}
+
+.lq_add_demand_shocks <- function(fit, draws, plan, seed = NULL) {
+  info <- .posterior_predict_mask_and_mode(fit)
+  means <- .posterior_predict_mean_state(fit, draws, plan, info)
+  indices <- plan$draw_indices
+  n_total <- .lq_draw_count(fit, draws)
+  measurement <- .posterior_quality_vector(draws$sigma_measurement, n_total,
+                                           "sigma_measurement")[indices]
+  omega <- .posterior_quality_vector(draws$sigma_demand_shock, n_total,
+                                     "sigma_demand_shock")[indices]
+  rho <- .posterior_quality_vector(draws$rho_demand_shock, n_total,
+                                   "rho_demand_shock")[indices]
+  if (any(!is.finite(c(measurement, omega, rho))) || any(measurement <= 0) ||
+      any(omega <= 0) || any(abs(rho) >= 1))
+    stop("Invalid posterior measurement or demand-shock scales/correlations.", call. = FALSE)
+  omega_by_obs <- if (isTRUE(fit@stan_data$use_market_resid_scale == 1L)) {
+    .posterior_quality_matrix(draws$sigma_demand_shock_market, info$n_market,
+      "sigma_demand_shock_market")[indices, info$market, drop = FALSE]
+  } else matrix(omega, nrow = length(indices), ncol = info$n)
+  if (!is.matrix(omega_by_obs) ||
+      !identical(dim(omega_by_obs), c(length(indices), info$n)) ||
+      any(!is.finite(omega_by_obs)) || any(omega_by_obs <= 0))
+    stop("Invalid market-specific posterior demand-shock scales.", call. = FALSE)
+  scales <- if (.posterior_contract_rho_active(fit))
+    .posterior_predict_scales(fit, draws, indices, info) else NULL
+  calculate <- function() {
+    out <- matrix(0, length(indices), info$n,
+      dimnames = list(as.character(indices), as.character(seq_len(info$n))))
+    for (r in seq_along(indices)) {
+      shift <- numeric(info$n)
+      variance <- omega_by_obs[r, ]^2
+      if (!is.null(scales)) {
+        idx <- info$margin_idx
+        shift[idx] <- rho[[r]] * omega_by_obs[r, idx] / scales$margin[r, idx] *
+          (info$observed_margin[idx] - means$margin_mean[r, idx])
+        variance[idx] <- variance[idx] * (1 - rho[[r]]^2)
+      }
+      out[r, ] <- .lq_conditional_demand_shock(
+        info$observed_share - means$share_mean[r, ], shift, variance,
+        measurement[[r]], fit@stan_data$market_year_idx,
+        condition_shares = info$likelihood_mode != 3L)
+    }
+    out
+  }
+  plan$demand_shock_draws <- .lq_with_seed(seed, calculate)
+  plan$measurement_sd_draws <- measurement
+  plan$demand_shock_sd_draws <- omega_by_obs
+  plan$demand_shock_correlation_draws <- rho
+  plan$outside_share_draws <- .posterior_quality_matrix(draws$s0_prob,
+    fit@stan_data$N_market_year, "s0_prob")[indices, , drop = FALSE]
+  plan$share_residual_model <- "demand_shock"
+  plan$metadata$share_residual_model <- "demand_shock"
+  plan$metadata$demand_state <- "persistent quality plus observation demand shock"
+  plan
 }

@@ -50,6 +50,11 @@ validate_comparison_contract <- function(fits) {
       names(reference@metadata$resolved_priors),
       grep("^bargaining_", names(reference@metadata$resolved_priors), value = TRUE)
     )
+    ## A measurement prior is inactive in the historical combined model.
+    if (!isTRUE(reference@stan_data$share_residual_model == 2L) ||
+        !isTRUE(candidate@stan_data$share_residual_model == 2L))
+      shared_prior_names <- setdiff(shared_prior_names,
+        c("prior_sigma_measurement", "prior_log_sigma_measurement_sd"))
     if (identical(bases[[1L]], "relative"))
       shared_prior_names <- setdiff(shared_prior_names,
         grep("^prior_sigma_b_market", shared_prior_names, value = TRUE))
@@ -88,6 +93,16 @@ validate_comparison_contract <- function(fits) {
   paste0(paste(lines, collapse = "\n"), "\n")
 }
 
+## Version 1 normalizes CRLF only. Keep the original byte hash as a separate
+## seal; a canonical identity must never make substantive source edits reusable.
+.bayes_stan_source_identity <- function(source_file) {
+  text <- readChar(source_file, file.info(source_file)$size, useBytes = TRUE)
+  text <- gsub("\r\n", "\n", text, fixed = TRUE)
+  list(version = "lf-v1", sha256 = digest::digest(
+    text, algo = "sha256", serialize = FALSE
+  ))
+}
+
 .bayes_stan_source_contract <- function(metadata, source_code,
                                         require_hmc = TRUE,
                                         backend = "cmdstanr") {
@@ -121,12 +136,32 @@ validate_comparison_contract <- function(fits) {
     stop("Fit provenance has no valid Stan source SHA-256 hash.",
          call. = FALSE)
   }
-  source_file <- tryCatch(.cmdstan_kernel_file(kernel), error = function(e) {
+  source_spec <- metadata$model_spec_version %||%
+    metadata$prior_normalization$model_spec_version
+  source_file <- tryCatch(if (identical(as.integer(source_spec), 14L))
+    .cmdstan_kernel_file(kernel, model_spec_version = 14L) else
+    .cmdstan_kernel_file(kernel), error = function(e) {
     stop("Cannot locate the current Stan source for ", kernel, ": ",
          conditionMessage(e), call. = FALSE)
   })
   current_hash <- digest::digest(file = source_file, algo = "sha256")
-  if (!identical(saved_hash, current_hash)) {
+  current_identity <- .bayes_stan_source_identity(source_file)
+  saved_identity <- metadata$stan_source_identity
+  if (!is.null(saved_identity) &&
+      !identical(saved_identity, current_identity)) {
+    stop("Saved and installed canonical Stan source identities differ for ",
+         kernel, "; evidence is unavailable for this fit.", call. = FALSE)
+  }
+  ## Legacy fits have only a raw SHA. Prove that it seals one of the two
+  ## line-ending serializations of this exact source, then also verify the
+  ## fit's embedded source below. Do not change any saved metadata or seal.
+  raw_code <- readChar(source_file, file.info(source_file)$size, useBytes = TRUE)
+  lf_code <- gsub("\r\n", "\n", raw_code, fixed = TRUE)
+  line_ending_hashes <- vapply(c(lf_code, gsub("\n", "\r\n", lf_code,
+                                             fixed = TRUE)),
+    digest::digest, character(1), algo = "sha256", serialize = FALSE,
+    USE.NAMES = FALSE)
+  if (!saved_hash %in% c(current_hash, line_ending_hashes)) {
     stop("Saved and installed Stan source hashes differ for ", kernel,
          "; evidence is unavailable for this fit.", call. = FALSE)
   }
@@ -149,7 +184,10 @@ validate_comparison_contract <- function(fits) {
     source_file = source_file,
     saved_hash = saved_hash,
     current_hash = current_hash,
-    code_hash = code_hash
+    source_identity = current_identity,
+    line_ending_compatible = !identical(saved_hash, current_hash),
+    code_hash = code_hash,
+    model_spec_version = source_spec
   )
 }
 
@@ -285,7 +323,8 @@ validate_comparison_contract <- function(fits) {
 
 ## Rebuild through the ordinary external cache. Integrity/load failures use a
 ## fresh cache namespace so nutpieR cannot return the rejected cached binary.
-.bayes_nutpie_bridge_rebuild <- function(kernel, fresh = FALSE) {
+.bayes_nutpie_bridge_rebuild <- function(kernel, fresh = FALSE,
+                                         model_spec_version = NULL) {
   base <- file.path(.nutpie_cache_base(), "bridge-evidence")
   if (!dir.exists(base) && !dir.create(base, recursive = TRUE, showWarnings = FALSE)) {
     stop("Cannot create Nutpie evidence restoration cache: ", base, call. = FALSE)
@@ -293,7 +332,8 @@ validate_comparison_contract <- function(fits) {
   if (fresh) base <- tempfile("rebuild-", tmpdir = base)
   old <- options(antitrustBayes.nutpie_cache = base)
   on.exit(options(old), add = TRUE)
-  compiled <- .nutpie_model_for_kernel(kernel)
+  compiled <- if (is.null(model_spec_version)) .nutpie_model_for_kernel(kernel) else
+    .nutpie_model_for_kernel(kernel, model_spec_version)
   lib <- compiled$metadata$lib_path
   hash <- compiled$metadata$lib_hash
   if (!is.character(lib) || length(lib) != 1L || is.na(lib) || !file.exists(lib) ||
@@ -361,11 +401,14 @@ validate_comparison_contract <- function(fits) {
   rebuilt <- is.null(loaded)
   artifact <- native
   if (rebuilt) {
-    model <- .bayes_nutpie_bridge_rebuild(contract$kernel,
+    rebuild_args <- list(kernel = contract$kernel,
       fresh = !identical(reason, "saved_library_unavailable"))
+    if (identical(as.integer(contract$model_spec_version), 14L))
+      rebuild_args$model_spec_version <- 14L
+    model <- do.call(.bayes_nutpie_bridge_rebuild, rebuild_args)
     artifact <- model$metadata
     rebuilt_lib <- artifact$lib_path
-    if (!identical(artifact$source_hash, contract$saved_hash) ||
+    if (!identical(artifact$source_hash, contract$current_hash) ||
         !is.character(rebuilt_lib) || length(rebuilt_lib) != 1L ||
         is.na(rebuilt_lib) || !file.exists(rebuilt_lib) ||
         !identical(artifact$lib_hash, digest::digest(file = rebuilt_lib, algo = "sha256"))) {
@@ -493,7 +536,10 @@ validate_comparison_contract <- function(fits) {
   if (is.null(contract)) contract <- .bayes_cmdstan_evidence_contract(fit)
   fields <- fit@metadata$stan_data_fields
   if (is.null(fields)) {
-    fields <- names(.cmdstan_model_for_kernel(contract$kernel)$variables()$data)
+    model <- if (identical(as.integer(contract$model_spec_version), 14L))
+      .cmdstan_model_for_kernel(contract$kernel, 14L) else
+      .cmdstan_model_for_kernel(contract$kernel)
+    fields <- names(model$variables()$data)
   }
   if (!is.character(fields) || !length(fields) || anyNA(fields) ||
       anyDuplicated(fields) || !all(fields %in% names(fit@stan_data))) {

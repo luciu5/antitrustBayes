@@ -43,14 +43,20 @@
 #' @param leadersPost Optional Stackelberg post-counterfactual leader override.
 #' @param corePost Optional exact-fringe post-counterfactual strategic-core
 #'   override. An empty vector gives a wholly MonCom post state.
-#' @param demand_anchoring Demand baseline for policy simulation. The default
-#'   \code{"observed"} retains the historical observed-share reconstruction.
-#'   \code{"latent_quality"} draws the fitted scoped quality state, normalizes
-#'   latent relative shares while retaining the posterior outside share, and
+#' @param demand_anchoring Demand baseline for policy simulation. If omitted
+#'   (\code{NULL}), estimated fits use \code{"latent_quality"}; supplied
+#'   \code{BayesSpecifiedFit} primitives retain \code{"observed"} anchoring.
+#'   Explicit \code{"observed"} retains the historical observed-share reconstruction.
+#'   \code{"latent_quality"} uses the fitted scoped quality state plus
+#'   recovered period demand for demand-shock fits, excluding independent
+#'   measurement noise. It normalizes latent relative shares while retaining
+#'   the posterior outside share, and
 #'   solves a new pre-policy equilibrium using the observed-share FOC cost
 #'   primitive. It supports output Logit/CES and input Logit. For input Logit,
 #'   the native positive dollar markdown is retained and the observed
 #'   value/procurement-price primitive is held fixed.
+#'   Smooth-cutoff Logit auctions have no latent value-index reconstruction
+#'   and fail explicitly; \code{"observed"} retains their conditional calibration.
 #' @param price_domain Counterfactual rate domain. The default
 #'   \code{"positive"} rejects nonpositive input Logit solutions.
 #'   \code{"real"} retains finite signed rates for simultaneous input Logit
@@ -62,7 +68,7 @@
 #'   use level-rate changes.
 #' @param draw_plan Optional object returned by
 #'   \code{\link{posterior_policy_draws}}. A plan fixes posterior draw,
-#'   quality, and exact-k role realizations so multiple scenarios can reuse one
+#'   quality, period demand, and exact-k role realizations so multiple scenarios can reuse one
 #'   fit-level draw plan.
 #' @param allow_experimental Explicitly allow exploratory Pathfinder draws
 #'   for policy simulation.
@@ -112,6 +118,16 @@ NULL
   }
   if (identical(.Platform$OS.type, "windows")) return(1L)
   as.integer(mc.cores)
+}
+
+## Estimated policy states include posterior quality. Specified primitives have
+## no fitted quality distribution and keep their supplied calibration by default.
+.resolve_demand_anchoring <- function(fit, demand_anchoring = NULL) {
+  if (is.null(demand_anchoring)) {
+    return(if (methods::is(fit, "BayesSpecifiedFit")) "observed" else
+      "latent_quality")
+  }
+  match.arg(demand_anchoring, c("observed", "latent_quality"))
 }
 
 .select_unit_arg <- function(x, idx, unit_id, market_id, n_rows,
@@ -1012,7 +1028,7 @@ NULL
                                 role_mapping = c("mixture", "map", "threshold"),
                                 fixed_k = NULL, role_offset = 0L,
                                 leadersPost = NULL, corePost = NULL,
-                                demand_anchoring = c("observed", "latent_quality"),
+                                demand_anchoring = NULL,
                                 draw_plan = NULL,
                                 price_domain = c("positive", "real"),
                                 allow_experimental = FALSE, ..., .call) {
@@ -1021,10 +1037,15 @@ NULL
   if (!is.null(.native_ordered_structure(object))) {
     .require_real_rate_coordination(price_domain, object@supply_model)
   }
-  demand_anchoring <- match.arg(demand_anchoring)
+  demand_anchoring <- .resolve_demand_anchoring(object, demand_anchoring)
   if (identical(demand_anchoring, "latent_quality")) {
-    if (as.integer(object@supply_model) %in% c(4L, 5L)) {
-      stop("demand_anchoring = 'latent_quality' is unavailable for auction or bargaining conduct.",
+    if (identical(as.character(object@demand_model), "logit") &&
+        identical(as.integer(object@supply_model), 4L) &&
+        identical(.posterior_contract_structure(object), "fringe") &&
+        identical(.posterior_contract_partition(object), "cutoff") &&
+        (!methods::is(object, "BayesSpecifiedFit") ||
+         isTRUE(object@params$use_cutoff))) {
+      stop("Latent-quality smooth-cutoff Logit auctions have no implemented cost-based value-index reconstruction; explicit demand_anchoring = 'observed' retains the conditional calibration.",
            call. = FALSE)
     }
     if (!identical(as.character(object@market_side), "output") &&
@@ -1057,12 +1078,6 @@ NULL
   plan <- draw_plan
   role_mapping_selected <- match.arg(role_mapping,
                                       c("mixture", "map", "threshold"))
-  if (identical(demand_anchoring, "latent_quality") && is.null(plan) &&
-      (!is.null(fixed_k) || !identical(role_mapping_selected, "mixture") ||
-       !identical(as.integer(role_offset), 0L))) {
-    stop("latent-quality simulation currently supports only the automatic mixture role plan; fixed_k, non-mixture role_mapping, and role_offset are unsupported.",
-         call. = FALSE)
-  }
   if (!is.null(plan)) {
     plan <- .lq_validate_plan(object, plan, n_draws = n_draws,
                               role_mapping = role_mapping,
@@ -1071,7 +1086,10 @@ NULL
     draw_indices <- as.integer(plan$draw_indices)
     n_draws <- length(draw_indices)
   } else if (identical(demand_anchoring, "latent_quality")) {
-    plan <- .lq_make_policy_plan(object, draws, n_draws = n_draws)
+    plan <- .lq_make_policy_plan(
+      object, draws, n_draws = n_draws,
+      role_mapping = role_mapping_selected, fixed_k = fixed_k,
+      role_offset = role_offset)
     draw_indices <- as.integer(plan$draw_indices)
     n_draws <- length(draw_indices)
   } else {
@@ -1376,7 +1394,7 @@ setMethod(
            mc.cores = .default_mc_cores(),
            role_mapping = c("mixture", "map", "threshold"), fixed_k = NULL,
            role_offset = 0L, leadersPost = NULL, corePost = NULL,
-           demand_anchoring = c("observed", "latent_quality"),
+           demand_anchoring = NULL,
            draw_plan = NULL, price_domain = c("positive", "real"),
            allow_experimental = FALSE, ...) {
     native_structure <- .native_ordered_structure(object)
@@ -1407,7 +1425,7 @@ bayes_sim <- function(fit, ownerPost = NULL, n_draws = NULL, mcDelta = NULL,
                       role_mapping = c("mixture", "map", "threshold"),
                       fixed_k = NULL, role_offset = 0L, leadersPost = NULL,
                       corePost = NULL,
-                      demand_anchoring = c("observed", "latent_quality"),
+                      demand_anchoring = NULL,
                       draw_plan = NULL, price_domain = c("positive", "real"),
                       allow_experimental = FALSE, ...) {
   native_structure <- .native_ordered_structure(fit)

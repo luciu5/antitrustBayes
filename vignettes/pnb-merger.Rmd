@@ -52,6 +52,14 @@ We estimate the Bayesian logit demand model under four supply assumptions
 using the default joint Gaussian share/margin likelihood with collapsed,
 market-specific persistent quality and estimated cross-equation correlation:
 Nash-Bertrand, Monopolistic Competition, Cournot, and Second-Score Auction.
+New relative-share fits also estimate period demand shocks and independent
+measurement precision. The measurement SD has a configurable Lognormal prior
+with median .10 and log SD .5. Counterfactuals retain persistent quality plus
+the recovered period demand realization, while measurement noise remains in
+the observation model. Select `share_residual_model = "combined"` when fitting
+the original one-component residual model. Existing saved fits keep their
+original interpretation and model weights; updated estimates require new fits
+and evidence.
 Nash bargaining is available in the general API, but is not included in this
 retail-deposit candidate set because its institutional interpretation is less
 direct.

@@ -100,7 +100,7 @@
       stop("Collapsed quality fit has malformed Stan field 'likelihood_mode'.",
            call. = FALSE)
     }
-    if (as.integer(likelihood_mode) == 3L) {
+    if (as.integer(likelihood_mode) == 3L && !.posterior_demand_shock_model(fit)) {
       stop("posterior_quality() requires an active Gaussian share likelihood; ",
            "margin-only fits are not supported.", call. = FALSE)
     }
@@ -744,7 +744,15 @@
     sigma_by_market <- sigma_by_market[draw_indices, , drop = FALSE]
     if (is.null(realized_k)) prediction <- prediction[draw_indices, , drop = FALSE]
   }
-  list(rho = rho, sigma = sigma, sigma_by_market = sigma_by_market,
+  rho_by_market <- if (.posterior_demand_shock_model(fit) &&
+      isTRUE(data$use_market_resid_scale == 1L)) {
+    z <- .posterior_quality_matrix(draws$rho_market, n_market, "rho_market")
+    if (nrow(z) != parsed$n_draw || any(!is.finite(z)) || any(abs(z) >= 1))
+      stop("Unusable market-specific Gaussian correlation draws.", call. = FALSE)
+    z[draw_indices, , drop = FALSE]
+  } else matrix(rho, nrow = length(draw_indices), ncol = n_market)
+  list(rho = rho, rho_by_market = rho_by_market,
+       sigma = sigma, sigma_by_market = sigma_by_market,
        prediction = prediction,
        idx = idx, y = as.numeric(y), realized_k = realized_k)
 }
@@ -970,7 +978,14 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
       if (!is.finite(tau_sq))
         stop("Posterior draw ", draw,
              " has an unusable sigma_b_strat squared.", call. = FALSE)
-      if (isTRUE(parsed$relative)) {
+      if (.posterior_demand_shock_model(fit) && isTRUE(fit@stan_data$likelihood_mode == 3L)) {
+        for (block in seq_along(parsed$blocks)) {
+          units <- seq.int(parsed$block_starts[[block]], length.out = parsed$blocks[[block]])
+          q <- stats::rnorm(length(units), sd = parsed$tau[[draw]])
+          quality[row, units] <- q - mean(q)
+          sds[row, units] <- parsed$tau[[draw]] * sqrt(1 - 1 / length(units))
+        }
+      } else if (isTRUE(parsed$relative)) {
         sigma_share <- if (is.null(parsed$sigma_share_market))
           rep(parsed$sigma[[draw]], length(parsed$y)) else
           parsed$sigma_share_market[draw, parsed$market]
@@ -979,9 +994,9 @@ posterior_quality <- function(fit, n_draws = NULL, seed = NULL, draws = NULL,
         if (!is.null(joint)) {
           idx <- joint$idx
           sigma_margin <- joint$sigma_by_market[row, parsed$market[idx]]
-          residual[idx] <- residual[idx] - joint$rho[[row]] * sigma_share[idx] /
+          residual[idx] <- residual[idx] - joint$rho_by_market[row, parsed$market[idx]] * sigma_share[idx] /
             sigma_margin * (joint$y[idx] - log(joint$prediction[row, idx] + 1e-9))
-          variance[idx] <- variance[idx] * (1 - joint$rho[[row]]^2)
+          variance[idx] <- variance[idx] * (1 - joint$rho_by_market[row, parsed$market[idx]]^2)
         }
         arguments <- list(residual = residual, variance = variance,
           quality_index = parsed$quality,

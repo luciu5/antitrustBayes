@@ -66,7 +66,7 @@ test_that("fringe cutoff scales remain prespecified and are carried into data", 
   )
   expect_equal(d$cutoff_scale, .37)
   expect_equal(attr(d, "cutoff_scale"), .37)
-  expect_equal(attr(d, "model_spec_version"), 14L)
+  expect_equal(attr(d, "model_spec_version"), 15L)
 })
 
 test_that("singleton CES common vectors retain one-dimensional Stan shapes", {
@@ -340,7 +340,7 @@ test_that("specified Stackelberg simulation uses the native one-step route", {
   expect_identical(native@diagnostics$bayes_reconstruction$normalization$mode,
                    "supplied_draws")
   expect_equal(native@diagnostics$bayes_reconstruction$normalization$model_spec_version,
-               14L)
+               15L)
   out <- bayes_sim(
     fit, ownerPost = antitrust::counterfactual(
       costs = stats::setNames(.02, "p1")

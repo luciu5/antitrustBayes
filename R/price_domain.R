@@ -58,7 +58,9 @@
   for (model in states) {
     for (pre in c(TRUE, FALSE)) {
       prices <- as.numeric(if (pre) model@pricePre else model@pricePost)
-      active <- if (pre) rep(TRUE, length(prices)) else as.logical(model@subset)
+      active <- if (pre) attr(model, "antitrust_subset_pre", exact = TRUE) else
+        as.logical(model@subset)
+      if (is.null(active)) active <- rep(TRUE, length(prices))
       if (length(active) != length(prices) || anyNA(active) || !any(active)) {
         stop("Simulated input Logit model has an invalid active-product map.",
              call. = FALSE)

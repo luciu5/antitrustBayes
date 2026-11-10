@@ -1,0 +1,7 @@
+"id","Max_Rhat","Min_Bulk_ESS","Divergences","Treedepth_Hits","Active_parameters","Pass"
+"input_logit_snapshot__combined",1.00598837808899,840.309891628829,0,0,6,TRUE
+"input_logit_snapshot__demand_shock",1.00435310344976,935.127570458094,0,0,7,TRUE
+"input_logit_history__combined",1.00326570990295,840.162536033253,0,0,6,TRUE
+"input_logit_history__demand_shock",1.00602238234258,1126.59000501848,0,0,7,TRUE
+"output_ces_panel__combined",1.00803390471798,573.007958279584,0,0,12,TRUE
+"output_ces_panel__demand_shock",1.0093308329288,708.906959129355,0,0,13,TRUE

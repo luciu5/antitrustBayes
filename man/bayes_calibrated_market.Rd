@@ -76,7 +76,7 @@ product. If omitted, costs are drawn independently of conduct.}
 of length \code{J} summing to one. Supplying it skips the Dirichlet draw.}
 
 \item{outside_share}{Baseline outside-good share, a finite scalar strictly
-inside \code{(0, 1)}, default 0.20. Subsequent calls to \code{\link[=bayes_resolve_market]{bayes_resolve_market()}}
+inside \verb{(0, 1)}, default 0.20. Subsequent calls to \code{\link[=bayes_resolve_market]{bayes_resolve_market()}}
 let the outside share respond to changed costs and quality.}
 }
 \value{

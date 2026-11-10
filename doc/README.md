@@ -1,10 +1,29 @@
 # Development and evidence index
 
+The 2026-11-08 total/fraction extraction closeout preserves the economic quality-SD alias
+through nested conditional-quality recovery. Focused `posterior-quality` and
+`selective-extraction` fixtures verify distinct economic/total scales and
+nonzero-quality no-op policies without changing targets or specification 14.
+The downstream installation includes additional uncommitted source changes;
+its recorded Git SHA alone does not reproduce that build. See the mergerBayes
+execution ledger for this closeout's source/build provenance and scope.
+
 Opt-in [anchored Logit price scaling](validation/anchored_price_standardization.md)
 has deterministic source checks; installed integration and empirical refits
 remain pending the shared-library dependency refresh.
 
-Current package version is `0.3.0`, model specification 14. Relative-share
+Current package version is `0.3.0.9002`, model specification 15. New Gaussian
+relative-share Logit/CES fits default to persistent quality plus period demand
+and independent measurement error. Counterfactuals retain the jointly recovered
+quality, period demand and role states. See the
+[demand-state contract](share_residual_demand_state.md).
+Specification-14 fits retain their original model and verified frozen kernels;
+new-model inference/evidence is required before adopting updated model weights.
+Estimated-fit counterfactuals default to fitted posterior demand and role states;
+observed-share anchoring is an explicit alternative. Specified fits retain
+their supplied-state/calibration route. See the
+[counterfactual default contract and local verification](validation/posterior_policy_default_20261108.md).
+The historical simulation-default change does not invalidate compatible inference. Relative-share
 Option B for Logit/CES was validated 2026-10-23 at version `0.2.0.9009`.
 See the bounded
 [implementation results](validation/relative_share_implementation/README.md),
@@ -19,6 +38,40 @@ and results remain the detailed sources; historical checklists do not select wor
 Update this index when a completed task changes a status or verification route.
 
 ## Current development
+
+The specification-15 package implementation includes the estimated measurement
+prior, four production kernels, version-4 complete-demand policy plans and an
+explicit original-model route. Six bounded known-truth fits completed with zero
+divergences/depth hits, maximum R-hat 1.00934 and minimum bulk ESS 573; all
+2,200 draw/market-year policies passed independent FOCs and no-op checks.
+The ordinary non-HMC suite passed, with optional sampling skips and retained
+warnings. See the [integration evidence](validation/residual_model_integration_results.md)
+for native likelihood checks, sampler diagnostics, initial reporting failures,
+saved-fit compatibility and package-check results. No full paper rerun or new
+model probabilities are implied by this validation.
+
+The completed [PNB residual and variance experiments](validation/share_residual_experiment_record_20261109.md)
+are recorded for comparison; none selects an unfinished runner. Inverse
+institution-assets variance substantially improved snapshot baseline shares;
+hierarchical year effects improved historical temporal fit. These corrections
+already enter the pilots' conditional quality recovery and both equilibria.
+Production adoption remains separate, including revision of the recorded
+hierarchy prior's heavy tail.
+
+The [bounded measurement-prior diagnostic](validation/pnb_measurement_prior_diagnostic_20261109.md)
+completed both new Bertrand snapshot/history fits with a prior on the previously
+fixed measurement SD. Both had zero divergences/depth hits and adequate bounded
+mixing; large-bank mean errors were at most .30/.59 percentage points, with
+little margin change. All 200 new policies and all 800 comparison states were
+valid. Snapshot precision remains prior-like; history shifts toward .079 but
+the variance split remains prior-dependent. No production defaults, model
+probabilities or manuscript estimates were changed. See the report for source
+seals, independent checks, the reporting-only correction and replay commands.
+
+The [public installation and supplied-state quick start](../README.md#installation)
+separates package installation from optional estimation toolchains. Saved-fit
+evidence accepts only proven LF/CRLF source portability; raw seals, substantive
+source identity, data, priors and model-specification checks remain enforced.
 
 Start with the requested behavior, current source/help, and its focused tests.
 Use [package usage](../README.md) for the public interface and
@@ -41,7 +94,7 @@ do not retroactively change saved fits or establish universal HMC improvement.
 `antitrust` owns common structural/counterfactual machinery; `coordination` owns
 fringe/Stackelberg models. Read [DESCRIPTION](../DESCRIPTION) for dependency
 minima and [CI](../.github/workflows/qa.yml) for dependency selection and the
-canonical R version. Current minima are `antitrust >= 0.99.43`,
+canonical R version. Current minima are `antitrust >= 0.99.43.9000`,
 `coordination >= 0.1.0`, and `cmdstanr >= 0.9.0`; optional policy integration
 uses `trade >= 0.9.0`. Ordinary development CI resolves antitrust/trade `master`
 and coordination `main`, records their SHAs, and pins CmdStanR. Release runs
@@ -121,7 +174,7 @@ checklists in the historical umbrella and recovery notes below.
 | --- | --- | --- |
 | Relative-share demand (Option B) | Implemented as the Gaussian default for Logit/CES, including rho, sampled/collapsed persistent quality, derived market-year intercepts, policy reconstruction and normalized evidence. Bounded validation: 5,903 native checks; 1,092 actual M4T4 structural/policy checks; 26 complete paired-backend fits and 78 finite bridge repetitions across the original complete cases and a separately labeled finite-error CES panel. Original noiseless CES M4T4 stress remains incomplete. Full opt-in suite: 7,619 passing expectations, no failures/errors/skips, 30 retained warnings. Package check: no errors/warnings, one existing NOTE. Broad recovery and downstream paper adoption remain separate. | [contract](relative_share_likelihood.md), [executed results and limitations](validation/relative_share_implementation/README.md), [production validation runner](validation/relative_share_backend_validation.R), [earlier prototype](validation/option_b_relative_shares/README.md) |
 | Market/outside-share rotation | Implemented experimental coordinates with bounded sampler evidence; scaling and broader equivalence remain incomplete. | [rotation results](market_s0_rotation_results.md) |
-| Latent-quality policies | Implemented; frozen observed/latent benchmark completed. Broader statistical coverage is unestablished. | [policy results](latent_quality_policy_results.md), [usage](statistical_toolkit_usage.md) |
+| Posterior-state policies | Default for estimated fits; explicit observed-share calibration remains available. Fixed plans align parameters, recovered quality and roles across equilibria and scenarios. The frozen historical observed/latent benchmark and broader statistical coverage remain distinct. | [current default contract](validation/posterior_policy_default_20261108.md), [historical policy results](latent_quality_policy_results.md), [usage](statistical_toolkit_usage.md) |
 | Hybrid margins | Frozen seven-fixture benchmark completed; outlier/predictive evidence remains pending. | [hybrid results](collapsed_gaussian_hybrid_results.md) |
 | Model universe | Public descriptors and evidence aggregation implemented; restricted-family policy BMA is outside that interface. | [usage](statistical_toolkit_usage.md), [design contract](model_universe_specification.md) |
 | Hierarchy priors and recovery | Approved defaults and bounded comparisons recorded; existing fits retain frozen priors. | [default history](default_model_history.md), [paired results](validation/hierarchical_prior_recovery_results.md) |

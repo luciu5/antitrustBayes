@@ -57,9 +57,10 @@
   fields
 }
 
-.nutpie_model_for_kernel <- function(kernel) {
+.nutpie_model_for_kernel <- function(kernel, model_spec_version = NULL) {
   .nutpie_require()
-  source <- .cmdstan_kernel_file(kernel)
+  source <- if (is.null(model_spec_version)) .cmdstan_kernel_file(kernel) else
+    .cmdstan_kernel_file(kernel, model_spec_version)
   source_hash <- digest::digest(file = source, algo = "sha256")
   version <- as.character(utils::packageVersion("nutpieR"))
   key <- digest::digest(list(source_hash, version, R.version$platform), algo = "sha256")

@@ -23,7 +23,7 @@
   role_offset = 0L,
   leadersPost = NULL,
   corePost = NULL,
-  demand_anchoring = c("observed", "latent_quality"),
+  demand_anchoring = NULL,
   draw_plan = NULL,
   price_domain = c("positive", "real"),
   allow_experimental = FALSE,
@@ -47,7 +47,7 @@ bayes_sim(
   role_offset = 0L,
   leadersPost = NULL,
   corePost = NULL,
-  demand_anchoring = c("observed", "latent_quality"),
+  demand_anchoring = NULL,
   draw_plan = NULL,
   price_domain = c("positive", "real"),
   allow_experimental = FALSE,
@@ -107,18 +107,24 @@ named by simulation unit). Fringe permits zero.}
 \item{corePost}{Optional exact-fringe post-counterfactual strategic-core
 override. An empty vector gives a wholly MonCom post state.}
 
-\item{demand_anchoring}{Demand baseline for policy simulation. The default
-\code{"observed"} retains the historical observed-share reconstruction.
-\code{"latent_quality"} draws the fitted scoped quality state, normalizes
-latent relative shares while retaining the posterior outside share, and
+\item{demand_anchoring}{Demand baseline for policy simulation. If omitted
+(\code{NULL}), estimated fits use \code{"latent_quality"}; supplied
+\code{BayesSpecifiedFit} primitives retain \code{"observed"} anchoring.
+Explicit \code{"observed"} retains the historical observed-share reconstruction.
+\code{"latent_quality"} uses the fitted scoped quality state plus
+recovered period demand for demand-shock fits, excluding independent
+measurement noise. It normalizes latent relative shares while retaining
+the posterior outside share, and
 solves a new pre-policy equilibrium using the observed-share FOC cost
 primitive. It supports output Logit/CES and input Logit. For input Logit,
 the native positive dollar markdown is retained and the observed
-value/procurement-price primitive is held fixed.}
+value/procurement-price primitive is held fixed.
+Smooth-cutoff Logit auctions have no latent value-index reconstruction
+and fail explicitly; \code{"observed"} retains their conditional calibration.}
 
 \item{draw_plan}{Optional object returned by
 \code{\link{posterior_policy_draws}}. A plan fixes posterior draw,
-quality, and exact-k role realizations so multiple scenarios can reuse one
+quality, period demand, and exact-k role realizations so multiple scenarios can reuse one
 fit-level draw plan.}
 
 \item{price_domain}{Counterfactual rate domain. The default

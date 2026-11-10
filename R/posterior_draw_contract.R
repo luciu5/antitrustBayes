@@ -41,6 +41,28 @@
   "none"
 }
 
+## Missing residual metadata denotes the frozen historical combined model.
+.posterior_demand_shock_model <- function(fit) {
+  if (methods::is(fit, "BayesSpecifiedFit")) return(FALSE)
+  values <- list(fit@metadata$share_residual_model,
+    attr(fit@stan_data, "share_residual_model", exact = TRUE),
+    fit@stan_data$share_residual_model)
+  values <- values[!vapply(values, is.null, logical(1))]
+  if (!length(values)) return(FALSE)
+  modes <- vapply(values, function(value) {
+    if (length(value) != 1L || is.na(value))
+      stop("Malformed share_residual_model metadata.", call. = FALSE)
+    if (is.numeric(value)) value <- switch(as.character(value),
+      `1` = "combined", `2` = "demand_shock", "invalid")
+    if (!value %in% c("combined", "demand_shock"))
+      stop("Malformed share_residual_model metadata.", call. = FALSE)
+    value
+  }, character(1))
+  if (length(unique(modes)) != 1L)
+    stop("Inconsistent share_residual_model metadata.", call. = FALSE)
+  identical(modes[[1L]], "demand_shock")
+}
+
 .posterior_contract_rho_active <- function(fit) {
   if (methods::is(fit, "BayesSpecifiedFit")) return(FALSE)
   isTRUE(fit@stan_data$use_rho == 1L) &&
@@ -217,6 +239,24 @@
     if (quality == "collapsed" && isTRUE(fit@stan_data$use_market_resid_scale == 1L))
       required <- c(required, "sigma_share_market")
   }
+  if (.posterior_demand_shock_model(fit) && purpose %in%
+      c("policy_plan", "posterior_quality", "posterior_predictive")) {
+    required <- c(required, "sigma_share", "sigma_demand_shock", "sigma_measurement",
+                  "rho_demand_shock")
+    if (isTRUE(fit@stan_data$use_market_resid_scale == 1L))
+      required <- c(required, "sigma_demand_shock_market", "rho_market",
+                    "sigma_share_market", "sigma_margin_market")
+    if (!isTRUE(fit@stan_data$likelihood_mode == 2L))
+      required <- c(required, "sigma_margin", if (native)
+        "posterior_component_prob" else "pred_marginNormInv")
+    ## Sampled q still needs the actual role's margin mean when recovering d.
+    if (.posterior_contract_rho_active(fit) && quality == "sampled") {
+      required <- c(required, "sigma_margin", if (native)
+        "posterior_component_prob" else "pred_marginNormInv")
+      if (isTRUE(fit@stan_data$use_market_resid_scale == 1L))
+        required <- c(required, "sigma_margin_market")
+    }
+  }
   required <- unique(required)
   optional <- setdiff(unique(optional), required)
   available <- .posterior_fit_draw_names(fit)
@@ -306,6 +346,14 @@
       value <- stats::plogis(value)
     }
     out[[i]] <- value
+  }
+  if (isTRUE(contract$total_fraction_scale) &&
+      "sigma_b_strat" %in% names(out)) {
+    ## The canonical sigma_b_strat above is already the economic quality SD.
+    ## Keep its explicit alias when forwarding this list to quality recovery:
+    ## supplied total/fraction draws otherwise interpret that historical name
+    ## as the raw total scale and require its fraction logit a second time.
+    out$sigma_b_strat_economic <- out$sigma_b_strat
   }
   out
 }

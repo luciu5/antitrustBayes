@@ -2,7 +2,7 @@
 
 ## Start with the current task
 
-- Use `main`, the repository default branch, for routine work. The `refactor` migration is integrated; do not recreate that branch. Start any necessary isolated task branch from `main`.
+- Routine implementation may be performed directly on `main`, the maintained default branch. The `refactor` migration is integrated; do not recreate that branch. Start any necessary isolated task branch from `main`.
 
 - Read [the documentation index](doc/README.md), then only the topic documents
   needed for the requested change. It owns the current operational agenda;

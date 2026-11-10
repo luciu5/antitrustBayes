@@ -53,17 +53,12 @@ bayes_est(
   nutpie_options = list(),
   share_basis = c("relative", "absolute"),
   price_standardization = NULL,
+  share_residual_model = c("auto", "demand_shock", "combined"),
   ...
 )
 }
 \arguments{
 \item{prices}{Numeric vector of product prices. Must be positive.}
-
-\item{price_standardization}{Optional \code{list(center = ..., scale = ...)}
-fixing the price center and positive scale for relative-share Logit.
-The default uses each fit's price mean and SD. Supplying the same target-snapshot
-values across fits holds the economic slope prior scale fixed and requires
-a distinct fit/cache identity. CES and absolute-share models require \code{NULL}.}
 
 \item{quantities}{Numeric vector of product quantities (e.g., units sold,
 deposits). Must be positive. Within each market-year, the package
@@ -146,7 +141,11 @@ total-scale/variance-fraction rotation available with Gaussian shares,
 collapsed quality, and a common residual scale. In that mode the raw Stan
 fields \code{sigma_b_strat} and \code{log_sigma_share} are sampler
 coordinates; use \code{sigma_b_strat_economic} and \code{sigma_share} for
-the reconstructed economic scales.}
+the reconstructed economic scales.
+In the demand-shock model these sampler coordinates rotate persistent
+quality and demand-shock scales; \code{sigma_share} includes independent
+measurement variance as well. \code{sigma_demand_shock} is the recovered
+period-demand SD.}
 
 \item{market_intercept_parameterization}{For \code{share_basis = "absolute"},
 \code{NULL} resolves to \code{"sampled"}; \code{"collapsed"} integrates
@@ -328,6 +327,28 @@ intercept prior. \code{"absolute"} retains the absolute log-share model.
 Evidence comparisons must use the same basis. Relative shares do not support
 observation-level LOO.}
 
+\item{price_standardization}{Optional \code{list(center = ..., scale = ...)}
+fixing the price center and positive scale for relative-share Logit.
+The default \code{NULL} uses this fit's price mean and SD. Supplying the
+same target-snapshot values across fits holds the prior's economic slope
+scale fixed. This changes the prior relative to within-sample scaling and
+requires a distinct fit/cache identity; it does not turn information-set
+comparisons into sequential Bayesian updating. CES and absolute-share
+models currently require \code{NULL}.}
+
+\item{share_residual_model}{Share-error decomposition. The default
+\code{"auto"} uses \code{"demand_shock"} for Gaussian relative shares
+and \code{"combined"} for absolute shares. The demand-shock model retains
+persistent quality plus period demand in policy states, with independent
+measurement error in observations. Its measurement SD has prior
+\code{log(m) ~ Normal(log(prior_sigma_measurement),
+prior_log_sigma_measurement_sd)}, default median .10 and log SD .5.
+The existing share-residual prior then governs period-demand SD and the
+correlation prior governs demand-margin correlation. \code{"combined"}
+retains the original one-component residual model. The new decomposition
+requires Gaussian relative shares and Gaussian margins; its separate
+transitory variances can remain prior-dependent.}
+
 \item{...}{Additional arguments (currently unused).}
 }
 \value{
@@ -414,7 +435,8 @@ log share-error and log margin-error heterogeneity SDs, only when
 \item{\code{prior_sigma_resid_market_shape}, \code{prior_sigma_resid_market_rate}}{
 Gamma shape/rate (defaults 2 and 7). Densities are normalized for evidence.}
 \item{\code{prior_sigma_share}}{Lognormal center for log-share error SD
-(default 0.5).}
+(default 0.5), applied to economic demand-shock SD under the
+demand-shock decomposition and combined residual SD otherwise.}
 \item{\code{prior_sigma_margin}}{Lognormal center for log inverse-margin
 error SD (default 0.75).}
 \item{\code{prior_sigma_meanval_strat}}{Scale parameter for the
@@ -430,6 +452,10 @@ gives an arithmetic prior mean of 20 percent.}
 \item{\code{s0_prior_sd}}{Prior SD for the outside share on the logit
 scale (default 0.4562340). The default prior's 5th percentile is
 10 percent.}
+\item{\code{prior_sigma_measurement}}{Median measurement SD in the
+demand-shock model (default 0.10). Its primitive log SD has a Normal prior.}
+\item{\code{prior_log_sigma_measurement_sd}}{SD of the Normal prior on
+log measurement SD (default 0.5).}
 \item{\code{prior_log_sigma_share_sd}}{Prior SD for the log share-error
 scale (default 0.5).}
 \item{\code{prior_log_sigma_margin_sd}}{Prior SD for the log

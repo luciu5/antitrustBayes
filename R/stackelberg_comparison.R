@@ -86,11 +86,13 @@
 }
 .bayes_validate_bridge <- function(fits) {
   for (fit in fits) {
+    validate_fit_spec(fit)
     dat <- fit@stan_data
     normalization <- fit@metadata$prior_normalization
     if (!is.list(normalization) ||
         !identical(normalization$mode, "native_stan_normalized") ||
-        !isTRUE(normalization$model_spec_version == .antitrust_bayes_model_spec_version)) {
+        !isTRUE(normalization$model_spec_version ==
+          attr(fit@stan_data, "model_spec_version", exact = TRUE))) {
       stop("Marginal likelihood requires native normalized current-specification fits. Refit older or unverified objects.")
     }
     if (isTRUE(dat$use_s0_market_pool == 1L) &&

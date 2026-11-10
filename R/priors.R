@@ -9,8 +9,16 @@
 #' one half and two, respectively.
 #'
 #' @details With the default relative-share basis, market-year utility intercepts
-#'   are derived calibration quantities without priors. The intercept prior
-#'   entries below apply only to explicit absolute-share fits.
+#'   are derived calibration quantities without priors. New relative Gaussian
+#'   fits separate period demand from independent measurement error, with
+#'   \code{prior_sigma_measurement = .10} and
+#'   \code{prior_log_sigma_measurement_sd = .5} specifying a Normal prior on
+#'   log measurement SD. These fields stay fixed across manifests and are
+#'   inactive under \code{share_residual_model = "combined"}. The existing
+#'   share-residual prior governs period-demand SD in the new model.
+#'   The two transitory variances need not be separately identified.
+#'
+#'   The intercept prior entries below apply only to explicit absolute-share fits.
 #'   In that basis every Logit or CES market has a free inside-versus-outside utility
 #'   intercept (the outside good has utility zero).
 #'   A single market uses a normalized Normal(0, 1) prior directly, with no
@@ -48,7 +56,10 @@
 #'   the historical Half-Normal mean 0.35 * sqrt(2/pi).
 #'   Quality SD retains its positive-truncated Normal centered at 1, and
 #'   share/margin error SDs retain Lognormal priors; these already have
-#'   modes away from zero. Fixed prior scales on signed coefficients are
+#'   modes away from zero. In the demand-shock decomposition the existing share
+#'   prior applies to economic shock SD. Independent measurement SD has median
+#'   \code{prior_sigma_measurement = 0.10}; its primitive log SD has a Normal
+#'   prior with SD \code{prior_log_sigma_measurement_sd = 0.5} in every manifest. Fixed prior scales on signed coefficients are
 #'   hyperparameters, not sampled SDs, and remain unchanged.
 #' @examples
 #' priors <- bayes_prior_manifest()
@@ -68,6 +79,8 @@ bayes_prior_manifest <- function(name = c("baseline", "tight", "diffuse")) {
   list(
     prior_sigma_share = 0.5,
     prior_log_sigma_share_sd = 0.5,
+    prior_sigma_measurement = 0.10,
+    prior_log_sigma_measurement_sd = 0.5,
     prior_sigma_margin = 0.75,
     prior_log_sigma_margin_sd = 1 * multiplier,
     prior_sigma_meanval_strat = 1,
@@ -217,25 +230,19 @@ resolve_prior_manifest <- function(prior_manifest, priors) {
   priors
 }
 
+.bayes_package_description <- function() {
+  tryCatch({
+    path <- getNamespaceInfo(asNamespace("antitrustBayes"), "path")
+    as.list(read.dcf(file.path(path, "DESCRIPTION"))[1L, ])
+  }, error = function(e) list())
+}
+
 package_provenance <- function(data, prior_manifest, model_prior = NA_real_) {
-  commit <- Sys.getenv("ANTITRUSTBAYES_COMMIT", unset = NA_character_)
-  if (is.na(commit)) {
-    commit <- tryCatch(
-      system2("git", c("rev-parse", "HEAD"), stdout = TRUE, stderr = FALSE)[1],
-      error = function(e) NA_character_,
-      warning = function(w) NA_character_
-    )
-  }
-  package_version <- tryCatch(
-    as.character(utils::packageVersion("antitrustBayes")),
-    error = function(e) {
-      description <- tryCatch(
-        utils::packageDescription("antitrustBayes"),
-        error = function(e) NULL
-      )
-      if (!is.null(description$Version)) description$Version else "development"
-    }
-  )
+  description <- .bayes_package_description()
+  commit <- description$RemoteSha %||% description$GithubSHA1 %||% NA_character_
+  if (length(commit) != 1L || is.na(commit) ||
+      !grepl("^[0-9a-fA-F]{40}$", commit)) commit <- NA_character_
+  package_version <- description$Version %||% "development"
   list(
     data_hash = digest::digest(data, algo = "sha256"),
     prior_manifest = prior_manifest,

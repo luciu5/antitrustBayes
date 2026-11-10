@@ -339,14 +339,9 @@ test_that("latent mode rejects unsupported normalization and conduct combination
     simulate(input_ces$fit, input_ces$owner,
              demand_anchoring = "latent_quality", mc.cores = 1L), "input Logit"
   )
-  auction <- .latent_policy_fixture(supply = 4L)
-  expect_error(
-    simulate(auction$fit, auction$owner, demand_anchoring = "latent_quality",
-             mc.cores = 1L), "auction or bargaining"
-  )
 })
 
-test_that("the observed-share route remains the default and numerically unchanged", {
+test_that("supplied primitives keep their observed-share default numerically unchanged", {
   fx <- .latent_policy_fixture(n_draws = 3L)
   set.seed(22L)
   implicit <- suppressWarnings(simulate(

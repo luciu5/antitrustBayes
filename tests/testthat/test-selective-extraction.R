@@ -47,6 +47,78 @@ if (!methods::isClass("selective_contract_stanfit")) {
   fit
 }
 
+test_that("selective total/fraction draws preserve economic quality across nested policy recovery", {
+  ## Material failure: the adapter's economic SD used to lose its explicit
+  ## alias, so nested recovery mistook it for the raw total scale and failed
+  ## (or could condition quality on the wrong variance). Unlike a full-list
+  ## mock, this backend double returns only requested Stan columns.
+  fit <- .selective_fit(quality = "collapsed")
+  fit@stan_data$N <- 3L
+  fit@stan_data$log_shareIn <- c(-.8, -.9, -1)
+  fit@stan_data$share_likelihood <- 2L
+  fit@stan_data$likelihood_mode <- 2L
+  fit@stan_data$quality_scale_parameterization <- 2L
+  attr(fit@stan_data, "model_spec_version") <- .antitrust_bayes_model_spec_version
+  attr(fit@stan_data, "quality_scope") <- "global"
+  fit@metadata$quality_scale_parameterization_effective <- "total_fraction"
+  fit@metadata$quality_scope <- "global"
+  fit@metadata$share_likelihood <- "gaussian"
+  fit@metadata$model_spec_version <- .antitrust_bayes_model_spec_version
+  mu <- rbind(c(-.9, -.75, -.85), c(-.7, -.95, -1.2))
+  tau <- c(.6, .3)
+  sigma <- c(.4, .5)
+  total <- sqrt(tau^2 + sigma^2)
+  fraction_logit <- 2 * (log(sigma) - log(tau))
+  columns <- c("sigma_b_strat", "share_mean[3]", "a_market[1]",
+    "log_sigma_share", "s0_prob[1]", "sigma_b_strat_economic",
+    "share_mean[1]", "sigma_share", "share_mean[2]")
+  values <- array(0, c(2L, 1L, length(columns)),
+    dimnames = list(iteration = 1:2, chain = "1", variable = columns))
+  values[, , "sigma_b_strat"] <- total
+  values[, , "log_sigma_share"] <- fraction_logit
+  values[, , "sigma_b_strat_economic"] <- tau
+  values[, , "sigma_share"] <- sigma
+  values[, , "a_market[1]"] <- 6
+  values[, , "s0_prob[1]"] <- .2
+  for (j in 1:3) values[, , paste0("share_mean[", j, "]")] <- mu[, j]
+  native <- structure(list(draws_array = values), class = "NutpieFit")
+  requested <- list()
+  fit@stanfit <- structure(list(
+    metadata = function() list(stan_variables = unique(sub("\\[.*$", "", columns))),
+    draws = function(variables = NULL, format = "draws_array") {
+      requested[[length(requested) + 1L]] <<- variables
+      .bayes_backend_draws(native, variables, format)
+    }), class = c("CmdStanMCMC", "CmdStanFit"))
+
+  extracted <- .posterior_extract(fit, "policy_plan")
+  expect_equal(extracted$sigma_b_strat, tau)
+  expect_equal(extracted$sigma_b_strat_economic, tau)
+  expect_identical(.posterior_canonical_draws(extracted, fit), extracted)
+  got <- posterior_quality(fit, seed = 47L)
+  raw <- posterior_quality(fit, seed = 47L, draws = list(share_mean = mu,
+    sigma_b_strat = total, log_sigma_share = fraction_logit, sigma_share = sigma))
+  expect_equal(got$draws, raw$draws, tolerance = 1e-14)
+  centered <- diag(3L) - matrix(1 / 3, 3L, 3L)
+  for (i in 1:2) {
+    expected_mean <- tau[i]^2 / (tau[i]^2 + sigma[i]^2) *
+      as.numeric(centered %*% (fit@stan_data$log_shareIn - mu[i, ]))
+    expected_sd <- sqrt(2 / 3 * tau[i]^2 * sigma[i]^2 / (tau[i]^2 + sigma[i]^2))
+    expect_equal(as.numeric(got$conditional_means[i, ]), expected_mean, tolerance = 1e-12)
+    expect_equal(as.numeric(got$conditional_sds[i, ]), rep(expected_sd, 3L), tolerance = 1e-12)
+  }
+  plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 47L)
+  prepared <- suppressWarnings(posterior_policy_models(fit, draw_plan = plan))
+  result <- suppressWarnings(simulate(fit, fit@data$group, draw_plan = plan, mc.cores = 1L))
+  expect_equal(nrow(prepared$failures), 0L)
+  expect_equal(as.integer(result@n_valid), 2L)
+  expect_gt(max(abs(plan$quality_draws)), 0)
+  expect_equal(result@price_change$m1, matrix(0, 2L, 3L), ignore_attr = TRUE, tolerance = 1e-8)
+  expect_true(all(vapply(requested, function(x) "sigma_b_strat_economic" %in% x,
+                         logical(1))))
+  expect_false(any(vapply(requested, function(x)
+    any(c("sigma_b_strat", "log_sigma_share") %in% x), logical(1))))
+})
+
 test_that("policy plans use one selected union and normalize s0 aliases", {
   fit <- .selective_fit()
   draws <- .selective_draws("s0")

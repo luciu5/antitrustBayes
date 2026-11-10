@@ -111,6 +111,18 @@
 #'   invalid for Gaussian residuals.
 #' @param share_likelihood Share residual family: \code{"gaussian"}
 #'   (default) or \code{"student_t"}.
+#' @param share_residual_model Share-error decomposition. The default
+#'   \code{"auto"} uses \code{"demand_shock"} for Gaussian relative shares
+#'   and \code{"combined"} for absolute shares. The demand-shock model retains
+#'   persistent quality plus period demand in policy states, with independent
+#'   measurement error in observations. Its measurement SD has prior
+#'   \code{log(m) ~ Normal(log(prior_sigma_measurement),
+#'   prior_log_sigma_measurement_sd)}, default median .10 and log SD .5.
+#'   The existing share-residual prior then governs period-demand SD and the
+#'   correlation prior governs demand-margin correlation. \code{"combined"}
+#'   retains the original one-component residual model. The new decomposition
+#'   requires Gaussian relative shares and Gaussian margins; its separate
+#'   transitory variances can remain prior-dependent.
 #' @param quality_parameterization Quality effects are \code{"collapsed"}
 #'   (default) or \code{"sampled"}; collapsed quality integrates Gaussian
 #'   group effects. Relative shares also support market residual scales.
@@ -122,6 +134,10 @@
 #'   fields \code{sigma_b_strat} and \code{log_sigma_share} are sampler
 #'   coordinates; use \code{sigma_b_strat_economic} and \code{sigma_share} for
 #'   the reconstructed economic scales.
+#'   In the demand-shock model these sampler coordinates rotate persistent
+#'   quality and demand-shock scales; \code{sigma_share} includes independent
+#'   measurement variance as well. \code{sigma_demand_shock} is the recovered
+#'   period-demand SD.
 #' @param share_basis Share observation basis. The default \code{"relative"}
 #'   uses J-1 orthonormal log-share contrasts in each market-year, with a
 #'   correctly projected Gaussian share-margin likelihood. It supports Gaussian
@@ -347,7 +363,8 @@
 #'   \item{\code{prior_sigma_resid_market_shape}, \code{prior_sigma_resid_market_rate}}{
 #'     Gamma shape/rate (defaults 2 and 7). Densities are normalized for evidence.}
 #'   \item{\code{prior_sigma_share}}{Lognormal center for log-share error SD
-#'     (default 0.5).}
+#'     (default 0.5), applied to economic demand-shock SD under the
+#'     demand-shock decomposition and combined residual SD otherwise.}
 #'   \item{\code{prior_sigma_margin}}{Lognormal center for log inverse-margin
 #'     error SD (default 0.75).}
 #'   \item{\code{prior_sigma_meanval_strat}}{Scale parameter for the
@@ -363,6 +380,10 @@
 #'   \item{\code{s0_prior_sd}}{Prior SD for the outside share on the logit
 #'     scale (default 0.4562340). The default prior's 5th percentile is
 #'     10 percent.}
+#'   \item{\code{prior_sigma_measurement}}{Median measurement SD in the
+#'     demand-shock model (default 0.10). Its primitive log SD has a Normal prior.}
+#'   \item{\code{prior_log_sigma_measurement_sd}}{SD of the Normal prior on
+#'     log measurement SD (default 0.5).}
 #'   \item{\code{prior_log_sigma_share_sd}}{Prior SD for the log share-error
 #'     scale (default 0.5).}
 #'   \item{\code{prior_log_sigma_margin_sd}}{Prior SD for the log
@@ -463,6 +484,7 @@ bayes_est <- function(prices, quantities, margins,
                       nutpie_options = list(),
                       share_basis = c("relative", "absolute"),
                       price_standardization = NULL,
+                      share_residual_model = c("auto", "demand_shock", "combined"),
                       ...) {
   cl <- match.call()
   if (!is.null(price_standardization) && match.arg(demand_model) != "logit")
@@ -515,6 +537,8 @@ bayes_est <- function(prices, quantities, margins,
                                 market_intercept_parameterization,
                                 market_s0_parameterization, priors)
   share_basis <- basis$name
+  residual_model <- .resolve_share_residual_model(share_residual_model,
+    share_basis, share_likelihood, margin_likelihood)
   quality_scope <- match.arg(quality_scope)
   if (!is.null(margin_likelihood)) {
     margin_likelihood <- match.arg(margin_likelihood, c("student_t", "gaussian"))
@@ -819,6 +843,7 @@ bayes_est <- function(prices, quantities, margins,
       quality_scale_parameterization = quality_scale_resolution$requested,
       market_intercept_parameterization = market_intercept_resolution$requested,
       share_basis = share_basis,
+      share_residual_model = residual_model$effective,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope,
       price_standardization = price_standardization
@@ -871,6 +896,7 @@ bayes_est <- function(prices, quantities, margins,
       quality_scale_parameterization = quality_scale_resolution$requested,
       market_intercept_parameterization = market_intercept_resolution$requested,
       share_basis = share_basis,
+      share_residual_model = residual_model$effective,
       margin_likelihood = likelihood_modes$margin_likelihood,
       quality_scope = quality_scope
     )
@@ -971,6 +997,9 @@ bayes_est <- function(prices, quantities, margins,
   metadata$stan_source_hash <- digest::digest(
     file = .cmdstan_kernel_file(stan_kernel), algo = "sha256"
   )
+  metadata$stan_source_identity <- .bayes_stan_source_identity(
+    .cmdstan_kernel_file(stan_kernel)
+  )
   metadata$stan_data_fields <- stan_data_names
   metadata$stan_data_hash <- digest::digest(cmdstan_data, algo = "sha256")
   metadata$price_standardization <- attr(stan_data, "price_standardization", exact = TRUE)
@@ -1038,6 +1067,12 @@ bayes_est <- function(prices, quantities, margins,
     market_intercept_resolution$no_op
   metadata$market_intercept_coordinate_convention <-
     market_intercept_resolution$coordinate_convention
+  metadata$share_residual_model <- residual_model$effective
+  metadata$share_residual_model_requested <- residual_model$requested
+  metadata$measurement_sd_prior <- if (residual_model$code == 2L) list(
+    family = "normal_on_log_sd", mean = log(priors$prior_sigma_measurement),
+    sd = priors$prior_log_sigma_measurement_sd, primitive = "log_sigma_measurement",
+    jacobian = "none") else NULL
   metadata$share_basis <- basis$name
   metadata$share_observation_measure <- basis$observation_measure
   metadata$share_dimension <- attr(stan_data, "share_dimension", exact = TRUE)
@@ -1100,6 +1135,8 @@ bayes_est <- function(prices, quantities, margins,
     mode = "native_stan_normalized",
     model_spec_version = .antitrust_bayes_model_spec_version,
     share_basis = basis$name,
+    share_residual_model = residual_model$effective,
+    measurement_sd_prior = metadata$measurement_sd_prior,
     share_observation_measure = basis$observation_measure,
     market_intercept_mean_prior = metadata$market_intercept_mean_prior,
     share_likelihood = likelihood_modes$share_likelihood,

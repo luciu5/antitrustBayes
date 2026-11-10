@@ -21,5 +21,5 @@ test_that("fit specification validation rejects stale fits", {
   old_normalization <- current
   attr(old_normalization@stan_data, "model_spec_version") <- 12L
   expect_error(validate_fit_spec(old_normalization),
-               "current specification is 14.*Refit it with bayes_est")
+               "current specification is 15.*Refit it with bayes_est")
 })

@@ -61,13 +61,11 @@ test_that("latent auction value and costs remain fixed under cost and ownership 
     unname(antitrust::calcMargins(changed, preMerger = FALSE, level = TRUE)), tolerance = 1e-12)
 })
 
-test_that("auction policy realization does not broaden unsupported demand or side", {
-  fit <- .auction_policy_fixture()
-  fit@market_side <- "input"
-  expect_error(posterior_policy_models(fit), "output Logit/CES")
+test_that("auction policy realization rejects unsupported input CES before constructing draws", {
   params <- bayes_params(s0 = .2, gamma = rep(5, 3), supply_model = 4L)
   market <- bayes_market(prices = c(5, 6, 7), quantities = c(40, 30, 20),
-    margins = rep(.3, 3), group = c("A", "A", "B"), outside_price = 1)
+    margins = rep(.3, 3), group = c("A", "A", "B"), outside_price = 1,
+    market_side = "input")
   expect_error(posterior_policy_models(bayes_specify(params, market)), "output Logit/CES")
 })
 
@@ -117,7 +115,7 @@ test_that("collapsed joint quality is realized once in an auction policy plan", 
   latent <- suppressWarnings(posterior_policy_models(fit, draw_plan = plan,
     demand_anchoring = "latent_quality", labels = c("one", "two", "three"), insideSize = 90))
   observed <- suppressWarnings(posterior_policy_models(fit, draw_plan = plan,
-    labels = c("one", "two", "three"), insideSize = 90))
+    demand_anchoring = "observed", labels = c("one", "two", "three"), insideSize = 90))
   expect_equal(nrow(latent$failures), 0L)
   expect_equal(nrow(observed$failures), 0L)
   for (position in seq_along(plan$draw_indices)) {

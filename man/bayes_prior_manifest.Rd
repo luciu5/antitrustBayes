@@ -23,8 +23,16 @@ one half and two, respectively.
 }
 \details{
 With the default relative-share basis, market-year utility intercepts
-are derived calibration quantities without priors. The intercept prior
-entries below apply only to explicit absolute-share fits.
+are derived calibration quantities without priors. New relative Gaussian
+fits separate period demand from independent measurement error, with
+\code{prior_sigma_measurement = .10} and
+\code{prior_log_sigma_measurement_sd = .5} specifying a Normal prior on
+log measurement SD. These fields stay fixed across manifests and are
+inactive under \code{share_residual_model = "combined"}. The existing
+share-residual prior governs period-demand SD in the new model.
+The two transitory variances need not be separately identified.
+
+The intercept prior entries below apply only to explicit absolute-share fits.
 In that basis every Logit or CES market has a free inside-versus-outside utility
 intercept (the outside good has utility zero).
 A single market uses a normalized Normal(0, 1) prior directly, with no
@@ -62,7 +70,10 @@ scale. This hierarchy remains disabled unless
 the historical Half-Normal mean 0.35 * sqrt(2/pi).
 Quality SD retains its positive-truncated Normal centered at 1, and
 share/margin error SDs retain Lognormal priors; these already have
-modes away from zero. Fixed prior scales on signed coefficients are
+modes away from zero. In the demand-shock decomposition the existing share
+prior applies to economic shock SD. Independent measurement SD has median
+\code{prior_sigma_measurement = 0.10}; its primitive log SD has a Normal
+prior with SD \code{prior_log_sigma_measurement_sd = 0.5} in every manifest. Fixed prior scales on signed coefficients are
 hyperparameters, not sampled SDs, and remain unchanged.
 }
 \examples{

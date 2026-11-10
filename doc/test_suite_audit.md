@@ -79,8 +79,9 @@ editing. These are the final dispositions; the CSV specifies each block.
 - **A, permanent regression benchmark:** public default/legacy-mode contracts
   (`test-default-model.R`, `test-collapsed-gaussian-api.R`), old ownership input
   equivalent to `Counterfactual` (`test-simulate-dispatch.R`), saved fit scope
-  interpretation (`test-market-quality-R.R`), observed-share default
-  (`test-latent-quality-simulation.R`), one-year exact-k plan selectors
+  interpretation (`test-market-quality-R.R`), posterior-state estimated-fit
+  defaults and explicit observed-share compatibility
+  (`test-relative-share-posterior.R`, `test-latent-quality-simulation.R`), one-year exact-k plan selectors
   (`test-plan-k-key-compatibility.R`), HMC-only bridge/LOO evidence
   (`test-bridge-performance-migration.R`), and dense Gaussian oracles
   (`test-posterior-quality.R`, `test-market-intercept-collapse.R`). These

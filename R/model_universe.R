@@ -428,6 +428,8 @@ bayes_model_universe <- function(hypotheses, prior_weights) {
     stan = stan_state,
     attributes = attr_state
   )
+  if (!is.null(md$share_residual_model))
+    state$share_residual_model <- md$share_residual_model
   ## Version 2 materializes ALTREP vectors while preserving the complete state,
   ## names, classes, dimensions, and attributes.  Version 3 can retain the
   ## original ALTREP/reference graph, making equal M=1 global/market states

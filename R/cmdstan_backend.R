@@ -2,18 +2,21 @@
 ## the installed package, which may be on a read-only library path.
 .cmdstan_model_cache <- new.env(parent = emptyenv())
 
-.cmdstan_kernel_file <- function(kernel) {
-  path <- system.file("stan", paste0(kernel, ".stan"),
+.cmdstan_kernel_file <- function(kernel, model_spec_version = NULL) {
+  legacy <- !is.null(model_spec_version) && identical(as.integer(model_spec_version), 14L)
+  directory <- if (legacy) file.path("stan", "legacy14") else "stan"
+  path <- system.file(directory, paste0(kernel, ".stan"),
                       package = "antitrustBayes")
-  if (!nzchar(path)) path <- file.path("inst", "stan", paste0(kernel, ".stan"))
+  if (!nzchar(path)) path <- file.path("inst", directory, paste0(kernel, ".stan"))
   if (!file.exists(path)) {
     stop("Cannot find the installed Stan kernel: ", kernel, call. = FALSE)
   }
   normalizePath(path, mustWork = TRUE)
 }
 
-.cmdstan_model_for_kernel <- function(kernel) {
-  source <- .cmdstan_kernel_file(kernel)
+.cmdstan_model_for_kernel <- function(kernel, model_spec_version = NULL) {
+  source <- if (is.null(model_spec_version)) .cmdstan_kernel_file(kernel) else
+    .cmdstan_kernel_file(kernel, model_spec_version)
   version <- as.character(cmdstanr::cmdstan_version())
   hash <- digest::digest(list(
     source = digest::digest(file = source, algo = "sha256"),

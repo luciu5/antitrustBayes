@@ -1,8 +1,11 @@
 # Experimental policy simulation and model universe
 
-The observed-share policy anchor remains the default. Specification14 changes
-the estimation default to relative conditional-share contrasts; use current fits
-under a common share basis. Changing a policy does not require another fit.
+Estimated-fit policy simulations default to the fitted posterior state through
+`demand_anchoring = "latent_quality"`. Observed-share calibration is the explicit
+alternative `demand_anchoring = "observed"`. Specification 14 and its inference
+contracts are unchanged; changing the simulation default does not require a refit.
+`BayesSpecifiedFit` has supplied primitives rather than an estimated quality
+posterior and retains its supplied-state/calibration default.
 
 ## Reuse posterior latent states across policies
 
@@ -19,8 +22,7 @@ observed <- bayes_sim(
   demand_anchoring = "observed"
 )
 latent <- bayes_sim(
-  fit, ownerPost = merger, draw_plan = plan,
-  demand_anchoring = "latent_quality"
+  fit, ownerPost = merger, draw_plan = plan
 )
 latent_cost <- bayes_sim(
   fit, ownerPost = cost_shock, draw_plan = plan,
@@ -33,6 +35,10 @@ draw, and the conditional market-level ordered-k state where applicable.
 Reuse the plan to hold these states fixed across policies and periods.
 Input Logit is supported using the native positive dollar markdown and held-fixed
 value primitive. Input CES and unsupported conduct/likelihood combinations fail explicitly.
+Second-score Logit auctions use their cost-based value index, with the correct
+input/output sign, rather than a posted-price demand inversion. Supported
+bargaining routes retain their existing firm-share equations and cost/value
+recovery. Neither route silently falls back to observed-share anchoring.
 Relative Gaussian fits support active-rho quality reconstruction. For input Logit, an
 antitrust `costs` counterfactual changes the value primitive; it is not a tariff
 pass-through calculation.

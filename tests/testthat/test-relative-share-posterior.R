@@ -54,6 +54,214 @@
   list(fit = fit, draws = draws)
 }
 
+## Material failure: a public default or wrapper can silently condition on
+## observed shares, or pair recovered quality with a different slope/role row.
+.policy_default_fixture <- function(quality = "collapsed", demand = "logit",
+                                    structure = "simultaneous", k = 2L) {
+  fixture <- .relative_posterior_fixture(quality, demand = demand)
+  fit <- fixture$fit
+  data <- fit@data
+  native <- structure != "simultaneous"
+  prepare <- if (demand == "ces") prepare_ces_stan_data else prepare_stan_data
+  fit@stan_data <- prepare(
+    prices = data$prices, quantities = data$quantities, margins = data$margins,
+    market = data$market, year = data$year, group = data$group,
+    market_side = "output", supply_model = 1L,
+    quality_scope = if (native) "market" else "global",
+    quality_parameterization = quality, share_basis = "relative",
+    share_residual_model = "combined", use_rho = TRUE,
+    use_cutoff = FALSE, use_hmt = FALSE, priors = list(),
+    structure = structure, partition_prior = if (native) "ordered_k" else "cutoff",
+    k_support = if (native) k else NULL,
+    k_prior = if (native) rep(1 / length(k), length(k)) else NULL)
+  fit@price_sd <- if (demand == "ces") fit@stan_data$log_price_sd else
+    fit@stan_data$price_sd
+  fit@metadata$market_year_labels <- attr(fit@stan_data, "market_year_size")$market_year_labels
+  fixture$draws$a_market[, 1L] <- c(4, 5)
+  if (native) {
+    fit@metadata$quality_scope <- "market"
+    fit@metadata$structure <- structure
+    fit@metadata$partition_prior <- "ordered_k"
+    fit@metadata$k_support <- k
+    fit@metadata$k_prior <- rep(1 / length(k), length(k))
+    fit@metadata$firm_market_ranking <- attr(fit@stan_data, "firm_market_ranking")
+    fixture$draws$posterior_component_prob <- matrix(
+      1 / length(k), 2L, fit@stan_data$N_partition_component)
+    fixture$draws$prior_component_prob <- fixture$draws$posterior_component_prob
+  }
+  fit@stanfit <- .relative_posterior_native(fixture$draws)
+  fit
+}
+
+test_that("estimated defaults reuse posterior quality while observed anchoring stays conditional", {
+  for (quality in c("sampled", "collapsed")) for (demand in c("logit", "ces")) {
+    fit <- .policy_default_fixture(quality, demand)
+    saved <- serialize(fit, NULL)
+    plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 291L)
+    realize <- function(...) suppressWarnings(posterior_policy_models(
+      fit, draw_plan = plan, year = "1", ...))
+    implicit <- realize()
+    latent <- realize(demand_anchoring = "latent_quality")
+    observed <- realize(demand_anchoring = "observed")
+    expect_identical(implicit$demand_anchoring, "latent_quality")
+    expect_equal(nrow(implicit$failures), 0L)
+    expect_equal(implicit$models, latent$models)
+    scenario <- antitrust::counterfactual(ownership = c("a", "b", "c"))
+    run <- function(...) suppressWarnings(simulate(
+      fit, scenario, draw_plan = plan, year = "1", mc.cores = 1L, ...))
+    default_sim <- run()
+    latent_sim <- run(demand_anchoring = "latent_quality")
+    observed_sim <- run(demand_anchoring = "observed")
+    wrapped <- suppressWarnings(bayes_sim(
+      fit, scenario, draw_plan = plan, year = "1", mc.cores = 1L))
+    expect_equal(as.integer(default_sim@n_valid), 2L)
+    expect_identical(default_sim@metadata$demand_anchoring, "latent_quality")
+    expect_identical(wrapped@metadata$demand_anchoring, "latent_quality")
+    expect_equal(default_sim@price_pre, latent_sim@price_pre)
+    expect_equal(default_sim@price_post, wrapped@price_post)
+    expect_equal(default_sim@price_post, latent_sim@price_post)
+    expect_equal(default_sim@price_post, default_sim@price_pre, tolerance = 1e-6)
+    expect_gt(max(abs(default_sim@price_pre[[1L]] - observed_sim@price_pre[[1L]])), 1e-4)
+    for (pos in seq_along(plan$draw_indices)) {
+      model <- implicit$models[[1L]][[pos]]@model
+      conditional <- observed$models[[1L]][[pos]]@model
+      expect_equal(as.numeric(conditional@pricePre), fit@data$prices[1:3])
+      expect_equal(model@mcPre, conditional@mcPre, tolerance = 1e-12)
+      expect_equal(as.numeric(model@pricePre), default_sim@price_pre[[1L]][pos, ],
+                   ignore_attr = TRUE, tolerance = 1e-8)
+      state <- attr(implicit$models[[1L]][[pos]], "bayes_policy_draw")
+      expect_identical(state$draw_index, plan$draw_indices[[pos]])
+      expect_equal(state$quality, as.numeric(plan$quality_draws[pos, ]))
+      if (demand == "logit") {
+        alpha <- c(4, 5)[plan$draw_indices[[pos]]] / fit@price_sd
+        shares <- as.numeric(antitrust::calcShares(model, TRUE))
+        jacobian <- -alpha * (diag(shares) - tcrossprod(shares))
+        ownership <- outer(fit@data$group[1:3], fit@data$group[1:3], "==")
+        foc <- shares + (jacobian * ownership) %*%
+          (as.numeric(model@pricePre) - as.numeric(model@mcPre))
+        expect_lt(max(abs(foc)), 1e-7)
+      }
+    }
+    expect_identical(serialize(fit, NULL), saved)
+  }
+})
+
+test_that("native singleton conditional-k defaults forward one joint quality and role state", {
+  for (structure in c("fringe", "stackelberg")) {
+    fit <- .policy_default_fixture(structure = structure, k = 2L)
+    plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 831L)
+    implicit <- suppressWarnings(posterior_policy_models(fit, draw_plan = plan, year = "1"))
+    explicit <- suppressWarnings(posterior_policy_models(
+      fit, draw_plan = plan, year = "1", demand_anchoring = "latent_quality"))
+    expect_equal(nrow(implicit$failures), 0L)
+    expect_equal(implicit$models, explicit$models)
+    run <- function(...) suppressWarnings(bayes_sim(
+      fit, mcDelta = rep(.02, 3L), year = "1", mc.cores = 1L, ...))
+    automatic <- run(role_mapping = "map", fixed_k = 2L)
+    planned <- run(draw_plan = plan)
+    latent <- run(draw_plan = plan, demand_anchoring = "latent_quality")
+    expect_equal(as.integer(automatic@n_valid), 2L)
+    expect_identical(automatic@metadata$demand_anchoring, "latent_quality")
+    expect_true(all(vapply(automatic@metadata$k_cache,
+      function(state) identical(as.integer(state[[1L]]), 2L), logical(1))))
+    expect_equal(as.integer(planned@n_valid), 2L)
+    expect_identical(planned@metadata$demand_anchoring, "latent_quality")
+    expect_equal(planned@price_pre, latent@price_pre)
+    expect_equal(planned@price_post, latent@price_post)
+    for (pos in 1:2) {
+      state <- attr(implicit$models[[1L]][[pos]], "bayes_policy_draw")
+      expect_identical(state$draw_index, plan$draw_indices[[pos]])
+      expect_equal(state$realized_k, 2L)
+      expect_equal(state$quality, as.numeric(plan$quality_draws[pos, ]))
+      expect_equal(planned@metadata$latent_diagnostics[[1L]][[pos]]$quality,
+                   as.numeric(plan$quality_draws[pos, ]))
+      expect_equal(planned@metadata$k_cache[[pos]][[1L]], 2L)
+      expect_equal(as.numeric(implicit$models[[1L]][[pos]]@pricePre),
+                   planned@price_pre[[1L]][pos, ], ignore_attr = TRUE)
+    }
+  }
+})
+
+test_that("native model realization honors fixed-plan role semantics and checks integrity", {
+  for (structure in c("fringe", "stackelberg")) {
+    for (controls in list(list(role_mapping = "map", fixed_k = 2L),
+                          list(role_mapping = "map", role_offset = 1L))) {
+      fit <- .policy_default_fixture(structure = structure,
+        k = if (is.null(controls$role_offset)) 2L else 1:2)
+      plan <- do.call(posterior_policy_draws,
+        c(list(fit, n_draws = 2L, seed = 718L), controls))
+      realized <- suppressWarnings(posterior_policy_models(
+        fit, draw_plan = plan, year = "1"))
+      expect_equal(nrow(realized$failures), 0L)
+      expect_identical(realized$draw_plan, plan)
+      for (pos in 1:2) {
+        state <- attr(realized$models[[1L]][[pos]], "bayes_policy_draw")
+        expect_identical(state$realized_k, plan$k_cache[[pos]][[1L]])
+        expect_equal(state$quality, as.numeric(plan$quality_draws[pos, ]))
+      }
+      changed <- plan
+      changed$metadata$role_mapping <- "threshold"
+      expect_error(posterior_policy_models(fit, draw_plan = changed, year = "1"),
+                   "role metadata")
+      changed <- plan
+      changed$k_cache[[1L]][[1L]] <- 1L
+      expect_error(posterior_policy_models(fit, draw_plan = changed, year = "1"),
+                   "latent states")
+    }
+  }
+})
+
+test_that("estimated smooth-cutoff auctions fail explicitly instead of using posted-price quality", {
+  fixture <- .relative_posterior_fixture("sampled")
+  fit <- .policy_default_fixture("sampled")
+  fit@supply_model <- 4L
+  fit@metadata$structure <- "fringe"
+  fit@metadata$partition_prior <- "cutoff"
+  fit@stan_data$use_cutoff <- 1L
+  fixture$draws$cutoff_share <- matrix(.2, 2L, 1L)
+  fit@stanfit <- .relative_posterior_native(fixture$draws)
+  run <- function(...) simulate(fit, c("a", "b", "c"), year = "1",
+                                n_draws = 2L, mc.cores = 1L, ...)
+  expect_error(run(), "smooth-cutoff Logit auctions have no implemented cost-based value-index")
+  expect_error(run(demand_anchoring = "latent_quality"),
+               "smooth-cutoff Logit auctions have no implemented cost-based value-index")
+  observed <- suppressWarnings(run(demand_anchoring = "observed"))
+  expect_identical(observed@metadata$demand_anchoring, "observed")
+  expect_equal(as.integer(observed@n_valid), 2L)
+  expect_equal(observed@price_pre[[1L]][1L, ], fit@data$prices[1:3],
+               ignore_attr = TRUE)
+})
+
+test_that("posterior defaults hold quality fixed through sequential policies", {
+  fit <- .policy_default_fixture()
+  plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 402L)
+  scenario <- antitrust::counterfactual(costs = rep(.02, 3L))
+  scenario <- antitrust::add_step(scenario, ownership = c("a", "a", "c"))
+  result <- suppressWarnings(simulate(
+    fit, scenario, draw_plan = plan, year = "1", mc.cores = 1L))
+  expect_equal(as.integer(result@n_valid), 2L)
+  for (pos in 1:2) {
+    path <- result@sims[[1L]][[pos]]
+    expect_s4_class(path, "CounterfactualPath")
+    first <- path@results[[1L]]
+    second <- path@results[[2L]]
+    expect_equal(first@slopes, path@initial@slopes)
+    expect_equal(second@slopes, path@initial@slopes)
+    expect_equal(second@pricePre, first@pricePost)
+    expect_equal(as.numeric(second@mcPre), as.numeric(first@mcPost))
+    expect_equal(result@metadata$latent_diagnostics[[1L]][[pos]]$quality,
+                 as.numeric(plan$quality_draws[pos, ]))
+    alpha <- c(4, 5)[plan$draw_indices[[pos]]] / fit@price_sd
+    for (model in path@results) {
+      shares <- as.numeric(antitrust::calcShares(model, FALSE))
+      jacobian <- -alpha * (diag(shares) - tcrossprod(shares))
+      foc <- shares + (jacobian * model@ownerPost) %*%
+        (as.numeric(model@pricePost) - as.numeric(model@mcPost))
+      expect_lt(max(abs(foc)), 1e-7)
+    }
+  }
+})
+
 test_that("relative quality recovery equals dense masked joint Gaussian conditioning", {
   fixture <- .relative_posterior_fixture()
   fit <- fixture$fit
@@ -160,7 +368,8 @@ test_that("relative latent policies retain the structural cost primitive", {
     fit@stan_data <- prepare(prices = data$prices, quantities = data$quantities,
       margins = data$margins, market = data$market, year = data$year, group = data$group,
       market_side = "output", supply_model = 1L, quality_scope = "global", quality_parameterization = quality,
-      share_basis = "relative", use_rho = TRUE, use_cutoff = FALSE,
+      share_basis = "relative", share_residual_model = "combined",
+      use_rho = TRUE, use_cutoff = FALSE,
       use_hmt = FALSE, priors = list())
     fit@price_sd <- if (demand == "ces") fit@stan_data$log_price_sd else fit@stan_data$price_sd
     fit@metadata$market_year_labels <-
@@ -222,7 +431,8 @@ test_that("relative exact-role policies reuse their rho-conditioned quality and 
       fit@stan_data <- prepare(prices = data$prices, quantities = data$quantities,
         margins = data$margins, market = data$market, year = data$year, group = data$group,
         market_side = "output", supply_model = supply, quality_scope = "market",
-        quality_parameterization = "collapsed", share_basis = "relative", use_rho = TRUE,
+        quality_parameterization = "collapsed", share_basis = "relative",
+        share_residual_model = "combined", use_rho = TRUE,
         use_cutoff = FALSE, use_hmt = FALSE, priors = list(), structure = structure,
         partition_prior = "ordered_k", k_support = 1L, k_prior = 1)
       fit@supply_model <- supply
@@ -262,4 +472,245 @@ test_that("relative exact-role policies reuse their rho-conditioned quality and 
         else expect_identical(solved@tariff_state$corePost, solved@tariff_state$corePre)
       }
     }
+})
+
+## Material failure: a constructor's placeholder shares rescale every quantity
+## even when estimated slopes, costs and equilibrium prices remain identical.
+test_that("estimated posterior baselines retain quantity mass and CES budget", {
+  for (demand in c("logit", "ces")) {
+    fit <- .policy_default_fixture("sampled", demand)
+    plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 825L)
+    observed <- posterior_policy_models(fit, draw_plan = plan, year = "1",
+      insideSize = 90, demand_anchoring = "observed")
+    latent <- posterior_policy_models(fit, draw_plan = plan, year = "1",
+      insideSize = 90)
+    expect_equal(nrow(observed$failures), 0L)
+    expect_equal(nrow(latent$failures), 0L)
+    expected_quantity <- 90 * c(.5, .3, .2)
+    for (position in seq_along(plan$draw_indices)) {
+      draw <- plan$draw_indices[[position]]
+      s0 <- .posterior_extract(fit)$s0_prob[draw, 1L]
+      expected_mass <- if (demand == "logit") 90 / (1 - s0) else
+        sum(expected_quantity * fit@data$prices[1:3]) + 90 * s0 / (1 - s0)
+      model <- observed$models[[1L]][[position]]@model
+      latent_model <- latent$models[[1L]][[position]]@model
+      expect_equal(model@mktSize, expected_mass, tolerance = 1e-10)
+      expect_equal(unname(antitrust::calcQuantities(model, TRUE)),
+        expected_quantity, tolerance = 1e-10)
+      expect_equal(latent_model@mktSize, expected_mass, tolerance = 1e-10)
+    }
+  }
+})
+
+.demand_shock_fixture <- function(quality = "collapsed", rho = .6,
+                                  likelihood_mode = 1L) {
+  fixture <- .relative_posterior_fixture(quality, rho)
+  fit <- fixture$fit
+  attr(fit@stan_data, "model_spec_version") <- .antitrust_bayes_model_spec_version
+  fit@stan_data$share_residual_model <- 2L
+  fit@stan_data$likelihood_mode <- likelihood_mode
+  fit@metadata$share_residual_model <- "demand_shock"
+  fixture$draws$sigma_demand_shock <- c(.3, .35)
+  fixture$draws$sigma_measurement <- c(.2, .25)
+  fixture$draws$rho_demand_shock <- rep(rho, 2L)
+  fixture$draws$sigma_share <- sqrt(fixture$draws$sigma_demand_shock^2 +
+                                    fixture$draws$sigma_measurement^2)
+  fixture$draws$rho <- rho * fixture$draws$sigma_demand_shock /
+    fixture$draws$sigma_share
+  fit@stanfit <- .relative_posterior_native(fixture$draws)
+  fixture$fit <- fit
+  fixture
+}
+
+## Material failure: period shocks can be lost or observation error carried into
+## equilibrium demand; plan reuse can also silently change the fitted state.
+test_that("new residual plans carry the same recovered demand state into policy", {
+  for (quality in c("sampled", "collapsed")) {
+    f <- .demand_shock_fixture(quality)
+    plan <- posterior_policy_draws(f$fit, n_draws = 2L, seed = 915L)
+    expect_identical(plan$fit_signature$fit_signature_version, 4L)
+    expect_true(any(abs(plan$demand_shock_draws) > .01))
+    expect_equal(unname(rowSums(plan$demand_shock_draws[, 1:3])), c(0, 0), tolerance = 1e-12)
+    expect_equal(unname(rowSums(plan$demand_shock_draws[, 4:6])), c(0, 0), tolerance = 1e-12)
+    expect_equal(plan$measurement_sd_draws,
+      f$draws$sigma_measurement[plan$draw_indices])
+    expect_identical(antitrustBayes:::.lq_validate_plan(f$fit, plan), plan)
+    changed <- plan
+    changed$demand_shock_draws[1L, 1L] <- changed$demand_shock_draws[1L, 1L] + .01
+    expect_error(antitrustBayes:::.lq_validate_plan(f$fit, changed), "latent states")
+    models <- suppressWarnings(posterior_policy_models(f$fit, draw_plan = plan, year = "1"))
+    expect_equal(nrow(models$failures), 0L)
+    scenario <- antitrust::counterfactual(ownership = c("a", "b", "c"))
+    policy <- suppressWarnings(simulate(f$fit, scenario, draw_plan = plan,
+      year = "1", mc.cores = 1L))
+    expect_equal(as.integer(policy@n_valid), 2L)
+    expect_equal(policy@price_post, policy@price_pre, tolerance = 1e-6)
+    for (r in seq_along(plan$draw_indices)) {
+      model <- models$models[[1L]][[r]]@model
+      shares <- as.numeric(antitrust::calcShares(model, TRUE))
+      alpha <- 4
+      jacobian <- -alpha * (diag(shares) - tcrossprod(shares))
+      foc <- shares + diag(diag(jacobian)) %*%
+        (as.numeric(model@pricePre) - as.numeric(model@mcPre))
+      expect_lt(max(abs(foc)), 1e-7)
+      expected <- antitrustBayes:::.lq_relative_full_predictor(f$fit, f$draws,
+        plan$draw_indices[[r]], plan$quality_draws[r, , drop = FALSE])[1L, 1:3] +
+          plan$demand_shock_draws[r, 1:3]
+      reference <- model
+      reference@pricePre <- f$fit@data$prices[1:3]
+      ref_shares <- as.numeric(antitrust::calcShares(reference, TRUE))
+      expect_equal(as.numeric(ref_shares / sum(ref_shares)),
+        as.numeric(exp(expected - max(expected)) / sum(exp(expected - max(expected)))),
+        tolerance = 1e-7)
+    }
+  }
+})
+
+## Material failure: conditioning q on omega alone overstates information, and
+## a wrong Matheron covariance leaks measurement into economic demand shocks.
+test_that("conditional shocks match independent Gaussian contrast moments", {
+  basis <- antitrustBayes:::.relative_share_basis(rep.int(1L, 3L))
+  variance <- c(.3, .5, .2)^2
+  residual <- c(.5, -.3, .1)
+  shift <- c(.1, -.1, .05)
+  m <- .2
+  K <- crossprod(basis, (variance + m^2) * basis)
+  cross <- diag(variance) %*% basis
+  expected_mean <- as.numeric(basis %*% crossprod(basis,
+    shift + cross %*% solve(K, crossprod(basis, residual - shift))))
+  expected_cov <- basis %*% crossprod(basis,
+    (diag(variance) - cross %*% solve(K, t(cross))) %*% basis) %*% t(basis)
+  set.seed(91)
+  states <- replicate(5000L, antitrustBayes:::.lq_conditional_demand_shock(
+    residual, shift, variance, m, rep.int(1L, 3L)))
+  expect_equal(rowMeans(states), expected_mean, tolerance = .008)
+  covariance_mcse <- sqrt((expected_cov^2 + diag(expected_cov) %o%
+    diag(expected_cov)) / (ncol(states) - 1L))
+  expect_lt(max(abs(stats::cov(t(states)) - expected_cov) / covariance_mcse), 5)
+  f <- .demand_shock_fixture()
+  q <- posterior_quality(f$fit, draws = f$draws, seed = 94L)
+  legacy <- f$fit
+  legacy@metadata$share_residual_model <- "combined"
+  legacy@stan_data$share_residual_model <- 1L
+  reference <- posterior_quality(legacy, draws = f$draws, seed = 94L)
+  expect_equal(q$draws, reference$draws)
+})
+
+## Material failure: omitted share equations must not constrain the economic
+## shock or persistent q using data that the likelihood did not observe.
+test_that("margin-only demand states ignore observed shares", {
+  f <- .demand_shock_fixture(likelihood_mode = 3L)
+  p <- posterior_policy_draws(f$fit, n_draws = 2L, seed = 31L)
+  f$fit@stan_data$log_shareIn <- rev(f$fit@stan_data$log_shareIn) + 100
+  q <- posterior_policy_draws(f$fit, n_draws = 2L, seed = 31L)
+  expect_equal(p$quality_draws, q$quality_draws)
+  expect_equal(p$demand_shock_draws, q$demand_shock_draws)
+})
+
+## Material failure: using a common total correlation with market shock scales
+## gives the wrong share-margin covariance and hence the wrong posterior q.
+test_that("market residual scales recover q using the economic shock covariance", {
+  f <- .demand_shock_fixture()
+  f$fit@stan_data$use_market_resid_scale <- 1L
+  f$draws$sigma_demand_shock_market <- matrix(c(.6, .7), 2L, 1L)
+  f$draws$sigma_share_market <- sqrt(f$draws$sigma_demand_shock_market^2 +
+    f$draws$sigma_measurement^2)
+  f$draws$sigma_margin_market <- matrix(c(.7, .8), 2L, 1L)
+  f$draws$rho_market <- f$draws$rho_demand_shock *
+    f$draws$sigma_demand_shock_market / f$draws$sigma_share_market
+  f$fit@stanfit <- .relative_posterior_native(f$draws)
+  q <- posterior_quality(f$fit, draws = f$draws, seed = 5L)
+  for (r in 1:2) {
+    residual <- f$fit@stan_data$log_shareIn - f$draws$relative_share_predictor[r, ]
+    idx <- f$fit@stan_data$margin_idx
+    omega <- f$draws$sigma_demand_shock_market[r, 1L]
+    rho <- f$draws$rho_demand_shock[[r]]
+    variance <- rep(omega^2 + f$draws$sigma_measurement[[r]]^2, 6L)
+    residual[idx] <- residual[idx] - rho * omega / f$draws$sigma_margin_market[r, 1L] *
+      (f$fit@stan_data$log_marginNormInv[idx] - log(2 + 1e-9))
+    variance[idx] <- omega^2 * (1 - rho^2) + f$draws$sigma_measurement[[r]]^2
+    expected <- .relative_share_gaussian(residual, variance,
+      f$fit@stan_data$group, rep.int(1L, 3L), f$fit@stan_data$market_year_idx,
+      tau = f$draws$sigma_b_strat[[r]], return_moments = TRUE)
+    expect_equal(as.numeric(q$conditional_means[r, ]), expected$conditional_mean)
+    expect_equal(as.numeric(q$conditional_sds[r, ]), sqrt(expected$conditional_variance))
+  }
+  p <- posterior_policy_draws(f$fit, n_draws = 2L, seed = 51L)
+  expect_identical(.lq_validate_plan(f$fit, p), p)
+  invalid <- f$fit
+  invalid@metadata$share_residual_model <- "combined"
+  expect_error(posterior_policy_draws(invalid), "Inconsistent")
+  f$draws$sigma_demand_shock_market[1L, 1L] <- -.1
+  f$fit@stanfit <- .relative_posterior_native(f$draws)
+  expect_error(posterior_policy_draws(f$fit, n_draws = 2L), "market-specific")
+})
+
+## Material failure: exact-k marginalization can condition q or d on another
+## component's FOC and then solve policy under a newly drawn role state.
+test_that("demand-shock native policies keep one role and demand state", {
+  for (demand in c("logit", "ces")) for (structure in c("fringe", "stackelberg")) {
+    fit <- .policy_default_fixture(structure = structure, demand = demand, k = c(1L, 2L))
+    fit@metadata$share_residual_model <- "demand_shock"
+    fit@stan_data$share_residual_model <- 2L
+    attr(fit@stan_data, "share_residual_model") <- "demand_shock"
+    draws <- .bayes_backend_extract(fit@stanfit)
+    draws$sigma_demand_shock <- c(.3, .35)
+    draws$sigma_measurement <- c(.2, .25)
+    draws$rho_demand_shock <- c(.6, .6)
+    draws$sigma_share <- sqrt(draws$sigma_demand_shock^2 + draws$sigma_measurement^2)
+    draws$rho <- draws$rho_demand_shock * draws$sigma_demand_shock / draws$sigma_share
+    fit@stanfit <- .relative_posterior_native(draws)
+    plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 209L)
+    models <- suppressWarnings(posterior_policy_models(fit, draw_plan = plan, year = "1"))
+    expect_equal(nrow(models$failures), 0L)
+    scenario <- antitrust::counterfactual(ownership = c("a", "b", "c"))
+    policy <- suppressWarnings(simulate(fit, scenario, draw_plan = plan,
+      year = "1", mc.cores = 1L))
+    expect_equal(as.integer(policy@n_valid), 2L)
+    expect_equal(policy@price_post, policy@price_pre, tolerance = 1e-6)
+    for (r in seq_along(plan$draw_indices)) {
+      state <- attr(models$models[[1L]][[r]], "bayes_policy_draw")
+      expect_identical(state$k, as.integer(plan$k_cache[[as.character(plan$draw_indices[[r]])]][[1L]]))
+      expect_equal(state$demand_shock, as.numeric(plan$demand_shock_draws[r, 1:3]))
+    }
+  }
+})
+
+## Material failure: a recovery-only economic-scale alias can invalidate a
+## frozen v2/v3 plan despite identical fitted economic draws and latent states.
+test_that("historical total-fraction plans retain their pre-alias fingerprint", {
+  f <- .relative_posterior_fixture()
+  f$fit@metadata$quality_scale_parameterization_effective <- "total_fraction"
+  f$fit@stan_data$quality_scale_parameterization <- 2L
+  f$draws$sigma_b_strat_economic <- f$draws$sigma_b_strat
+  f$fit@stanfit <- .relative_posterior_native(f$draws)
+  plan <- posterior_policy_draws(f$fit, n_draws = 2L, seed = 43L)
+  for (version in c(2L, 3L)) {
+    old <- plan
+    old$fit_signature$fit_signature_version <- version
+    old$fit_signature$fit_fingerprint <- .lq_fit_fingerprint(f$fit,
+      version = version, omit_redundant_quality_alias = TRUE)
+    old$fit_signature$latent_state_fingerprint <- .lq_plan_state_fingerprint(old)
+    expect_identical(.lq_validate_plan(f$fit, old), old)
+    corrupted <- old
+    corrupted$quality_draws[1L, 1L] <- corrupted$quality_draws[1L, 1L] + .01
+    expect_error(.lq_validate_plan(f$fit, corrupted), "latent states")
+  }
+  expect_error(.lq_fit_fingerprint(f$fit, version = 4L,
+    omit_redundant_quality_alias = TRUE), "version 2 or 3")
+})
+
+## Material failure: sampled quality must not excuse missing new residual states,
+## and share-only policies must not condition on omitted margin observations.
+test_that("demand residual contracts respect omitted equations and required states", {
+  f <- .demand_shock_fixture("sampled", likelihood_mode = 2L)
+  p <- posterior_policy_draws(f$fit, n_draws = 2L, seed = 72L)
+  changed <- f$fit
+  changed@stan_data$log_marginNormInv <- rep(100, 6L)
+  q <- posterior_policy_draws(changed, n_draws = 2L, seed = 72L)
+  expect_equal(p$quality_draws, q$quality_draws)
+  expect_equal(p$demand_shock_draws, q$demand_shock_draws)
+  f$draws$sigma_measurement <- NULL
+  f$fit@stanfit <- .relative_posterior_native(f$draws)
+  expect_error(posterior_policy_draws(f$fit), "sigma_measurement")
 })

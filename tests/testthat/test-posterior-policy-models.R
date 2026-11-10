@@ -173,5 +173,31 @@ test_that("realization rejects incompatible plans, selectors and models", {
   changed$quality_draws[1L, 1L] <- 1
   expect_error(posterior_policy_models(fit, draw_plan = changed), "latent states")
   fit@market_side <- "input"
+  fit@demand_model <- "ces"
   expect_error(posterior_policy_models(fit), "output Logit/CES")
+})
+
+test_that("specified defaults preserve supplied calibration without fitted quality", {
+  fit <- .policy_models_fixture()
+  plan <- posterior_policy_draws(fit, n_draws = 2L, seed = 73L)
+  testthat::local_mocked_bindings(
+    .lq_reference_score = function(...) stop("fabricated fitted quality"),
+    .package = "antitrustBayes")
+  implicit <- suppressWarnings(posterior_policy_models(fit, draw_plan = plan))
+  observed <- suppressWarnings(posterior_policy_models(
+    fit, draw_plan = plan, demand_anchoring = "observed"))
+  expect_identical(implicit$demand_anchoring, "observed")
+  expect_equal(nrow(implicit$failures), 0L)
+  expect_equal(implicit$models, observed$models)
+  for (model in implicit$models$unit_1) {
+    expect_equal(as.numeric(model@model@pricePre), fit@market$prices)
+    expect_null(attr(model, "bayes_latent_quality"))
+  }
+  scenario <- antitrust::counterfactual(costs = rep(.02, fit@market$n_prod))
+  direct <- suppressWarnings(simulate(fit, scenario, draw_plan = plan, mc.cores = 1L))
+  wrapped <- suppressWarnings(bayes_sim(fit, scenario, draw_plan = plan, mc.cores = 1L))
+  expect_identical(direct@metadata$demand_anchoring, "observed")
+  expect_identical(wrapped@metadata$demand_anchoring, "observed")
+  expect_equal(direct@price_pre, wrapped@price_pre)
+  expect_equal(direct@price_post, wrapped@price_post)
 })

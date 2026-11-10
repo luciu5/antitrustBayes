@@ -1,0 +1,7 @@
+"id","status","fit_checkpoint","fit_seal","policy_report","exit_status"
+"input_logit_snapshot__combined","failed",TRUE,TRUE,TRUE,1
+"input_logit_snapshot__demand_shock","failed",TRUE,TRUE,TRUE,1
+"input_logit_history__combined","failed",TRUE,TRUE,TRUE,1
+"input_logit_history__demand_shock","failed",TRUE,TRUE,TRUE,1
+"output_ces_panel__combined","failed",TRUE,TRUE,TRUE,1
+"output_ces_panel__demand_shock","failed",TRUE,TRUE,TRUE,1

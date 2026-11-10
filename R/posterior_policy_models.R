@@ -4,7 +4,8 @@
 #' unit. The returned models can be passed to a deterministic policy package
 #' without fitting again or simulating an unchanged counterfactual.
 #'
-#' @param fit A \code{BayesFit} for a supported output-market model.
+#' @param fit A \code{BayesFit} for a supported output Logit/CES or input
+#'   Logit model.
 #' @param draw_plan A plan returned by \code{posterior_policy_draws()}. If
 #'   omitted, a new plan is constructed once.
 #' @param n_draws Number of draws when constructing a plan; must agree with
@@ -13,8 +14,13 @@
 #' @param market,year Simulation-unit selectors. Panel fits require an explicit
 #'   year selection, as in \code{simulate()}.
 #' @param demand_anchoring \code{"observed"} or \code{"latent_quality"}.
+#'   If omitted (\code{NULL}), estimated fits use \code{"latent_quality"}
+#'   and supplied \code{BayesSpecifiedFit} primitives use \code{"observed"}.
 #'   Latent anchoring uses the plan's conditional quality realization and
-#'   preserves the original structural cost primitive. Solving the resulting
+#'   recovered period demand for demand-shock fits, excluding independent
+#'   measurement noise from structural demand. The same state is reusable
+#'   across baseline and policy equilibria.
+#'   It preserves the original structural cost primitive. Solving the resulting
 #'   latent baseline may be necessary.
 #' @param insideSize,priceOutside,labels Optional simulation-unit overrides,
 #'   following the conventions of \code{simulate()}.
@@ -23,9 +29,10 @@
 #'   unit and draw position, \code{draw_indices}, \code{units}, the reusable
 #'   \code{draw_plan}, and a \code{failures} data frame. Failed models occupy
 #'   their original list positions as \code{NULL}.
-#' @details Initial support includes simultaneous Bertrand, Cournot and
-#'   monopolistic competition, and native exact fringe/Stackelberg models under
-#'   output Logit/CES demand. Ordinary models are \code{AntitrustFit} objects;
+#' @details Support includes simultaneous Bertrand, Cournot, monopolistic
+#'   competition, second-score auction and bargaining, and native exact
+#'   fringe/Stackelberg models under output Logit/CES and input Logit demand.
+#'   Ordinary models are \code{AntitrustFit} objects;
 #'   exact role models are native \pkg{coordination} objects. No policy wedge
 #'   or tariff equation is evaluated here. Attributes retain the draw index,
 #'   local quality units, realized k and plan fingerprint. Quality and roles
@@ -37,21 +44,20 @@
 #' @export
 posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
                                     seed = NULL, market = NULL, year = NULL,
-                                    demand_anchoring = c("observed", "latent_quality"),
+                                    demand_anchoring = NULL,
                                     insideSize = NULL, priceOutside = NULL,
                                     labels = NULL,
                                     allow_experimental = FALSE) {
   if (!methods::is(fit, "BayesFit"))
     stop("'fit' must be a BayesFit object.", call. = FALSE)
   .cmdstan_require_policy_inference(fit, allow_experimental)
-  demand_anchoring <- match.arg(demand_anchoring)
+  demand_anchoring <- .resolve_demand_anchoring(fit, demand_anchoring)
   specified <- methods::is(fit, "BayesSpecifiedFit")
-  auction_logit <- identical(as.character(fit@demand_model), "logit") &&
-    identical(as.integer(fit@supply_model), 4L)
-  if (!identical(fit@market_side, "output") ||
+  if ((!identical(fit@market_side, "output") &&
+       !identical(fit@demand_model, "logit")) ||
       !fit@demand_model %in% c("logit", "ces") ||
-      (!as.integer(fit@supply_model) %in% c(1L, 2L, 3L) && !auction_logit))
-    stop("posterior_policy_models() supports output Logit/CES Bertrand, Cournot and MonCom games, and second-score output Logit auctions.",
+      !as.integer(fit@supply_model) %in% 1:5)
+    stop("posterior_policy_models() supports output Logit/CES and input Logit Bertrand, Cournot, MonCom, second-score auction and bargaining games.",
          call. = FALSE)
   native_structure <- .native_ordered_structure(fit)
   structure_name <- fit@metadata[["structure", exact = TRUE]] %||% if (specified)
@@ -70,7 +76,10 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
   plan <- if (is.null(draw_plan))
     .lq_make_policy_plan(fit, draws, n_draws = n_draws,
                          seed = .lq_validate_seed(seed)) else
-    .lq_validate_plan(fit, draw_plan, n_draws = n_draws, draws = draws)
+    .lq_validate_plan(
+      fit, draw_plan, n_draws = n_draws, draws = draws,
+      role_mapping = draw_plan$role_mapping, fixed_k = draw_plan$fixed_k,
+      role_offset = draw_plan$role_offset)
   setup <- if (specified) .specified_simulation_units(fit, market, year) else
     .estimated_simulation_units(fit, market, year)
   indices <- as.integer(plan$draw_indices)
@@ -166,6 +175,8 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
           quality_scope = plan$quality_scope,
           quality_units = plan$quality_units[local_q],
           quality = as.numeric(plan$quality_draws[pos, local_q]),
+          demand_shock = if (is.null(plan$demand_shock_draws)) NULL else
+            as.numeric(plan$demand_shock_draws[pos, unit$idx]),
           plan_fingerprint = plan$fit_signature$latent_state_fingerprint)
         list(model = model, error = NULL)
       }, error = function(e) list(model = NULL, error = e))
