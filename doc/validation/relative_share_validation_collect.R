@@ -128,6 +128,41 @@
   result
 }
 
+# A kernel: entry seals the composed Stan program, including its fragments.
+# Recompose from the requested checkout even if another package is installed.
+.relative_collect_source_hashes <- function(keys, repository) {
+  vapply(keys, function(key) {
+    if (startsWith(key, 'kernel:')) {
+      kernel <- substring(key, 8L)
+      if (!kernel %in% getFromNamespace('.bayes_bridge_kernel_names', 'antitrustBayes'))
+        return(NA_character_)
+      resolve <- getFromNamespace('.cmdstan_kernel_file', 'antitrustBayes')
+      path <- tryCatch(resolve(kernel, stan_root = file.path(repository, 'inst', 'stan')),
+        error = function(e) NA_character_)
+    } else {
+      path <- file.path(repository, key)
+    }
+    if (is.na(path) || !file.exists(path)) return(NA_character_)
+    digest::digest(file = path, algo = 'sha256')
+  }, character(1), USE.NAMES = FALSE)
+}
+
+.relative_collect_source_table <- function(manifest, repository) {
+  recorded <- c(manifest$runtime$source_hashes, manifest$kernel_hashes)
+  files <- list.files(file.path(repository, 'inst', 'stan'), '[.]stan$')
+  kernels <- getFromNamespace('.bayes_bridge_kernel_names', 'antitrustBayes')
+  generated <- setdiff(kernels, tools::file_path_sans_ext(files))
+  expected <- c(file.path('R', list.files(file.path(repository, 'R'), '[.]R$')),
+    'doc/validation/nutpie_backend_validation.R', file.path('inst', 'stan', files),
+    if (length(generated)) paste0('kernel:', generated))
+  keys <- unique(c(names(recorded), expected))
+  sources <- data.frame(path = keys, manifest_sha256 = unname(recorded[keys]),
+    current_sha256 = .relative_collect_source_hashes(keys, repository))
+  sources$matches <- !is.na(sources$manifest_sha256) & !is.na(sources$current_sha256) &
+    sources$manifest_sha256 == sources$current_sha256
+  sources
+}
+
 .relative_collect_policy_identity <- function(fit, policy) {
   antitrustBayes:::.lq_validate_plan(fit, policy$plan)
   draws <- policy$draws; plan <- policy$plan
@@ -372,17 +407,7 @@ relative_validation_collect <- function(root, report_dir, repository = '.',
     if (!file.exists(path)) return(simpleError('Missing saved artifact.'))
     tryCatch(readRDS(path), error = identity)
   }
-  source_paths <- c(manifest$runtime$source_hashes, manifest$kernel_hashes)
-  names(source_paths) <- c(names(manifest$runtime$source_hashes), names(manifest$kernel_hashes))
-  expected_sources <- c(paste0('R/', list.files(file.path(repository, 'R'), '[.]R$')),
-    'doc/validation/nutpie_backend_validation.R',
-    paste0('inst/stan/', list.files(file.path(repository, 'inst/stan'), '[.]stan$')))
-  source_names <- unique(c(names(source_paths), expected_sources))
-  sources <- data.frame(path = source_names,
-    manifest_sha256 = unname(source_paths[match(source_names, names(source_paths))]),
-    current_sha256 = vapply(source_names, function(p) hash(file.path(repository, p)), character(1)))
-  sources$matches <- sources$manifest_sha256 == sources$current_sha256
-  sources$matches[is.na(sources$matches)] <- FALSE
+  sources <- .relative_collect_source_table(manifest, repository)
   current_source_verified <- all(sources$matches)
   fits <- policies <- evidences <- list()
   identities <- posterior <- diagnostic <- evidence_summary <- bridge_attempts <- policy_summary <- policy_failures <- list()

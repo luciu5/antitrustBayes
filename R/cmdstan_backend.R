@@ -2,21 +2,25 @@
 ## the installed package, which may be on a read-only library path.
 .cmdstan_model_cache <- new.env(parent = emptyenv())
 
-.cmdstan_kernel_file <- function(kernel, model_spec_version = NULL) {
+.cmdstan_kernel_file <- function(kernel, model_spec_version = NULL, stan_root = NULL) {
   legacy <- !is.null(model_spec_version) && identical(as.integer(model_spec_version), 14L)
   if (!legacy && (endsWith(kernel, "_relative_panel") || kernel == "logit_ordered_panel")) {
     base_kernel <- if (kernel == "logit_ordered_panel") "logit_stackelberg" else
       sub("_relative_panel$", "", kernel)
-    base <- .cmdstan_kernel_file(base_kernel)
+    base <- .cmdstan_kernel_file(base_kernel, stan_root = stan_root)
     source <- if (kernel == "logit_ordered_panel") .balanced_panel_kernel_file(base) else base
     return(.relative_panel_kernel_file(kernel, source, file.path(dirname(base), "include")))
   }
   if (!legacy && identical(kernel, "logit_stackelberg_panel"))
-    return(.balanced_panel_kernel_file(.cmdstan_kernel_file("logit_stackelberg")))
-  directory <- if (legacy) file.path("stan", "legacy14") else "stan"
-  path <- system.file(directory, paste0(kernel, ".stan"),
-                      package = "antitrustBayes")
-  if (!nzchar(path)) path <- file.path("inst", directory, paste0(kernel, ".stan"))
+    return(.balanced_panel_kernel_file(.cmdstan_kernel_file("logit_stackelberg", stan_root = stan_root)))
+  filename <- paste0(kernel, ".stan")
+  if (legacy) filename <- file.path("legacy14", filename)
+  if (is.null(stan_root)) {
+    path <- system.file("stan", filename, package = "antitrustBayes")
+    if (!nzchar(path)) path <- file.path("inst", "stan", filename)
+  } else {
+    path <- file.path(stan_root, filename)
+  }
   if (!file.exists(path)) {
     stop("Cannot find the installed Stan kernel: ", kernel, call. = FALSE)
   }

@@ -286,9 +286,9 @@ relative_noisy_ces_panel_run <- function(original_sampling_root, output_root,
   paired <- all(c('cmdstanr', 'nutpie') %in% names(fits))
   identity_equal <- paired && identical(helper$nutpie_validation_identity(fits$cmdstanr),
     helper$nutpie_validation_identity(fits$nutpie))
-  expected_sources <- c(manifest$runtime$source_hashes, source_hashes)
-  current_source_verified <- identical(unname(vapply(file.path(repository, names(expected_sources)),
-    digest::digest, character(1), file = TRUE, algo = 'sha256')), unname(expected_sources))
+  expected_sources <- c(manifest$runtime$source_hashes, source_hashes, manifest$kernel_hashes)
+  current_source_verified <- identical(helper$.relative_collect_source_hashes(names(expected_sources), repository),
+    unname(expected_sources))
   identity_equal <- isTRUE(identity_equal) && current_source_verified
   tables$paired_identity <- data.frame(case, both_fits_present = paired,
     current_source_verified, source_data_prior_identity_equal = identity_equal)

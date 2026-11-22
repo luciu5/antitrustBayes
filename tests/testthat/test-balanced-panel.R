@@ -85,6 +85,43 @@ test_that("ordinary and ordered Logit and CES use distinct sealed relative kerne
   }
 })
 
+test_that("validation manifests verify composed kernels from the requested checkout", {
+  repository <- test_path("..", "..")
+  collector <- file.path(repository, "doc", "validation", "relative_share_validation_collect.R")
+  skip_if_not(file.exists(collector), "Research collector requires a source checkout")
+  scripts <- new.env(parent = environment())
+  sys.source(collector, scripts)
+  sys.source(file.path(repository, "doc", "validation", "relative_share_backend_validation.R"), scripts)
+  manifest <- withr::with_dir(repository, scripts$relative_validation_kernel_hashes())
+  expect_identical(scripts$.relative_collect_source_hashes(names(manifest), repository), unname(manifest))
+  runtime_paths <- c(file.path("R", list.files(file.path(repository, "R"), "[.]R$")),
+    "doc/validation/nutpie_backend_validation.R")
+  runtime_hashes <- vapply(file.path(repository, runtime_paths), digest::digest, character(1),
+    file = TRUE, algo = "sha256")
+  sampling <- list(runtime = list(source_hashes = setNames(runtime_hashes, runtime_paths)),
+    kernel_hashes = manifest)
+  expect_true(all(scripts$.relative_collect_source_table(sampling, repository)$matches))
+  missing <- "kernel:ces_supply_relative_panel"
+  sampling$kernel_hashes <- manifest[names(manifest) != missing]
+  audit <- scripts$.relative_collect_source_table(sampling, repository)
+  expect_identical(audit$path[!audit$matches], missing)
+
+  checkout <- tempfile("panel-checkout-")
+  on.exit(unlink(checkout, recursive = TRUE))
+  stan <- file.path(checkout, "inst", "stan")
+  dir.create(stan, recursive = TRUE)
+  original <- file.path(repository, "inst", "stan")
+  expect_true(all(file.copy(file.path(original, c("ces_supply.stan", "include")), stan, recursive = TRUE)))
+  keys <- c("inst/stan/ces_supply.stan", "kernel:ces_supply_relative_panel")
+  fragment <- file.path(stan, "include", "relative_panel_functions.stan")
+  cat("\n// Changed include\n", file = fragment, append = TRUE)
+  current <- scripts$.relative_collect_source_hashes(keys, checkout)
+  expect_identical(current[1], unname(manifest[keys[1]]))
+  expect_false(is.na(current[2]))
+  expect_false(identical(current[2], unname(manifest[keys[2]])))
+  expect_identical(scripts$.relative_collect_source_hashes("kernel:unknown", checkout), NA_character_)
+})
+
 test_that("compiled M4T4 density, gradient and all ordered-k scores match the generic kernel", {
   # Optional when CmdStan executables have been prepared. Hundreds of fixed
   # parameter evaluations use log_prob only, including its Jacobian.
