@@ -80,7 +80,7 @@ validate_comparison_contract <- function(fits) {
 }
 
 .bayes_bridge_kernel_names <- c(
-  "ces_stackelberg", "ces_supply", "logit_stackelberg", "logit_supply"
+  "ces_stackelberg", "ces_supply", "logit_stackelberg", "logit_stackelberg_panel", "logit_supply"
 )
 
 .bayes_stan_source_text <- function(code) {

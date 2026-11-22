@@ -5,6 +5,14 @@ then the optional [posterior workflow](../vignettes/posterior-workflow.Rmd) and
 [model reference](../vignettes/supply-and-demand.Rmd). These guides do not run
 inference or bridge sampling during documentation builds.
 
+Complete four-market, four-period Logit panels with paired Gaussian combined
+residuals and collapsed market-specific quality use an exact specialized
+ordered-k likelihood. The generic kernel remains available for other designs
+and saved evidence. The [balanced-panel regression](../tests/testthat/test-balanced-panel.R)
+checks dispatch and source seals. Set `RUN_BALANCED_PANEL_STAN=true` when
+running the `balanced-panel` test filter to compare both compiled targets and
+gradients at fixed parameter points without sampling.
+
 The 2026-11-08 total/fraction extraction closeout preserves the economic quality-SD alias
 through nested conditional-quality recovery. Focused `posterior-quality` and
 `selective-extraction` fixtures verify distinct economic/total scales and

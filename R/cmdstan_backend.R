@@ -4,6 +4,8 @@
 
 .cmdstan_kernel_file <- function(kernel, model_spec_version = NULL) {
   legacy <- !is.null(model_spec_version) && identical(as.integer(model_spec_version), 14L)
+  if (!legacy && identical(kernel, "logit_stackelberg_panel"))
+    return(.balanced_panel_kernel_file(.cmdstan_kernel_file("logit_stackelberg")))
   directory <- if (legacy) file.path("stan", "legacy14") else "stan"
   path <- system.file(directory, paste0(kernel, ".stan"),
                       package = "antitrustBayes")
@@ -12,6 +14,32 @@
     stop("Cannot find the installed Stan kernel: ", kernel, call. = FALSE)
   }
   normalizePath(path, mustWork = TRUE)
+}
+
+# Compose a separately identified kernel, sharing the exact declarations, priors
+# and generated quantities of the generic kernel. Its original source is also
+# the evidence reference for saved fits, so it stays byte-for-byte intact.
+.balanced_panel_kernel_file <- function(base_source) {
+  base <- readLines(base_source, warn = FALSE)
+  likelihood <- readLines(file.path(dirname(base_source), "include",
+    "balanced_panel_likelihood.stan"), warn = FALSE)
+  transformed_data <- which(base == "transformed data {")
+  likelihood_start <- which(trimws(base) == "// The share likelihood is common across all ordered-k states.") - 1L
+  quantities <- which(base == "generated quantities {")
+  if (length(transformed_data) != 1L || length(likelihood_start) != 1L || length(quantities) != 1L ||
+      !identical(trimws(base[likelihood_start]), "if (share_basis == 2) {") ||
+      transformed_data >= likelihood_start || likelihood_start >= quantities)
+    stop("Cannot locate the ordered-k kernel's shared blocks.")
+  code <- c(base[seq_len(transformed_data)], "  array[N_firm_mky] int panel_firm_obs;",
+    "  for (i in 1:N) panel_firm_obs[obs_to_firm_mky[i]] = i;",
+    base[(transformed_data + 1L):(likelihood_start - 1L)], likelihood, "}", "",
+    base[quantities:length(base)])
+  bytes <- charToRaw(paste0(paste(code, collapse = "\n"), "\n"))
+  hash <- digest::digest(bytes, algo = "sha256", serialize = FALSE)
+  path <- file.path(tempdir(), paste0("logit_stackelberg_panel_", hash, ".stan"))
+  if (!file.exists(path) || !identical(digest::digest(file = path, algo = "sha256"), hash))
+    writeBin(bytes, path)
+  path
 }
 
 .cmdstan_model_for_kernel <- function(kernel, model_spec_version = NULL) {

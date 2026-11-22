@@ -19,7 +19,8 @@ test_that("specification 14 retains its statistical meaning without mutation", {
 })
 
 test_that("legacy evidence selects only its sealed original kernel", {
-  for (kernel in .bayes_bridge_kernel_names) {
+  expect_error(.cmdstan_kernel_file("logit_stackelberg_panel", 14L), "Cannot find")
+  for (kernel in c("ces_stackelberg", "ces_supply", "logit_stackelberg", "logit_supply")) {
     file <- .cmdstan_kernel_file(kernel, 14L)
     source <- paste0(paste(readLines(file, warn = FALSE), collapse = "\n"), "\n")
     metadata <- list(backend = "cmdstanr", inference = "hmc", stan_kernel = kernel,

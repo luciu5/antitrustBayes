@@ -851,7 +851,7 @@ bayes_est <- function(prices, quantities, margins,
     stan_kernel <- if (structure == "stackelberg" ||
                        (exact_structure && structure == "fringe" &&
                         partition_prior == "ordered_k")) {
-      "logit_stackelberg"
+      if (.uses_balanced_panel_kernel(stan_data)) "logit_stackelberg_panel" else "logit_stackelberg"
     } else "logit_supply"
     price_sd_val <- stan_data$price_sd
   } else {

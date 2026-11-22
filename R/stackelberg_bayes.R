@@ -341,6 +341,28 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
   )
 }
 
+# One row per persistent quality group per period, in the market-wide firm
+# rank order used by the supply equations. Incomplete or multi-product panels
+# use the generic Gaussian likelihood.
+.uses_balanced_panel_kernel <- function(d) {
+  if (d$N_market != 4L || any(d$market_mky_n != 4L) ||
+      d$share_basis != 1L || d$share_residual_model != 1L || d$likelihood_mode != 1L ||
+      d$quality_parameterization != 2L || d$quality_scope != 2L || d$use_rho != 1L ||
+      d$N_margin != d$N || d$N_firm_mky != d$N ||
+      any(d$quality_block_n != d$firm_market_n) ||
+      any(d$firm_mky_n != d$firm_market_n[d$mky_to_market]) ||
+      anyDuplicated(d$obs_to_firm_mky) != 0L) return(FALSE)
+  obs <- order(as.integer(d$obs_to_firm_mky))
+  if (!all(d$firm_mky_rank == sequence(as.integer(d$firm_mky_n)))) return(FALSE)
+  # Each rank must denote the same distinct quality group throughout a market.
+  for (m in seq_len(d$N_market)) {
+    rows <- which(d$firm_mky_market == m)
+    groups <- matrix(d$obs_to_quality[obs[rows]], nrow = d$firm_market_n[m])
+    if (anyDuplicated(groups[, 1L]) || any(groups != groups[, 1L])) return(FALSE)
+  }
+  TRUE
+}
+
 .stack_partition_arrays <- function(firm, mky_to_market, market_levels,
                                     k_prior = NULL, k_scope = "market",
                                     partition_prior = "cutoff", k_support = NULL,

@@ -343,7 +343,7 @@
     for (i in seq_len(nrow(nonfinite))) {
       at <- nonfinite[i, ]
       field <- fields[[at[[3L]]]]
-      permitted <- fit$metadata$kernel %in% c("logit_stackelberg", "ces_stackelberg") &&
+      permitted <- fit$metadata$kernel %in% c("logit_stackelberg", "logit_stackelberg_panel", "ces_stackelberg") &&
         grepl("^component_log_score\\[[1-9][0-9]*\\]$", field) &&
         identical(as.numeric(draws[at[[1L]], at[[2L]], at[[3L]]]), -Inf)
       prior <- match(sub("^component_log_score", "prior_component_prob", field), fields)
