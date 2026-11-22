@@ -80,7 +80,9 @@ validate_comparison_contract <- function(fits) {
 }
 
 .bayes_bridge_kernel_names <- c(
-  "ces_stackelberg", "ces_supply", "logit_stackelberg", "logit_stackelberg_panel", "logit_supply"
+  "ces_stackelberg", "ces_supply", "logit_stackelberg", "logit_stackelberg_panel", "logit_supply",
+  "logit_ordered_panel", "logit_supply_relative_panel", "ces_supply_relative_panel",
+  "logit_stackelberg_relative_panel", "ces_stackelberg_relative_panel"
 )
 
 .bayes_stan_source_text <- function(code) {
@@ -577,6 +579,55 @@ validate_comparison_contract <- function(fits) {
   )
 }
 
+# Each bridge uses fresh proposals and the same posterior evaluation
+# rows. Cache only exact coordinate matches and successful, warning-free scores.
+# Keep separate bridge objects, RNG order, MCSEs and failure handling.
+.bayes_shared_bridge_inputs <- function(context, method) {
+  setup_warned <- FALSE
+  draws <- context$samples
+  args <- context$bridge_args
+  if (inherits(draws, "CmdStanMCMC")) {
+    fit <- draws
+    draws <- withCallingHandlers(fit$unconstrain_draws(format = "matrix"),
+      warning = function(w) setup_warned <<- TRUE)
+    bounds <- stats::setNames(rep(Inf, ncol(draws)), colnames(draws))
+    # CmdStan's bridge adapter evaluates the unconstrained target with its
+    # Jacobian; it maps invalid proposal evaluations to negative infinity.
+    args <- list(lb = -bounds, ub = bounds, data = fit,
+      log_posterior = function(q, data) {
+        if ("lp__" %in% names(q)) q <- q[names(q) != "lp__"]
+        value <- tryCatch(data$log_prob(q, jacobian = TRUE), error = function(e) {
+          print(e)
+          -Inf
+        })
+        if (is.na(value)) -Inf else value
+      })
+  }
+  if (!is.matrix(draws) || !is.function(args$log_posterior)) return(NULL)
+  target <- args$log_posterior
+  count <- nrow(draws) - round(nrow(draws) / 2)
+  # Warp-III also scores the deterministic reflection of each posterior point.
+  if (method == "warp3") count <- 2L * count
+  points <- vector("list", count)
+  scores <- rep(NA_real_, count)
+  next_row <- 0L
+  args$log_posterior <- function(q, data) {
+    next_row <<- next_row + 1L
+    i <- next_row
+    if (i > count) return(target(q, data))
+    if (is.finite(scores[i]) && identical(q, points[[i]])) return(scores[i])
+    warned <- FALSE
+    value <- withCallingHandlers(target(q, data), warning = function(w) warned <<- TRUE)
+    if (!warned && length(value) == 1L && is.finite(value)) {
+      points[[i]] <<- q
+      scores[i] <<- value
+    }
+    value
+  }
+  list(samples = draws, bridge_args = args, setup_warned = setup_warned,
+       reset = function() next_row <<- 0L)
+}
+
 .bayes_log_lik_array <- function(stanfit, parameter_name,
                                  expected_units = NULL) {
   if (!inherits(stanfit, "CmdStanMCMC") && !inherits(stanfit, "NutpieFit")) {
@@ -986,15 +1037,26 @@ bayes_compare <- function(..., restrictions = NULL, reference = NULL,
             status = "not_attempted", logml = NA_real_, mcse_logml = NA_real_,
             error = bridge_error, warnings = "", stringsAsFactors = FALSE))
       } else {
+        shared_inputs <- NULL
         repetition_info <- vector("list", bridge_repetitions)
         bridge_list[[i]] <- lapply(seq_len(bridge_repetitions), function(rep_id) {
           failure <- ""; warnings <- character()
           value <- tryCatch(
             withCallingHandlers(
-              do.call(bridgesampling::bridge_sampler, c(list(
-                samples = bridge_context$samples, repetitions = 1L,
-                method = bridge_method, silent = TRUE, maxiter = bridge_maxiter
-              ), bridge_context$bridge_args)),
+              {
+                if (bridge_repetitions > 1L && is.null(shared_inputs))
+                  shared_inputs <<- .bayes_shared_bridge_inputs(bridge_context, bridge_method)
+                inputs <- shared_inputs %||% bridge_context
+                if (!is.null(shared_inputs)) {
+                  shared_inputs$reset()
+                  # Repeat a warning-producing conversion for the next diagnostic.
+                  if (shared_inputs$setup_warned) shared_inputs <<- NULL
+                }
+                do.call(bridgesampling::bridge_sampler, c(list(
+                  samples = inputs$samples, repetitions = 1L, method = bridge_method,
+                  silent = TRUE, maxiter = bridge_maxiter
+                ), inputs$bridge_args))
+              },
               warning = function(w) warnings <<- c(warnings, conditionMessage(w))),
             error = function(e) {
               failure <<- conditionMessage(e)

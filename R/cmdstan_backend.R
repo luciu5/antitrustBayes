@@ -4,6 +4,13 @@
 
 .cmdstan_kernel_file <- function(kernel, model_spec_version = NULL) {
   legacy <- !is.null(model_spec_version) && identical(as.integer(model_spec_version), 14L)
+  if (!legacy && (endsWith(kernel, "_relative_panel") || kernel == "logit_ordered_panel")) {
+    base_kernel <- if (kernel == "logit_ordered_panel") "logit_stackelberg" else
+      sub("_relative_panel$", "", kernel)
+    base <- .cmdstan_kernel_file(base_kernel)
+    source <- if (kernel == "logit_ordered_panel") .balanced_panel_kernel_file(base) else base
+    return(.relative_panel_kernel_file(kernel, source, file.path(dirname(base), "include")))
+  }
   if (!legacy && identical(kernel, "logit_stackelberg_panel"))
     return(.balanced_panel_kernel_file(.cmdstan_kernel_file("logit_stackelberg")))
   directory <- if (legacy) file.path("stan", "legacy14") else "stan"
@@ -37,6 +44,39 @@
   bytes <- charToRaw(paste0(paste(code, collapse = "\n"), "\n"))
   hash <- digest::digest(bytes, algo = "sha256", serialize = FALSE)
   path <- file.path(tempdir(), paste0("logit_stackelberg_panel_", hash, ".stan"))
+  if (!file.exists(path) || !identical(digest::digest(file = path, algo = "sha256"), hash))
+    writeBin(bytes, path)
+  path
+}
+
+# Keep previously sealed sources available. Panel calculations use the original local or
+# global quality coordinates and preserve the period-only reporting contract.
+.relative_panel_kernel_file <- function(kernel, source, includes) {
+  lines <- readLines(source, warn = FALSE)
+  insert <- function(anchor, addition, after = FALSE) {
+    at <- which(lines == anchor)
+    if (length(at) != 1L) stop("Missing or ambiguous panel kernel anchor: ", anchor)
+    lines <<- append(lines, addition, after = at - as.integer(!after))
+  }
+  insert("  real bounded_inv_logit(real eta) {",
+         readLines(file.path(includes, "relative_panel_functions.stan")))
+  insert("transformed data {", c(
+    "  array[N_market] int market_panel;", "  int global_panel = 0;"), after = TRUE)
+  end <- max(which(lines == "}" & seq_along(lines) < match("parameters {", lines)))
+  lines <- append(lines, readLines(file.path(includes, "relative_panel_design.stan")), after = end - 1L)
+  lines <- sub("relative_local_gaussian_logpdf(relative_base_resid, relative_base_var,",
+    "panel_local_gaussian_logpdf(market_panel[m] > 0, relative_base_resid, relative_base_var,", lines, fixed = TRUE)
+  lines <- sub("relative_local_gaussian_logpdf(relative_cond_resid, relative_cond_var,",
+    "panel_local_gaussian_logpdf(market_panel[m] == 2, relative_cond_resid, relative_cond_var,", lines, fixed = TRUE)
+  lines <- sub("score[kk] += relative_gaussian_logpdf(",
+    "score[kk] += panel_gaussian_logpdf(market_panel[m] == 2,", lines, fixed = TRUE)
+  lines <- sub("relative_share_ll = relative_gaussian_logpdf(",
+    "relative_share_ll = panel_gaussian_logpdf(global_panel > 0,", lines, fixed = TRUE)
+  lines <- sub("relative_margin_ll + relative_gaussian_logpdf(",
+    "relative_margin_ll + panel_gaussian_logpdf(global_panel == 2,", lines, fixed = TRUE)
+  bytes <- charToRaw(paste0(paste(lines, collapse = "\n"), "\n"))
+  hash <- digest::digest(bytes, algo = "sha256", serialize = FALSE)
+  path <- file.path(tempdir(), paste0(kernel, "_", hash, ".stan"))
   if (!file.exists(path) || !identical(digest::digest(file = path, algo = "sha256"), hash))
     writeBin(bytes, path)
   path

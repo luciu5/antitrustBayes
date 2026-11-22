@@ -403,6 +403,8 @@ relative_validation_collect <- function(root, report_dir, repository = '.',
     metadata <- if (valid_fit) fit@metadata else list()
     kernel_path <- paste0('inst/stan/', metadata$stan_kernel, '.stan')
     kernel_index <- match(kernel_path, names(manifest$kernel_hashes))
+    if (is.na(kernel_index))
+      kernel_index <- match(paste0('kernel:', metadata$stan_kernel), names(manifest$kernel_hashes))
     metadata_fields <- metadata$stan_data_fields
     data_hash <- if (valid_fit && length(metadata_fields) && all(metadata_fields %in% names(fit@stan_data)))
       digest::digest(fit@stan_data[metadata_fields], algo = 'sha256') else NA_character_

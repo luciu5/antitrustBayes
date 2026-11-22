@@ -1,6 +1,15 @@
 #!/usr/bin/env Rscript
 # Sourcing defines functions only. Run from a development-source session with
 # compatible libraries/toolchains and explicit external cache options.
+relative_validation_kernel_hashes <- function() {
+  kernels <- getFromNamespace(".bayes_bridge_kernel_names", "antitrustBayes")
+  resolve <- getFromNamespace(".cmdstan_kernel_file", "antitrustBayes")
+  source <- vapply(kernels, resolve, character(1))
+  hashes <- vapply(source, digest::digest, character(1), file = TRUE, algo = "sha256")
+  paths <- file.path("inst", "stan", paste0(kernels, ".stan"))
+  stats::setNames(hashes, ifelse(file.exists(paths), paths, paste0("kernel:", kernels)))
+}
+
 relative_validation_fixtures <- function() {
   source('doc/validation/nutpie_backend_validation.R', local = TRUE)
   source('doc/validation/single_market_intercept_validation.R', local = TRUE)
@@ -92,8 +101,7 @@ relative_validation_run <- function(root, max_seconds=13200, run_policy=TRUE, re
     seed=452891L,control=list(adapt_delta=.99,max_treedepth=13L))
   manifest<-list(started=Sys.time(),deadline=Sys.time()+max_seconds,fixtures=fixtures,
     controls=controls,starting_commit=trimws(system2('git',c('rev-parse','HEAD'),stdout=TRUE)),
-    kernel_hashes=vapply(list.files('inst/stan','[.]stan$',full.names=TRUE),
-      digest::digest,character(1),file=TRUE,algo='sha256'),
+    kernel_hashes=relative_validation_kernel_hashes(),
     runtime=nutpie_validation_runtime(normalizePath('.')),status='running',
     preparation_warnings=preparation_warnings,attempts=list())
   if(!is.null(prior_manifest)) {

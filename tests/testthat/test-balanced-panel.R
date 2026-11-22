@@ -1,6 +1,7 @@
 panel_test_args <- function(conduct = 1L, structure = "fringe", mask = FALSE,
-                            remove = FALSE, duplicate = FALSE) {
-  x <- expand.grid(firm = 1:7, year = 1:4, market = 1:4)
+                            remove = FALSE, duplicate = FALSE,
+                            markets = 4L, periods = 4L) {
+  x <- expand.grid(firm = 1:7, year = seq_len(periods), market = seq_len(markets))
   # Shuffle rows and give markets different firm rankings.
   x <- x[order((seq_len(nrow(x)) * 53L) %% nrow(x)), ]
   if (remove) x <- x[-1, ]
@@ -24,22 +25,23 @@ test_that("bayes_est selects the compiled kernel from the actual panel", {
     args <- panel_test_args(mask = mask)
     args$supply_model <- "bertrand"
     args$demand_model <- "logit"
-    expect_error(do.call(bayes_est, args), if (mask) "selected logit_stackelberg!" else
-      "selected logit_stackelberg_panel!")
+    expect_error(do.call(bayes_est, args), if (mask) "selected logit_stackelberg_relative_panel!" else
+      "selected logit_ordered_panel!")
   }
 })
 
-test_that("only complete paired M4T4 panels enter the balanced kernel", {
+test_that("only complete paired ordered panels enter the balanced kernel", {
   d <- panel_test_data()
   expect_true(.uses_balanced_panel_kernel(d))
   for (bad in list(panel_test_data(mask = TRUE), panel_test_data(remove = TRUE),
                    panel_test_data(duplicate = TRUE))) expect_false(.uses_balanced_panel_kernel(bad))
-  for (key in c("share_basis", "share_residual_model", "likelihood_mode", "quality_parameterization",
-                "quality_scope", "use_rho", "N_market")) {
+  for (key in c("share_basis", "likelihood_mode", "quality_parameterization",
+                "quality_scope")) {
     bad <- d
     bad[[key]] <- if (key == "use_rho") 0L else if (d[[key]] == 1L) 2L else 1L
     expect_false(.uses_balanced_panel_kernel(bad))
   }
+  expect_true(.uses_balanced_panel_kernel(panel_test_data(markets = 2L, periods = 3L)))
   bad <- d
   bad$obs_to_quality[1L] <- bad$obs_to_quality[1L] + 1L
   expect_false(.uses_balanced_panel_kernel(bad))
@@ -60,13 +62,36 @@ test_that("balanced kernel reuses the original generated quantities and has its 
   expect_error(.bayes_cmdstan_source_contract(meta, readLines(old)), "does not match")
 })
 
+test_that("ordinary and ordered Logit and CES use distinct sealed relative kernels", {
+  local_mocked_bindings(.cmdstan_model_for_kernel = function(kernel) stop("selected ", kernel, "!"))
+  for (demand in c("logit", "ces")) for (structure in c("simultaneous", "fringe")) {
+    args <- panel_test_args(markets = 2L, periods = 3L)
+    args$supply_model <- "bertrand"
+    args$demand_model <- demand
+    args$structure <- structure
+    if (structure == "simultaneous")
+      args[c("k_support", "k_prior", "partition_prior")] <- NULL
+    base <- paste(demand, if (structure == "fringe") "stackelberg" else "supply", sep = "_")
+    kernel <- if (base == "logit_stackelberg") "logit_ordered_panel" else
+      paste0(base, "_relative_panel")
+    expect_error(do.call(bayes_est, args), paste0("selected ", kernel, "!"))
+    source <- .cmdstan_kernel_file(kernel)
+    meta <- list(backend = "cmdstanr", inference = "hmc", model_spec_version = 15L,
+      stan_kernel = kernel, stan_source_hash = digest::digest(file = source, algo = "sha256"),
+      stan_source_identity = .bayes_stan_source_identity(source))
+    expect_identical(.bayes_cmdstan_source_contract(meta, readLines(source))$kernel, kernel)
+    expect_error(.bayes_cmdstan_source_contract(meta, readLines(.cmdstan_kernel_file(base))),
+                 "does not match")
+  }
+})
+
 test_that("compiled M4T4 density, gradient and all ordered-k scores match the generic kernel", {
   # Optional when CmdStan executables have been prepared. Hundreds of fixed
   # parameter evaluations use log_prob only, including its Jacobian.
   executables <- Sys.getenv(c("PANEL_GENERIC_EXE", "PANEL_FAST_EXE"))
   if (any(!nzchar(executables))) {
     skip_if(Sys.getenv("RUN_BALANCED_PANEL_STAN") != "true", "Opt-in compiled fixed-point comparison")
-    executables <- vapply(c("logit_stackelberg", "logit_stackelberg_panel"),
+    executables <- vapply(c("logit_stackelberg", "logit_ordered_panel"),
       function(k) .cmdstan_model_for_kernel(k)$exe_file(), character(1))
   }
   expect_true(all(file.exists(executables)))

@@ -851,7 +851,7 @@ bayes_est <- function(prices, quantities, margins,
     stan_kernel <- if (structure == "stackelberg" ||
                        (exact_structure && structure == "fringe" &&
                         partition_prior == "ordered_k")) {
-      if (.uses_balanced_panel_kernel(stan_data)) "logit_stackelberg_panel" else "logit_stackelberg"
+      "logit_stackelberg"
     } else "logit_supply"
     price_sd_val <- stan_data$price_sd
   } else {
@@ -908,6 +908,13 @@ bayes_est <- function(prices, quantities, margins,
     price_sd_val <- stan_data$log_price_sd
   }
 
+  if (stan_data$share_basis == 1L && stan_data$likelihood_mode != 3L) {
+    if (stan_kernel == "logit_stackelberg" && .uses_balanced_panel_kernel(stan_data)) {
+      stan_kernel <- "logit_ordered_panel"
+    } else {
+      stan_kernel <- paste0(stan_kernel, "_relative_panel")
+    }
+  }
   attr(stan_data, "s0_pooling") <- s0_pooling
   attr(stan_data, "s0_pooling_requested") <- s0_pooling_requested
   attr(stan_data, "s0_pooling_resolved") <- s0_pooling

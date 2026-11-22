@@ -345,9 +345,8 @@ stackelberg_partition_logprob <- function(sizes, cutoff, scale = 0.01) {
 # rank order used by the supply equations. Incomplete or multi-product panels
 # use the generic Gaussian likelihood.
 .uses_balanced_panel_kernel <- function(d) {
-  if (d$N_market != 4L || any(d$market_mky_n != 4L) ||
-      d$share_basis != 1L || d$share_residual_model != 1L || d$likelihood_mode != 1L ||
-      d$quality_parameterization != 2L || d$quality_scope != 2L || d$use_rho != 1L ||
+  if (d$share_basis != 1L || d$likelihood_mode != 1L ||
+      d$quality_parameterization != 2L || (d$quality_scope != 2L && d$N_market > 1L) ||
       d$N_margin != d$N || d$N_firm_mky != d$N ||
       any(d$quality_block_n != d$firm_market_n) ||
       any(d$firm_mky_n != d$firm_market_n[d$mky_to_market]) ||

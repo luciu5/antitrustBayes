@@ -5,13 +5,22 @@ then the optional [posterior workflow](../vignettes/posterior-workflow.Rmd) and
 [model reference](../vignettes/supply-and-demand.Rmd). These guides do not run
 inference or bridge sampling during documentation builds.
 
-Complete four-market, four-period Logit panels with paired Gaussian combined
-residuals and collapsed market-specific quality use an exact specialized
-ordered-k likelihood. The generic kernel remains available for other designs
-and saved evidence. The [balanced-panel regression](../tests/testthat/test-balanced-panel.R)
-checks dispatch and source seals. Set `RUN_BALANCED_PANEL_STAN=true` when
-running the `balanced-panel` test filter to compare both compiled targets and
-gradients at fixed parameter points without sampling.
+Logit and CES relative-share fits use an exact Gaussian calculation whenever
+the same quality groups occur once in each period. Markets can have different
+numbers of firms and periods. Global quality is evaluated jointly. Missing
+margins can span whole periods; partially paired periods use the general
+conditional density. The same checks apply to generated quantities. Fully
+paired, rank-stable Logit fringe and Stackelberg panels also reuse supply
+calculations across ordered-k states. Older fits retain their sealed sources.
+
+The [panel tests](../tests/testthat/test-relative-panel-targets.R) compare complete
+generated outputs, normalized densities and gradients at fixed initialization.
+Set `RUN_RELATIVE_PANEL_STAN=true` for the `relative-panel-targets` filter;
+`RUN_BALANCED_PANEL_STAN=true` runs the additional ordered-k score challenge
+in the `balanced-panel` filter. Neither check requires HMC.
+[Bridge regressions](../tests/testthat/test-bridge-score-reuse.R) check reuse
+of posterior scores across normal and Warp-III repetitions, including RNG and
+Monte Carlo errors.
 
 The 2026-11-08 total/fraction extraction closeout preserves the economic quality-SD alias
 through nested conditional-quality recovery. Focused `posterior-quality` and

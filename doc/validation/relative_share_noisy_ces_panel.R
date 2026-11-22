@@ -152,6 +152,13 @@ relative_noisy_ces_panel_run <- function(original_sampling_root, output_root,
   kernel_hash <- unname(source_hashes['inst/stan/ces_supply.stan'])
   if (!identical(kernel_hash, unname(original$kernel_hashes['inst/stan/ces_supply.stan'])))
     stop('Original fixture manifest and current CES kernel differ; do not relabel targets.')
+  kernel <- if ('kernel:ces_supply_relative_panel' %in% names(original$kernel_hashes))
+    'ces_supply_relative_panel' else 'ces_supply'
+  kernel_key <- if (kernel == 'ces_supply') 'inst/stan/ces_supply.stan' else paste0('kernel:', kernel)
+  kernel_hash <- digest::digest(file = getFromNamespace('.cmdstan_kernel_file', 'antitrustBayes')(kernel),
+    algo = 'sha256')
+  if (!identical(kernel_hash, unname(original$kernel_hashes[kernel_key])))
+    stop('Original fixture and current effective CES kernel source differ.')
   if (file.exists(output_root)) stop('Select a new, nonexistent output root; existing attempts are preserved.')
   original_state <- relative_noisy_ces_panel_original_state(original_sampling_root)
   stopifnot(dir.create(output_root, recursive = TRUE, showWarnings = FALSE))
@@ -183,7 +190,7 @@ relative_noisy_ces_panel_run <- function(original_sampling_root, output_root,
     observation_error = prepared$specification, maximum_cell_total_error = prepared$maximum_cell_total_error,
     controls = controls, sampling_seeds = sampling_seeds, bridge_seeds = bridge_seeds,
     bridge_repetitions = 3L, scheduled_calls = calls,
-    kernel_hashes = stats::setNames(kernel_hash, 'inst/stan/ces_supply.stan'),
+    kernel_hashes = original$kernel_hashes[c('inst/stan/ces_supply.stan', setdiff(kernel_key, 'inst/stan/ces_supply.stan'))],
     validation_source_hashes = source_hashes,
     runtime = helper$nutpie_validation_runtime(repository), attempts = list(), warnings = list())
   manifest_path <- file.path(output_root, 'sampling-manifest.rds')
@@ -231,7 +238,7 @@ relative_noisy_ces_panel_run <- function(original_sampling_root, output_root,
       identical(as.numeric(fit@data[[field]]), as.numeric(prepared$arguments[[field]])), logical(1))) &&
       all(vapply(c('market', 'year', 'group'), function(field)
         identical(as.character(fit@data[[field]]), as.character(prepared$arguments[[field]])), logical(1)))
-    verified <- identical(fit@metadata$backend, backend) && identical(fit@metadata$stan_kernel, 'ces_supply') &&
+    verified <- identical(fit@metadata$backend, backend) && identical(fit@metadata$stan_kernel, kernel) &&
       identical(fit@metadata$stan_source_hash, kernel_hash) && length(data_fields) > 0L &&
       identical(fit@metadata$stan_data_hash, digest::digest(fit@stan_data[data_fields], algo = 'sha256')) && observed_verified
     manifest$attempts[[active]]$identity <- identity
@@ -262,7 +269,7 @@ relative_noisy_ces_panel_run <- function(original_sampling_root, output_root,
       'stan_source_hash', 'stan_data_hash', 'model_spec_version', 'prior_manifest', 'resolved_priors')
     parsed$summary$identity_verified <- verified && isTRUE(parsed$summary$saved_summary_consistent) &&
       isTRUE(parsed$summary$saved_backend_verified) &&
-      identical(parsed$summary$context_kernel, 'ces_supply') &&
+      identical(parsed$summary$context_kernel, kernel) &&
       identical(parsed$summary$context_saved_hash, kernel_hash) &&
       identical(parsed$summary$context_current_hash, kernel_hash) &&
       all(vapply(fields, function(field) !is.null(parsed$metadata[[field]]) &&
