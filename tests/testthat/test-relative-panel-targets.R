@@ -46,6 +46,7 @@ test_that("Logit and CES panel kernels preserve densities, gradients and generat
         market = x$market, year = x$year, group = x$group, margin_observed = observed,
         supply_model = if (structure == "fringe") 1L else 3L,
         share_basis = "relative", use_s0_market_pool = TRUE, structure = structure,
+        use_cutoff = rich, use_hmt = FALSE, priors = list(),
         quality_scope = if (global) "global" else "market",
         share_residual_model = if (design == "demand_shock") "demand_shock" else "combined",
         use_market_resid_scale = design == "global_scales",

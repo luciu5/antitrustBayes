@@ -20,7 +20,8 @@ Set `RUN_RELATIVE_PANEL_STAN=true` for the `relative-panel-targets` filter;
 in the `balanced-panel` filter. Neither check requires HMC.
 [Bridge regressions](../tests/testthat/test-bridge-score-reuse.R) check reuse
 of posterior scores across normal and Warp-III repetitions, including RNG and
-Monte Carlo errors.
+Monte Carlo errors. The [November 22 validation](validation/relative_panel_validation_20261122.md)
+records the native comparisons and peak memory for serial compilation, testing and sampling.
 
 The 2026-11-08 total/fraction extraction closeout preserves the economic quality-SD alias
 through nested conditional-quality recovery. Focused `posterior-quality` and
