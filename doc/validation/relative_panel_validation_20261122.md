@@ -62,6 +62,29 @@ one warmup run per configuration.
 
 The three runs returned identical normalized log densities and every gradient
 coordinate. The six-count fit retains all six counts in generated quantities.
-This timing measures fixed-point evaluations. End-to-end sampling speed for
-this optimization remains unmeasured. Local measurements and the comparison
-script are in `doc/statistical_toolkit_runs/sparse-ordered-k-20261122/`.
+The table measures fixed-point evaluations. Local measurements and the
+comparison script are in `doc/statistical_toolkit_runs/sparse-ordered-k-20261122/`.
+
+### Four-chain sampling comparison
+
+On the same 112 observations and six declared counts, the original kernel took
+51.55 seconds and the kernel that skips zero-weight counts took 23.76 seconds
+(2.17× as fast, 54% less time). These are summed wall times for four sequential,
+single-threaded CmdStan chains, including warmup, sampling and writing generated
+quantities. Both arms used precompiled binaries, the same data, seed 452891,
+chain IDs 1–4, initialization at zero, 500 warmup and 500 sampling iterations
+per chain, target acceptance 0.99 and maximum treedepth 13. Alternating which
+kernel ran first within each chain pair gave the following times.
+
+| Kernel | Chain 1 (s) | Chain 2 (s) | Chain 3 (s) | Chain 4 (s) |
+| --- | ---: | ---: | ---: | ---: |
+| Original | 13.63 | 14.47 | 12.51 | 10.95 |
+| Skips zero-weight counts | 6.40 | 6.96 | 5.44 | 4.96 |
+
+All 2,000 draws of each of the 16 active parameter coordinates and all retained
+sampler diagnostics matched exactly between kernels. Both runs had zero
+divergences and zero treedepth hits, but maximum R-hat was 1.536 and minimum
+bulk ESS was 7.24. The timing measures identical sampler work on this fixture.
+Time to reach a well-mixed posterior remains unmeasured. Inputs, per-chain
+timings and diagnostics are recorded under `hmc-pair/` in the local run directory
+above, with input and executable hashes in `run.log`.

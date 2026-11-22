@@ -25,6 +25,8 @@ in the `balanced-panel` filter. Neither check requires HMC.
 of posterior scores across normal and Warp-III repetitions, including RNG and
 Monte Carlo errors. The [November 22 validation](validation/relative_panel_validation_20261122.md)
 records the native comparisons and peak memory for serial compilation, testing and sampling.
+It also reports paired four-chain timings and mixing diagnostics for six declared
+leader counts with all prior mass on three leaders.
 
 The 2026-11-08 total/fraction extraction closeout preserves the economic quality-SD alias
 through nested conditional-quality recovery. Focused `posterior-quality` and
