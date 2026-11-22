@@ -30,6 +30,25 @@ test_that("bayes_est selects the compiled kernel from the actual panel", {
   }
 })
 
+test_that("only an explicit zero prior selects the sparse ordered-k likelihood", {
+  local_mocked_bindings(.cmdstan_model_for_kernel = function(kernel) stop("selected ", kernel, "!"))
+  args <- panel_test_args()
+  args$supply_model <- "bertrand"
+  args$k_prior <- NULL
+  expect_error(do.call(bayes_est, args), "selected logit_ordered_panel!")
+  args$k_support <- 3L
+  expect_error(do.call(bayes_est, args), "selected logit_ordered_panel!")
+  args$k_support <- 1:6
+  args$k_prior <- c(rep(0.2, 5), 1e-100)
+  expect_error(do.call(bayes_est, args), "selected logit_ordered_panel!")
+  args$k_prior <- as.numeric(args$k_support == 3L)
+  expect_error(do.call(bayes_est, args), "selected logit_ordered_panel_sparse!")
+  args$demand_model <- "ces"
+  expect_error(do.call(bayes_est, args), "selected ces_stackelberg_relative_panel_sparse!")
+  args$share_basis <- "absolute"
+  expect_error(do.call(bayes_est, args), "selected ces_stackelberg_sparse!")
+})
+
 test_that("only complete paired ordered panels enter the balanced kernel", {
   d <- panel_test_data()
   expect_true(.uses_balanced_panel_kernel(d))

@@ -4,6 +4,12 @@
 
 .cmdstan_kernel_file <- function(kernel, model_spec_version = NULL, stan_root = NULL) {
   legacy <- !is.null(model_spec_version) && identical(as.integer(model_spec_version), 14L)
+  if (!legacy && endsWith(kernel, "_sparse")) {
+    base_kernel <- sub("_sparse$", "", kernel)
+    if (!base_kernel %in% .bayes_ordered_k_kernels) stop("Unknown sparse ordered-k kernel: ", kernel)
+    base <- .cmdstan_kernel_file(base_kernel, stan_root = stan_root)
+    return(.sparse_ordered_kernel_file(kernel, base))
+  }
   if (!legacy && (endsWith(kernel, "_relative_panel") || kernel == "logit_ordered_panel")) {
     base_kernel <- if (kernel == "logit_ordered_panel") "logit_stackelberg" else
       sub("_relative_panel$", "", kernel)
@@ -45,12 +51,7 @@
     "  for (i in 1:N) panel_firm_obs[obs_to_firm_mky[i]] = i;",
     base[(transformed_data + 1L):(likelihood_start - 1L)], likelihood, "}", "",
     base[quantities:length(base)])
-  bytes <- charToRaw(paste0(paste(code, collapse = "\n"), "\n"))
-  hash <- digest::digest(bytes, algo = "sha256", serialize = FALSE)
-  path <- file.path(tempdir(), paste0("logit_stackelberg_panel_", hash, ".stan"))
-  if (!file.exists(path) || !identical(digest::digest(file = path, algo = "sha256"), hash))
-    writeBin(bytes, path)
-  path
+  .write_generated_kernel("logit_stackelberg_panel", code)
 }
 
 # Keep previously sealed sources available. Panel calculations use the original local or
@@ -78,12 +79,35 @@
     "relative_share_ll = panel_gaussian_logpdf(global_panel > 0,", lines, fixed = TRUE)
   lines <- sub("relative_margin_ll + relative_gaussian_logpdf(",
     "relative_margin_ll + panel_gaussian_logpdf(global_panel == 2,", lines, fixed = TRUE)
+  .write_generated_kernel(kernel, lines)
+}
+
+.write_generated_kernel <- function(kernel, lines) {
   bytes <- charToRaw(paste0(paste(lines, collapse = "\n"), "\n"))
   hash <- digest::digest(bytes, algo = "sha256", serialize = FALSE)
   path <- file.path(tempdir(), paste0(kernel, "_", hash, ".stan"))
   if (!file.exists(path) || !identical(digest::digest(file = path, algo = "sha256"), hash))
     writeBin(bytes, path)
   path
+}
+
+# Only the model block needs the shortcut. Generated quantities retain the
+# declared support, including zero probabilities and their component scores.
+.sparse_ordered_kernel_file <- function(kernel, source) {
+  lines <- readLines(source, warn = FALSE)
+  model <- match("model {", lines)
+  quantities <- match("generated quantities {", lines)
+  starts <- which(seq_along(lines) > model & seq_along(lines) < quantities &
+    trimws(lines) == "int k = partition_component_k[cc];")
+  expected <- if (kernel == "logit_ordered_panel_sparse") 1L else 2L
+  if (length(starts) != expected) stop("Cannot locate ordered-k likelihood loops in ", kernel)
+  for (at in rev(starts)) {
+    indent <- sub("int k =.*$", "", lines[at])
+    guard <- paste0(indent, c("if (partition_prior_probability[cc] == 0) {",
+      "  score[kk] = negative_infinity();", "  continue;", "}"))
+    lines <- append(lines, guard, after = at - 1L)
+  }
+  .write_generated_kernel(kernel, lines)
 }
 
 .cmdstan_model_for_kernel <- function(kernel, model_spec_version = NULL) {

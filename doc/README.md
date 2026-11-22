@@ -12,6 +12,9 @@ margins can span whole periods; partially paired periods use the general
 conditional density. The same checks apply to generated quantities. Fully
 paired, rank-stable Logit fringe and Stackelberg panels also reuse supply
 calculations across ordered-k states. Older fits retain their sealed sources.
+When some declared counts have exactly zero prior probability, new ordered-k
+fits skip those counts in the likelihood and report the full support. Omitting
+`k_prior` gives each declared count equal weight.
 
 The [panel tests](../tests/testthat/test-relative-panel-targets.R) compare complete
 generated outputs, normalized densities and gradients at fixed initialization.

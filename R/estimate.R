@@ -231,7 +231,9 @@
 #'   feasible in every selected market.
 #' @param k_prior Positional probabilities corresponding to \code{k_support}.
 #'   Values are finite, non-negative, and must sum to one. \code{NULL} gives
-#'   a uniform prior.
+#'   a uniform prior on the supplied counts. Exact ordered-k fits skip
+#'   zero-weight counts when evaluating the model likelihood and retain
+#'   all supplied counts in posterior reporting.
 #' @param k_scope Legacy cutoff scope selector. Exact ordered-k uses one
 #'   partition and one firm ranking for the complete market panel.
 #' @param prior_manifest Prespecified proper prior manifest: \code{"baseline"},
@@ -914,6 +916,9 @@ bayes_est <- function(prices, quantities, margins,
     } else {
       stan_kernel <- paste0(stan_kernel, "_relative_panel")
     }
+  }
+  if (stan_kernel %in% .bayes_ordered_k_kernels && any(stan_data$partition_prior_probability == 0)) {
+    stan_kernel <- paste0(stan_kernel, "_sparse")
   }
   attr(stan_data, "s0_pooling") <- s0_pooling
   attr(stan_data, "s0_pooling_requested") <- s0_pooling_requested

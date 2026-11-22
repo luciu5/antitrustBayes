@@ -45,3 +45,23 @@ It contains the compiled sources and binaries, per-command memory measurements,
 the initial failure log and the rerun logs. The measured peaks identify
 compilation as a source of memory pressure. The cause of the earlier freeze
 remains unconfirmed.
+
+## Skipping counts with zero prior weight
+
+On the four-market, four-period Logit Cournot Stackelberg fixture, all prior
+mass was assigned to three leaders. Each timed invocation evaluated 2,000
+identical parameter points using the existing CmdStan toolchain. The three
+configurations ran in rotating order. Times are medians over six runs after
+one warmup run per configuration.
+
+| Configuration | Declared counts | Seconds |
+| --- | --- | ---: |
+| Original ordered-panel kernel | 1 through 6 | 0.370 |
+| Kernel that skips zero-weight counts in the likelihood | 1 through 6 | 0.226 |
+| Original ordered-panel kernel with singleton support | 3 | 0.222 |
+
+The three runs returned identical normalized log densities and every gradient
+coordinate. The six-count fit retains all six counts in generated quantities.
+This timing measures fixed-point evaluations. End-to-end sampling speed for
+this optimization remains unmeasured. Local measurements and the comparison
+script are in `doc/statistical_toolkit_runs/sparse-ordered-k-20261122/`.

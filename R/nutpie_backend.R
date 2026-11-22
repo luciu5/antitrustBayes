@@ -343,9 +343,8 @@
     for (i in seq_len(nrow(nonfinite))) {
       at <- nonfinite[i, ]
       field <- fields[[at[[3L]]]]
-      permitted <- fit$metadata$kernel %in% c("logit_stackelberg", "logit_stackelberg_panel",
-        "ces_stackelberg", "logit_ordered_panel", "logit_stackelberg_relative_panel",
-        "ces_stackelberg_relative_panel") &&
+      permitted <- fit$metadata$kernel %in% c("logit_stackelberg_panel", .bayes_ordered_k_kernels,
+        paste0(.bayes_ordered_k_kernels, "_sparse")) &&
         grepl("^component_log_score\\[[1-9][0-9]*\\]$", field) &&
         identical(as.numeric(draws[at[[1L]], at[[2L]], at[[3L]]]), -Inf)
       prior <- match(sub("^component_log_score", "prior_component_prob", field), fields)

@@ -297,7 +297,9 @@ feasible in every selected market.}
 
 \item{k_prior}{Positional probabilities corresponding to \code{k_support}.
 Values are finite, non-negative, and must sum to one. \code{NULL} gives
-a uniform prior.}
+a uniform prior on the supplied counts. Exact ordered-k fits skip
+zero-weight counts when evaluating the model likelihood and retain
+all supplied counts in posterior reporting.}
 
 \item{k_scope}{Legacy cutoff scope selector. Exact ordered-k uses one
 partition and one firm ranking for the complete market panel.}

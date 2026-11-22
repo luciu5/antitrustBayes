@@ -79,10 +79,13 @@ validate_comparison_contract <- function(fits) {
   invisible(TRUE)
 }
 
-.bayes_bridge_kernel_names <- c(
-  "ces_stackelberg", "ces_supply", "logit_stackelberg", "logit_stackelberg_panel", "logit_supply",
-  "logit_ordered_panel", "logit_supply_relative_panel", "ces_supply_relative_panel",
+.bayes_ordered_k_kernels <- c("ces_stackelberg", "logit_stackelberg", "logit_ordered_panel",
   "logit_stackelberg_relative_panel", "ces_stackelberg_relative_panel"
+)
+.bayes_bridge_kernel_names <- c(
+  "ces_supply", "logit_supply", "logit_stackelberg_panel",
+  "logit_supply_relative_panel", "ces_supply_relative_panel",
+  .bayes_ordered_k_kernels, paste0(.bayes_ordered_k_kernels, "_sparse")
 )
 
 .bayes_stan_source_text <- function(code) {

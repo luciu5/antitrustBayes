@@ -131,6 +131,8 @@ test_that("only documented zero-prior partition scores may be negative infinite"
   fit <- structure(list(draws_array = draws,
     metadata = list(kernel = "logit_stackelberg", num_samples = 2L)), class = "NutpieFit")
   expect_invisible(.nutpie_assert_fit(fit, "hmc", 2L))
+  fit$metadata$kernel <- "logit_ordered_panel_sparse"
+  expect_invisible(.nutpie_assert_fit(fit, "hmc", 2L))
   fit$draws_array[1, 1, "prior_component_prob[1]"] <- .1
   expect_error(.nutpie_assert_fit(fit, "hmc", 2L), "nonfinite posterior field")
   fit$draws_array[1, 1, "prior_component_prob[1]"] <- 0

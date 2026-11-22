@@ -28,7 +28,7 @@ test_that("Logit and CES panel kernels preserve densities, gradients and generat
   for (demand in c("logit", "ces")) for (structure in c("simultaneous", "fringe", "stackelberg")) {
     rich <- structure != "simultaneous"
     base <- paste(demand, if (rich) "stackelberg" else "supply", sep = "_")
-    for (design in designs) {
+    for (design in c(designs, if (rich) c("absolute", "margin_only"))) {
       x <- expand.grid(group = 1:5, year = 1:3, market = 1:2)
       if (design == "global_one") x <- subset(x, market == 1)
       if (design == "one") x <- subset(x, market == 1 & year == 1)
@@ -52,20 +52,37 @@ test_that("Logit and CES panel kernels preserve densities, gradients and generat
         use_market_resid_scale = design == "global_scales",
         use_rho = !(design == "uncorrelated" || (rich && global && design != "global_one")))
       if (design == "sampled") args$quality_parameterization <- "sampled"
+      if (design == "absolute") args$share_basis <- "absolute"
+      if (design == "margin_only") args$likelihood_mode <- 3L
       if (rich) args <- c(args, list(partition_prior = "ordered_k", k_support = 1:3,
                                      k_prior = c(.5, 0, .5)))
-      d <- do.call(if (demand == "logit") prepare_stan_data else prepare_ces_stan_data, args)
+      if (rich && design == "unequal") args$k_prior <- c(0, 1, 0)
+      prepare <- if (demand == "logit") prepare_stan_data else prepare_ces_stan_data
+      d <- do.call(prepare, args)
       fast <- if (demand == "logit" && rich && .uses_balanced_panel_kernel(d))
         "logit_ordered_panel" else paste0(base, "_relative_panel")
+      if (design %in% c("absolute", "margin_only")) fast <- base
       case <- paste(demand, structure, design)
       cmdstanr::write_stan_json(d[.nutpie_stan_data_fields(base)], data_path)
       draw <- file.path(work, "draw.csv")
       alt <- file.path(work, "alt.csv")
       fixed <- c("sample", "num_samples=1", "num_warmup=0", "algorithm=fixed_param",
                  "random", "seed=375", "init=0.4")
-      compare(run(base, fixed, draw), run(fast, fixed, alt), case)
+      reference <- run(base, fixed, draw)
       grad <- c("log_prob", paste0("constrained_params=", shQuote(draw)), "jacobian=1")
-      compare(run(base, grad, alt), run(fast, grad, alt), case)
+      reference_grad <- run(base, grad, alt)
+      variants <- c(if (fast != base) fast, if (rich) paste0(fast, "_sparse"))
+      for (kernel in variants) {
+        compare(reference, run(kernel, fixed, alt), paste(case, kernel, "outputs"))
+        compare(reference_grad, run(kernel, grad, alt), paste(case, kernel, "gradient"))
+      }
+      if (rich && design == "unequal") {
+        args$k_support <- 2L
+        args$k_prior <- NULL
+        compact <- do.call(prepare, args)
+        cmdstanr::write_stan_json(compact[.nutpie_stan_data_fields(base)], data_path)
+        compare(reference_grad, run(base, grad, alt), paste(case, "singleton gradient"))
+      }
     }
   }
 })
