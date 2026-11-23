@@ -287,10 +287,9 @@
 #' @param role_mapping One of \code{"mixture"}, \code{"map"}, or
 #'   \code{"threshold"}.
 #' @param fixed_k Optional explicit leader count.
-#' @param price_domain \code{"positive"} (default) or \code{"real"}.
-#'   Real rates are an explicit input Logit Cournot counterfactual domain
-#'   extension and require coordination >= 0.0.0.9004. The fitted posterior,
-#'   observed calibration prices, and role semantics are unchanged.
+#' @param price_domain Eligible input Logit games default to finite real counterfactual rates.
+#'   Use \code{price_domain = "positive"} to require positive rates.
+#'   Output markets and CES use the positive domain. Use level changes for zero baseline rates.
 #' @param role_offset Integer adjacent-partition sensitivity offset.
 #' @param insideSize Bayesian inside quantity convention.
 #' @param priceOutside Outside-good price override.
@@ -309,7 +308,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                                     fixed_k = NULL, role_offset = 0L,
                                     insideSize = NULL, priceOutside = NULL,
                                     labels = NULL,
-                                    price_domain = c("positive", "real"),
+                                    price_domain = NULL,
                                     allow_experimental = FALSE, ...) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.")
   .cmdstan_require_policy_inference(fit, allow_experimental)
@@ -342,7 +341,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                                      role_mapping, fixed_k, role_offset,
                                      insideSize, priceOutside, labels,
                                      draws = NULL, dots = list(),
-                                     price_domain = "positive") {
+                                     price_domain = .validate_simulation_price_domain(fit, NULL)) {
   structure_name <- .stack_bridge_or(fit@metadata$structure,
     if (isTRUE(fit@stan_data$use_cutoff == 1L)) "fringe" else "simultaneous")
   if (!identical(structure_name, "stackelberg")) {
@@ -397,7 +396,7 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                  normIndex = NA, priceOutside = p0, alpha = params$alpha,
                  labels = labels, control.equ = list(implicitCheck = FALSE))
   }
-  if (identical(price_domain, "real")) args$price_domain <- "real"
+  args$price_domain <- price_domain
   if (length(dots)) {
     dup <- intersect(names(dots), names(args)); if (length(dup)) stop("argument(s) supplied more than once: ", paste(dup, collapse = ", "))
     args <- c(args, dots)
@@ -444,10 +443,9 @@ bayes_stackelberg_model <- function(fit, draw = 1L, market = NULL, year = NULL,
 #' @param market,year Optional selectors; exactly one market-year is required.
 #' @param role_mapping One of \code{"mixture"} or \code{"map"}.
 #' @param fixed_k Optional explicit strategic-core count, including zero.
-#' @param price_domain \code{"positive"} (default) or \code{"real"}.
-#'   Real rates are an explicit input Logit Cournot counterfactual domain
-#'   extension and require coordination >= 0.0.0.9004. The fitted posterior,
-#'   observed calibration prices, and role semantics are unchanged.
+#' @param price_domain Eligible input Logit games default to finite real counterfactual rates.
+#'   Use \code{price_domain = "positive"} to require positive rates.
+#'   Output markets and CES use the positive domain. Use level changes for zero baseline rates.
 #' @param role_offset Integer adjacent-partition sensitivity offset.
 #' @param insideSize Bayesian inside quantity convention.
 #' @param priceOutside Outside-good price override.
@@ -462,7 +460,7 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                                     fixed_k = NULL, role_offset = 0L,
                                     insideSize = NULL, priceOutside = NULL,
                                     labels = NULL,
-                                    price_domain = c("positive", "real"),
+                                    price_domain = NULL,
                                     allow_experimental = FALSE, ...) {
   if (!methods::is(fit, "BayesFit")) stop("'fit' must be a BayesFit object.")
   .cmdstan_require_policy_inference(fit, allow_experimental)
@@ -497,7 +495,7 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
                                            role_mapping, fixed_k, role_offset,
                                            insideSize, priceOutside, labels,
                                            draws = NULL, dots = list(),
-                                     price_domain = "positive") {
+                                     price_domain = .validate_simulation_price_domain(fit, NULL)) {
   structure_name <- .stack_bridge_or(fit@metadata$structure, "simultaneous")
   partition_prior <- .stack_bridge_or(fit@metadata$partition_prior, "cutoff")
   if (!identical(structure_name, "fringe") ||
@@ -564,7 +562,7 @@ bayes_core_fringe_model <- function(fit, draw = 1L, market = NULL, year = NULL,
       labels = labels
     )
   }
-  if (identical(price_domain, "real")) args$price_domain <- "real"
+  args$price_domain <- price_domain
   if (length(dots)) {
     dup <- intersect(names(dots), names(args))
     if (length(dup)) {

@@ -15,7 +15,7 @@ bayes_stackelberg_model(
   insideSize = NULL,
   priceOutside = NULL,
   labels = NULL,
-  price_domain = c("positive", "real"),
+  price_domain = NULL,
   allow_experimental = FALSE,
   ...
 )
@@ -41,10 +41,9 @@ bayes_stackelberg_model(
 
 \item{labels}{Product labels override.}
 
-\item{price_domain}{\code{"positive"} (default) or \code{"real"}.
-Real rates are an explicit input Logit Cournot counterfactual domain
-extension and require coordination >= 0.0.0.9004. The fitted posterior,
-observed calibration prices, and role semantics are unchanged.}
+\item{price_domain}{Eligible input Logit games default to finite real counterfactual rates.
+Use \code{price_domain = "positive"} to require positive rates.
+Output markets and CES use the positive domain. Use level changes for zero baseline rates.}
 
 \item{allow_experimental}{Explicitly allow exploratory Pathfinder draws.}
 

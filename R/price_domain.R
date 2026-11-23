@@ -1,21 +1,20 @@
 ## Deterministic simulation domain; this never modifies a fitted posterior.
 .validate_simulation_price_domain <- function(object, price_domain) {
+  supply <- as.integer(object@supply_model)
+  native <- .native_ordered_structure(object)
+  structure_name <- object@metadata$structure
+  if (is.null(structure_name)) structure_name <- "simultaneous"
+  eligible <- identical(as.character(object@demand_model), "logit") &&
+    identical(as.character(object@market_side), "input") &&
+    ((is.null(native) && identical(structure_name, "simultaneous") &&
+      supply %in% 1:5) ||
+     (!is.null(native) && supply %in% c(1L, 3L)))
+  if (is.null(price_domain)) return(if (eligible) "real" else "positive")
   price_domain <- match.arg(price_domain, c("positive", "real"))
-  if (identical(price_domain, "real")) {
-    supply <- as.integer(object@supply_model)
-    native <- .native_ordered_structure(object)
-    structure_name <- object@metadata$structure
-    if (is.null(structure_name)) structure_name <- "simultaneous"
-    eligible <- identical(as.character(object@demand_model), "logit") &&
-      identical(as.character(object@market_side), "input") &&
-      ((is.null(native) && identical(structure_name, "simultaneous") &&
-        supply %in% 1:5) ||
-       (!is.null(native) && supply %in% c(1L, 3L)))
-    if (!eligible) {
-      stop("price_domain = 'real' supports simultaneous input Logit games or ",
-           "native exact Bertrand/Cournot fringe and Stackelberg games.",
-           call. = FALSE)
-    }
+  if (identical(price_domain, "real") && !eligible) {
+    stop("price_domain = 'real' supports simultaneous input Logit games or ",
+         "native exact Bertrand/Cournot fringe and Stackelberg games.",
+         call. = FALSE)
   }
   price_domain
 }

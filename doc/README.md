@@ -16,6 +16,11 @@ When some declared counts have exactly zero prior probability, new ordered-k
 fits skip those counts in the likelihood and report the full support. Omitting
 `k_prior` gives each declared count equal weight.
 
+Input Logit counterfactuals default to signed rates for supported simultaneous and
+exact ordered games. Use `price_domain = "positive"` for a positive-rate restriction.
+See the [rate-domain regressions](../tests/testthat/test-real-rate-simulation.R)
+and [cross-package solver comparisons](validation/signed_rate_solvers_20261122.md).
+
 The [panel tests](../tests/testthat/test-relative-panel-targets.R) compare complete
 generated outputs, normalized densities and gradients at fixed initialization.
 Set `RUN_RELATIVE_PANEL_STAN=true` for the `relative-panel-targets` filter;

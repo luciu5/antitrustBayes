@@ -215,14 +215,14 @@ test_that("native Bertrand role games retain signed input rates", {
   }
 })
 
-test_that("the positive native route remains the default", {
+test_that("signed native input rates agree with the explicit real domain", {
   skip_if_not_installed("coordination")
   fit <- .rate_domain_fixture()
   plan <- posterior_policy_draws(fit, seed = 19L)
   implicit <- simulate(fit, c("a", "b", "c"), draw_plan = plan, mc.cores = 1L)
   explicit <- simulate(fit, c("a", "b", "c"), draw_plan = plan, mc.cores = 1L,
-                       price_domain = "positive")
+                       price_domain = "real")
   expect_identical(implicit@price_pre, explicit@price_pre)
   expect_identical(implicit@price_post, explicit@price_post)
-  expect_identical(implicit@metadata$price_domain, "positive")
+  expect_identical(implicit@metadata$price_domain, "real")
 })

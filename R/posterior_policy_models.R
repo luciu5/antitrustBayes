@@ -52,6 +52,7 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
     stop("'fit' must be a BayesFit object.", call. = FALSE)
   .cmdstan_require_policy_inference(fit, allow_experimental)
   demand_anchoring <- .resolve_demand_anchoring(fit, demand_anchoring)
+  price_domain <- .validate_simulation_price_domain(fit, NULL)
   specified <- methods::is(fit, "BayesSpecifiedFit")
   if ((!identical(fit@market_side, "output") &&
        !identical(fit@demand_model, "logit")) ||
@@ -161,7 +162,8 @@ posterior_policy_models <- function(fit, draw_plan = NULL, n_draws = NULL,
           stage <- "latent_pre_equilibrium"
           score <- .lq_reference_score(fit, draws, draw, bridge_unit, plan,
                                        market_object, params)
-          latent <- if (is.null(native_structure)) .lq_apply_to_fit(model, score, plan)
+          latent <- if (is.null(native_structure)) .lq_apply_to_fit(
+            model, score, plan, price_domain = price_domain)
             else .lq_apply_to_native(model, score, plan)
           model <- if (is.null(native_structure)) latent$fit else latent$native
           latent_metadata <- latent$metadata

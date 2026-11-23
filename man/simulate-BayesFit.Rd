@@ -25,7 +25,7 @@
   corePost = NULL,
   demand_anchoring = NULL,
   draw_plan = NULL,
-  price_domain = c("positive", "real"),
+  price_domain = NULL,
   allow_experimental = FALSE,
   ...
 )
@@ -49,7 +49,7 @@ bayes_sim(
   corePost = NULL,
   demand_anchoring = NULL,
   draw_plan = NULL,
-  price_domain = c("positive", "real"),
+  price_domain = NULL,
   allow_experimental = FALSE,
   ...
 )
@@ -127,15 +127,9 @@ and fail explicitly; \code{"observed"} retains their conditional calibration.}
 quality, period demand, and exact-k role realizations so multiple scenarios can reuse one
 fit-level draw plan.}
 
-\item{price_domain}{Counterfactual rate domain. The default
-\code{"positive"} rejects nonpositive input Logit solutions.
-\code{"real"} retains finite signed rates for simultaneous input Logit
-Bertrand, MonCom, Cournot, auction, and bargaining games and native exact fringe or
-Stackelberg games (native Cournot requires coordination >= 0.0.0.9004;
-native Bertrand requires >= 0.0.0.9006).
-The option affects simulation only, leaving the fitted posterior
-unchanged. Percentage changes from zero baseline rates are undefined;
-use level-rate changes.}
+\item{price_domain}{Eligible input Logit games default to finite real counterfactual rates.
+Use \code{price_domain = "positive"} to require positive rates.
+Output markets and CES use the positive domain. Use level changes for zero baseline rates.}
 
 \item{allow_experimental}{Explicitly allow exploratory Pathfinder draws
 for policy simulation.}

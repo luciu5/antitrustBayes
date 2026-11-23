@@ -57,15 +57,9 @@
 #'   value/procurement-price primitive is held fixed.
 #'   Smooth-cutoff Logit auctions have no latent value-index reconstruction
 #'   and fail explicitly; \code{"observed"} retains their conditional calibration.
-#' @param price_domain Counterfactual rate domain. The default
-#'   \code{"positive"} rejects nonpositive input Logit solutions.
-#'   \code{"real"} retains finite signed rates for simultaneous input Logit
-#'   Bertrand, MonCom, Cournot, auction, and bargaining games and native exact fringe or
-#'   Stackelberg games (native Cournot requires coordination >= 0.0.0.9004;
-#'   native Bertrand requires >= 0.0.0.9006).
-#'   The option affects simulation only, leaving the fitted posterior
-#'   unchanged. Percentage changes from zero baseline rates are undefined;
-#'   use level-rate changes.
+#' @param price_domain Eligible input Logit games default to finite real counterfactual rates.
+#'   Use \code{price_domain = "positive"} to require positive rates.
+#'   Output markets and CES use the positive domain. Use level changes for zero baseline rates.
 #' @param draw_plan Optional object returned by
 #'   \code{\link{posterior_policy_draws}}. A plan fixes posterior draw,
 #'   quality, period demand, and exact-k role realizations so multiple scenarios can reuse one
@@ -1030,7 +1024,7 @@ NULL
                                 leadersPost = NULL, corePost = NULL,
                                 demand_anchoring = NULL,
                                 draw_plan = NULL,
-                                price_domain = c("positive", "real"),
+                                price_domain = NULL,
                                 allow_experimental = FALSE, ..., .call) {
   .cmdstan_require_policy_inference(object, allow_experimental)
   price_domain <- .validate_simulation_price_domain(object, price_domain)
@@ -1395,7 +1389,7 @@ setMethod(
            role_mapping = c("mixture", "map", "threshold"), fixed_k = NULL,
            role_offset = 0L, leadersPost = NULL, corePost = NULL,
            demand_anchoring = NULL,
-           draw_plan = NULL, price_domain = c("positive", "real"),
+           draw_plan = NULL, price_domain = NULL,
            allow_experimental = FALSE, ...) {
     native_structure <- .native_ordered_structure(object)
     if (missing(ownerPost) && is.null(native_structure)) {
@@ -1426,7 +1420,7 @@ bayes_sim <- function(fit, ownerPost = NULL, n_draws = NULL, mcDelta = NULL,
                       fixed_k = NULL, role_offset = 0L, leadersPost = NULL,
                       corePost = NULL,
                       demand_anchoring = NULL,
-                      draw_plan = NULL, price_domain = c("positive", "real"),
+                      draw_plan = NULL, price_domain = NULL,
                       allow_experimental = FALSE, ...) {
   native_structure <- .native_ordered_structure(fit)
   if (missing(ownerPost) && is.null(native_structure)) {
